@@ -1,9 +1,12 @@
 package com.nerf.netx.ui.screens
 
 import android.annotation.SuppressLint
+import android.graphics.BitmapFactory
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.widget.ImageView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,6 +88,27 @@ fun SettingsScreen(
   val appliedTheme = themeId
   val previewUrl = htmlAssetUrlProvider(previewTheme)
   val palette = themePalette(previewTheme)
+  val themeDescriptions = remember {
+    mapOf(
+      ThemeId.NERF_MAIN_DASH_HTML to "High-contrast HUD, dense telemetry cards, orange/cyan emphasis.",
+      ThemeId.NERF_HUD_ALT_HTML to "Alt HUD palette with brighter accents and identical controls."
+    )
+  }
+  val screenshotAssetPath = remember {
+    mapOf(
+      ThemeId.NERF_MAIN_DASH_HTML to "themes/nerf_main_dash/screenshot.png",
+      ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png"
+    )
+  }
+  val previewScreenshotPath = screenshotAssetPath[previewTheme]
+  val previewScreenshotExists = remember(previewTheme) {
+    val path = screenshotAssetPath[previewTheme]
+    if (path == null) {
+      false
+    } else {
+      runCatching { context.assets.open(path).close() }.isSuccess
+    }
+  }
 
   Column(
     Modifier
@@ -106,6 +130,7 @@ fun SettingsScreen(
             Column(Modifier.weight(1f).padding(end = 8.dp)) {
               Text(t.displayName)
               Text("id=${t.id} | type=${t.type.name}", style = MaterialTheme.typography.bodySmall)
+              Text(themeDescriptions[t] ?: "No description.", style = MaterialTheme.typography.bodySmall)
             }
             RadioButton(selected = (previewTheme == t), onClick = { previewTheme = t })
           }
@@ -125,12 +150,50 @@ fun SettingsScreen(
         }
 
         Text("Selection above only previews until Apply Theme is tapped.", style = MaterialTheme.typography.bodySmall)
+        Text("Apply updates runtime theme without app restart.", style = MaterialTheme.typography.bodySmall)
       }
     }
 
     ElevatedCard {
       Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Theme Preview", style = MaterialTheme.typography.titleMedium)
+        Text(themeDescriptions[previewTheme] ?: "No description.", style = MaterialTheme.typography.bodySmall)
+
+        if (previewScreenshotExists && previewScreenshotPath != null) {
+          AndroidView(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(140.dp)
+              .border(1.dp, Color(0x334A6478), RoundedCornerShape(8.dp)),
+            factory = { ctx ->
+              ImageView(ctx).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+              }
+            },
+            update = { view ->
+              runCatching {
+                context.assets.open(previewScreenshotPath).use { stream ->
+                  val bmp = BitmapFactory.decodeStream(stream)
+                  view.setImageBitmap(bmp)
+                }
+              }
+            }
+          )
+        } else {
+          Box(
+            Modifier
+              .fillMaxWidth()
+              .height(90.dp)
+              .background(Color(0x1A6E8BA1), RoundedCornerShape(8.dp))
+              .border(1.dp, Color(0x334A6478), RoundedCornerShape(8.dp))
+              .padding(10.dp)
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Text("No screenshot asset found.", style = MaterialTheme.typography.bodySmall)
+              Text("Missing: ${previewScreenshotPath ?: "themes/<id>/screenshot.png"}", style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           colorSwatch("Primary", palette.primary)

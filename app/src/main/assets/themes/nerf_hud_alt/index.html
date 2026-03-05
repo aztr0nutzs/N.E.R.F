@@ -5,587 +5,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>NERF HUD Alt</title>
   <style>
-    :root{ --bg:#040607; --panel:#10151a; --line:#1f2c38; --pri:#ffe600; --acc:#00a3ff; --ok:#43d77b; --txt:#eaf2f8; --mut:#9eb2c3; }
-    *{ box-sizing:border-box; }
-    html,body{ margin:0; width:100%; height:100%; overflow:hidden; font-family:Segoe UI, Arial, sans-serif; background:radial-gradient(circle at 20% 0%, #16232f 0%, var(--bg) 45%); color:var(--txt); }
-    .app{ height:100dvh; display:flex; flex-direction:column; }
-    .screen{ display:none; flex:1; overflow:auto; padding:10px 10px 92px; }
-    .screen.active{ display:block; }
-    .header{ width:100%; height:74px; object-fit:contain; margin:0 auto 8px; display:block; }
-    .card{ background:linear-gradient(180deg, #131b22 0%, #0e141a 100%); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; }
-    .row{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
-    .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .btn{ border:1px solid #2c3f4f; color:var(--txt); background:#13202b; border-radius:10px; padding:10px; font-weight:600; min-height:44px; }
-    .btn.pri{ border-color:#7a3f0f; background:#46250a; color:#ffd4b2; }
-    .btn.acc{ border-color:#165274; background:#0a273a; color:#bcecff; }
-    .btn:disabled{ opacity:0.45; filter:grayscale(0.25); }
-    .mut{ color:var(--mut); font-size:12px; }
-    .kv{ font-size:13px; color:var(--mut); }
-    .v{ color:var(--txt); font-weight:700; }
-    .chip{ border:1px solid #2b3f50; border-radius:999px; padding:3px 8px; font-size:11px; color:#c5d8e6; }
-    .list{ display:flex; flex-direction:column; gap:8px; }
-    .item{ border:1px solid #2a3a48; border-radius:10px; padding:8px; background:#0f171e; }
-    .mono{ font-family:Consolas, monospace; }
-    .map{ width:100%; min-height:220px; border:1px solid #274153; border-radius:12px; background:#081117; padding:8px; }
-    .map-stage{ position:relative; width:100%; min-height:320px; border:1px solid #274153; border-radius:12px; background:#081117; overflow:hidden; touch-action:none; }
-    .map-canvas{ width:100%; height:320px; display:block; }
-    .map-empty{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; background:rgba(3,8,12,0.78); padding:16px; }
-    .map-empty.hidden{ display:none; }
-    .map-empty-box{ max-width:260px; display:flex; flex-direction:column; gap:8px; align-items:center; }
-    .map-list{ margin-top:8px; max-height:140px; overflow:auto; }
-    .node{ padding:6px 8px; border:1px solid #315063; border-radius:8px; margin:6px 0; background:#0d1b25; font-size:12px; }
-    .status{ font-size:12px; color:#bcd5e7; }
-    .bottom{ position:fixed; left:0; right:0; bottom:0; background:rgba(3,8,12,0.94); border-top:1px solid #203344; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); }
-    .nav{ background:#0f1a22; color:#b9d1e2; border:1px solid #254153; border-radius:8px; font-size:10px; min-height:56px; }
-    .nav.active{ border-color:#9e4d0d; color:#ffd8be; }
-    input,select{ width:100%; min-height:40px; border:1px solid #2d4456; background:#0a131a; color:#d8e8f3; border-radius:8px; padding:8px; }
-    #log{ max-height:220px; overflow:auto; }
-    .modal{ position:fixed; inset:0; display:none; align-items:flex-end; background:rgba(0,0,0,0.55); z-index:90; }
-    .modal.show{ display:flex; }
-    .modal-sheet{ width:100%; background:#0c141b; border-top:1px solid #2a4253; border-top-left-radius:14px; border-top-right-radius:14px; padding:12px; padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+    :root{--hud-cyan:#00a3ff;--hud-blue:#2f8dff;--hud-orange:#ffe600;--hud-red:#ff6464;--hud-text:#eaf2f8;--hud-panel:#10151a;--hud-border:#1f2c38;--hud-glow:rgba(0,194,255,.26);--hud-muted:#9eb2c3;--bg:#040607;--line:var(--hud-border);--txt:var(--hud-text);--mut:var(--hud-muted)}
+    *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Segoe UI,Arial,sans-serif;background:radial-gradient(circle at 20% 0%,#16232f 0%,var(--bg) 45%);color:var(--txt)}
+    .app{height:100dvh;display:flex;flex-direction:column}.screen{display:none;flex:1;overflow:auto;padding:10px 10px 92px}.screen.active{display:block}
+    .header{width:100%;height:74px;object-fit:contain;margin:0 auto 8px;display:block}.card{background:linear-gradient(180deg,#131b22 0%,#0e141a 100%);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;box-shadow:0 0 18px var(--hud-glow)}
+    .row{display:flex;gap:8px;align-items:center;justify-content:space-between}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .btn{border:1px solid #2c3f4f;color:var(--txt);background:#13202b;border-radius:10px;padding:10px;font-weight:600;min-height:44px}.btn.pri{border-color:#7a3f0f;background:#46250a;color:#ffd4b2}.btn.acc{border-color:#165274;background:#0a273a;color:#bcecff}.btn:disabled{opacity:.45}
+    .mut{color:var(--mut);font-size:12px}.kv{font-size:13px;color:var(--mut)}.v{color:var(--txt);font-weight:700}.chip{border:1px solid #2b3f50;border-radius:999px;padding:3px 8px;font-size:11px;color:#c5d8e6}.list{display:flex;flex-direction:column;gap:8px}.item{border:1px solid #2a3a48;border-radius:10px;padding:8px;background:#0f171e}.mono{font-family:Consolas,monospace}
+    .map-stage{position:relative;width:100%;min-height:300px;border:1px solid #274153;border-radius:12px;background:#081117;overflow:hidden}.map-canvas{width:100%;height:300px;display:block}
+    .map-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,8,12,.78)}.map-empty.hidden{display:none}.map-empty-box{max-width:260px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center}
+    .map-list{margin-top:8px;max-height:140px;overflow:auto}.node{padding:6px 8px;border:1px solid #315063;border-radius:8px;margin:6px 0;background:#0d1b25;font-size:12px}
+    .status{font-size:12px;color:#bcd5e7}.progress-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0d151c;height:10px;width:100%}.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--hud-cyan),var(--hud-blue));transition:width 140ms linear}
+    .router-box{border:1px solid var(--line);border-radius:10px;padding:8px;background:#0d151c;margin-top:8px}.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(3,8,12,.94);border-top:1px solid #203344;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+    .nav{background:#0f1a22;color:#b9d1e2;border:1px solid #254153;border-radius:8px;font-size:10px;min-height:56px}.nav.active{border-color:#9e4d0d;color:#ffd8be}
+    input,select{width:100%;min-height:40px;border:1px solid #2d4456;background:#0a131a;color:#d8e8f3;border-radius:8px;padding:8px}#log{max-height:220px;overflow:auto}
+    .modal{position:fixed;inset:0;display:none;align-items:flex-end;background:rgba(0,0,0,.55);z-index:90}.modal.show{display:flex}.modal-sheet{width:100%;background:#0c141b;border-top:1px solid #2a4253;border-top-left-radius:14px;border-top-right-radius:14px;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
   </style>
 </head>
 <body>
 <div class="app">
-  <section id="screen-overview" class="screen active">
-    <img class="header" src="file:///android_asset/headers/overview.png" alt="overview" />
-    <div class="card">
-      <div class="row"><div class="kv">WAN</div><div id="ovWan" class="v">-</div></div>
-      <div class="row"><div class="kv">Latency</div><div id="ovLat" class="v">-</div></div>
-      <div class="row"><div class="kv">Jitter</div><div id="ovJit" class="v">-</div></div>
-      <div class="row"><div class="kv">Loss</div><div id="ovLoss" class="v">-</div></div>
-      <div class="row"><div class="kv">Devices</div><div id="ovDev" class="v">-</div></div>
-    </div>
-    <div class="grid2">
-      <button class="btn pri" id="btnQuickScan">Deep Scan</button>
-      <button class="btn acc" id="btnRefreshOv">Refresh</button>
-    </div>
-    <div class="status" id="statusOv"></div>
-  </section>
-
-  <section id="screen-speed" class="screen">
-    <img class="header" src="file:///android_asset/headers/speedtest.png" alt="speedtest" />
-    <div class="card">
-      <div class="row"><div class="kv">Phase</div><div id="spPhase" class="v">IDLE</div></div>
-      <div class="row"><div class="kv">Download</div><div id="spDown" class="v">0 Mbps</div></div>
-      <div class="row"><div class="kv">Upload</div><div id="spUp" class="v">0 Mbps</div></div>
-      <div class="row"><div class="kv">Latency</div><div id="spLat" class="v">0 ms</div></div>
-    </div>
-    <div class="grid2">
-      <button class="btn pri" id="btnStartSpeed">Start</button>
-      <button class="btn" id="btnStopSpeed">Stop</button>
-    </div>
-    <button class="btn" id="btnResetSpeed">Reset</button>
-  </section>
-
-  <section id="screen-console" class="screen">
-    <img class="header" src="file:///android_asset/headers/console.png" alt="console" />
-    <div class="card">
-      <div class="grid2">
-        <button class="btn" id="btnDhcp">Renew DHCP</button>
-        <button class="btn" id="btnDns">Flush DNS</button>
-        <button class="btn" id="btnFw">Toggle Firewall</button>
-        <button class="btn" id="btnVpn">Toggle VPN</button>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <select id="qosMode"><option>BALANCED</option><option>GAMING</option><option>STREAMING</option></select>
-        <button class="btn" id="btnQos">Set QoS</button>
-      </div>
-      <button class="btn pri" id="btnReboot">Reboot Router</button>
-    </div>
-    <div class="card"><div class="mut">Console Log</div><div id="log" class="mono"></div></div>
-  </section>
-
-  <section id="screen-map" class="screen">
-    <img class="header" src="file:///android_asset/headers/map.png" alt="map" />
-    <div class="row" style="margin-bottom:8px">
-      <button class="btn pri" id="btnMapRefresh">Refresh Topology</button>
-      <span class="chip" id="mapCount">0 nodes</span>
-    </div>
-    <div id="mapStage" class="map-stage">
-      <canvas id="mapCanvas" class="map-canvas"></canvas>
-      <div id="mapEmpty" class="map-empty hidden">
-        <div class="map-empty-box">
-          <div class="v">No devices discovered</div>
-          <div class="mut">Run scan to build topology map.</div>
-          <button class="btn pri" id="btnMapRunScan">Run Scan</button>
-        </div>
-      </div>
-    </div>
-    <div id="mapList" class="list map-list"></div>
-  </section>
-
-  <section id="screen-devices" class="screen">
-    <img class="header" src="file:///android_asset/headers/devices.png" alt="devices" />
-    <div class="row" style="margin-bottom:8px">
-      <input id="devSearch" placeholder="Search name / IP / MAC" />
-      <button class="btn" id="btnDevRefresh">Refresh</button>
-    </div>
-    <div id="devList" class="list"></div>
-  </section>
-
-  <section id="screen-analytics" class="screen">
-    <img class="header" src="file:///android_asset/headers/analytics.png" alt="analytics" />
-    <div class="card">
-      <div class="row"><div class="kv">Down</div><div id="anDown" class="v">-</div></div>
-      <div class="row"><div class="kv">Up</div><div id="anUp" class="v">-</div></div>
-      <div class="row"><div class="kv">Latency</div><div id="anLat" class="v">-</div></div>
-      <div class="row"><div class="kv">Jitter</div><div id="anJit" class="v">-</div></div>
-      <div class="row"><div class="kv">Packet Loss</div><div id="anLoss" class="v">-</div></div>
-      <div class="row"><div class="kv">Device Count</div><div id="anDev" class="v">-</div></div>
-    </div>
-    <button class="btn pri" id="btnAnRefresh">Refresh Analytics</button>
-  </section>
+  <section id="screen-overview" class="screen active"><img class="header" src="file:///android_asset/headers/overview.png" alt="overview" /><div class="card"><div class="row"><div class="kv">WAN</div><div id="ovWan" class="v">-</div></div><div class="row"><div class="kv">Latency</div><div id="ovLat" class="v">-</div></div><div class="row"><div class="kv">Jitter</div><div id="ovJit" class="v">-</div></div><div class="row"><div class="kv">Loss</div><div id="ovLoss" class="v">-</div></div><div class="row"><div class="kv">Devices</div><div id="ovDev" class="v">-</div></div></div><div class="grid2"><button class="btn pri" id="btnQuickScan">Deep Scan</button><button class="btn acc" id="btnRefreshOv">Refresh</button></div><div class="card" style="margin-top:10px"><div class="row"><div class="kv">Scan State</div><div id="scanState" class="v">IDLE</div></div><div class="progress-wrap"><div id="scanProgressBar" class="progress-bar"></div></div><div class="grid2" style="margin-top:8px"><div class="kv">Targets <span id="scanTargets" class="v">0</span></div><div class="kv">Probes <span id="scanProbes" class="v">0</span></div><div class="kv">Found <span id="scanFound" class="v">0</span></div><div class="kv">Elapsed <span id="scanElapsed" class="v">0s</span></div></div><div class="grid2" style="margin-top:8px"><button class="btn pri" id="btnStartScan">Start Scan</button><button class="btn" id="btnStopScan">Stop Scan</button></div></div><div class="card"><div class="kv" style="margin-bottom:6px">Router Info (Read-only)</div><div class="router-box"><div class="row"><div class="kv">Gateway</div><div id="routerGateway" class="v mono">-</div></div><div class="row"><div class="kv">SSID</div><div id="routerSsid" class="v">-</div></div><div class="row"><div class="kv">Wi-Fi RSSI</div><div id="routerRssi" class="v">-</div></div><div class="row"><div class="kv">DNS</div><div id="routerDns" class="v mono">-</div></div><div class="row"><div class="kv">Subnet</div><div id="routerSubnet" class="v mono">-</div></div></div><button class="btn acc" id="btnRouterInfo" style="margin-top:8px">Refresh Router Info</button></div><div class="status" id="statusOv"></div></section>
+  <section id="screen-speed" class="screen"><img class="header" src="file:///android_asset/headers/speedtest.png" alt="speedtest" /><div class="card"><div class="row"><div class="kv">Phase</div><div id="spPhase" class="v">IDLE</div></div><div class="row"><div class="kv">Download</div><div id="spDown" class="v">0 Mbps</div></div><div class="row"><div class="kv">Upload</div><div id="spUp" class="v">0 Mbps</div></div><div class="row"><div class="kv">Latency</div><div id="spLat" class="v">0 ms</div></div></div><div class="grid2"><button class="btn pri" id="btnStartSpeed">Start</button><button class="btn" id="btnStopSpeed">Stop</button></div><button class="btn" id="btnResetSpeed">Reset</button></section>
+  <section id="screen-console" class="screen"><img class="header" src="file:///android_asset/headers/console.png" alt="console" /><div class="card"><div class="grid2"><button class="btn" id="btnDhcp">Renew DHCP</button><button class="btn" id="btnDns">Flush DNS</button><button class="btn" id="btnFw">Toggle Firewall</button><button class="btn" id="btnVpn">Toggle VPN</button></div><div class="row" style="margin-top:8px"><select id="qosMode"><option>BALANCED</option><option>GAMING</option><option>STREAMING</option></select><button class="btn" id="btnQos">Set QoS</button></div><button class="btn pri" id="btnReboot">Reboot Router</button></div><div class="card"><div class="mut">Console Log</div><div id="log" class="mono"></div></div></section>
+  <section id="screen-map" class="screen"><img class="header" src="file:///android_asset/headers/map.png" alt="map" /><div class="row" style="margin-bottom:8px"><button class="btn pri" id="btnMapRefresh">Refresh Topology</button><span class="chip" id="mapCount">0 nodes</span></div><div id="mapStage" class="map-stage"><canvas id="mapCanvas" class="map-canvas"></canvas><div id="mapEmpty" class="map-empty hidden"><div class="map-empty-box"><div class="v">No devices discovered</div><div class="mut">Run scan to build topology map.</div><button class="btn pri" id="btnMapRunScan">Run Scan</button></div></div></div><div id="mapList" class="list map-list"></div></section>
+  <section id="screen-devices" class="screen"><img class="header" src="file:///android_asset/headers/devices.png" alt="devices" /><div class="row" style="margin-bottom:8px"><input id="devSearch" placeholder="Search name / IP / MAC" /><button class="btn" id="btnDevRefresh">Refresh</button></div><div id="devList" class="list"></div></section>
+  <section id="screen-analytics" class="screen"><img class="header" src="file:///android_asset/headers/analytics.png" alt="analytics" /><div class="card"><div class="row"><div class="kv">Down</div><div id="anDown" class="v">-</div></div><div class="row"><div class="kv">Up</div><div id="anUp" class="v">-</div></div><div class="row"><div class="kv">Latency</div><div id="anLat" class="v">-</div></div><div class="row"><div class="kv">Jitter</div><div id="anJit" class="v">-</div></div><div class="row"><div class="kv">Packet Loss</div><div id="anLoss" class="v">-</div></div><div class="row"><div class="kv">Device Count</div><div id="anDev" class="v">-</div></div></div><button class="btn pri" id="btnAnRefresh">Refresh Analytics</button></section>
 </div>
-
-<div id="deviceModal" class="modal">
-  <div class="modal-sheet">
-    <div class="row">
-      <div>
-        <div id="dmName" class="v">Device</div>
-        <div id="dmMeta" class="mut mono">-</div>
-      </div>
-      <button class="btn" id="dmClose">Close</button>
-    </div>
-    <div class="row"><div class="kv">Risk</div><div id="dmRisk" class="v">-</div></div>
-    <div class="grid2" style="margin-top:8px">
-      <button class="btn" id="dmPing">Ping</button>
-      <button class="btn" id="dmBlock">Block</button>
-    </div>
-    <button class="btn" id="dmPrio">Prioritize</button>
-  </div>
-</div>
-
-<nav class="bottom">
-  <button class="nav active" data-screen="overview">Overview</button>
-  <button class="nav" data-screen="speed">Speed</button>
-  <button class="nav" data-screen="console">Console</button>
-  <button class="nav" data-screen="map">Map</button>
-  <button class="nav" data-screen="devices">Devices</button>
-  <button class="nav" data-screen="analytics">Analytics</button>
-</nav>
-
+<div id="deviceModal" class="modal"><div class="modal-sheet"><div class="row"><div><div id="dmName" class="v">Device</div><div id="dmMeta" class="mut mono">-</div></div><button class="btn" id="dmClose">Close</button></div><div class="row"><div class="kv">Hostname</div><div id="dmHostname" class="v">-</div></div><div class="row"><div class="kv">IP</div><div id="dmIp" class="v mono">-</div></div><div class="row"><div class="kv">MAC</div><div id="dmMac" class="v mono">-</div></div><div class="row"><div class="kv">Vendor</div><div id="dmVendor" class="v">-</div></div><div class="row"><div class="kv">Latency</div><div id="dmLatency" class="v">-</div></div><div class="row"><div class="kv">Online</div><div id="dmOnline" class="v">-</div></div><div class="row"><div class="kv">Last Seen</div><div id="dmLastSeen" class="v">-</div></div><div class="row"><div class="kv">Risk</div><div id="dmRisk" class="v">-</div></div><div class="grid2" style="margin-top:8px"><button class="btn" id="dmPing">Ping</button><button class="btn" id="dmCopyIp">Copy IP</button><button class="btn" id="dmCopyMac">Copy MAC</button><button class="btn" id="dmBlock" disabled>Block</button></div><button class="btn" id="dmPrio" disabled>Prioritize</button><div class="mut" id="dmActionReason">Block/Prioritize unavailable: router APIs not verified.</div></div></div>
+<nav class="bottom"><button class="nav active" data-screen="overview">Overview</button><button class="nav" data-screen="speed">Speed</button><button class="nav" data-screen="console">Console</button><button class="nav" data-screen="map">Map</button><button class="nav" data-screen="devices">Devices</button><button class="nav" data-screen="analytics">Analytics</button></nav>
 <script>
 (function(){
-  const $=(id)=>document.getElementById(id);
-  const state={ devices:[], filtered:[], selectedDevice:null, routerControlSupported:false };
-  const mapRenderer = createMapRenderer(openDeviceModalById);
-
-  window.NERF = window.NERF || {};
-  window.NERF.onEvent = function(eventName,payload){
-    if(eventName==='action.result'){
-      if(payload.devices){ state.devices = normalizeDevices(payload.devices); renderDevices(); renderMap(); updateOverviewFromDevices(); }
-      if(payload.downMbps!=null || payload.deviceCount!=null){ renderAnalytics(payload); }
-      if(payload.code==='ROUTER_INFO'){ applyRouterInfo(payload); }
-      if(payload.status==='NOT_SUPPORTED' && payload.message){ $('statusOv').textContent = payload.message; }
-      log('EVENT '+eventName+' '+JSON.stringify(payload));
-    } else if(eventName==='scan_progress'){
-      $('statusOv').textContent = 'Scan '+(payload.probesSent||0)+'/'+(payload.targetsPlanned||0)+' found '+(payload.devicesFound||0);
-    } else if(eventName==='scan_done'){
-      $('statusOv').textContent = 'Scan complete: '+(payload.devicesFound||0)+' devices';
-      req('devices.list',{});
-    }
-  };
-
-  function req(action,payload){
-    try{
-      if(window.NERF_NATIVE && window.NERF_NATIVE.request){
-        window.NERF_NATIVE.request(action, JSON.stringify(payload||{}));
-      } else { log('Bridge unavailable: '+action); }
-    } catch(e){ log('Bridge error: '+e.message); }
-  }
-  window.NERF.request = req;
-
-  function log(msg){
-    const el = document.createElement('div');
-    el.textContent = '['+new Date().toLocaleTimeString()+'] '+msg;
-    $('log').prepend(el);
-  }
-
-  function normalizeDevices(rows){
-    return (rows||[]).map((d,i)=>({
-      id: String(d.id || ('node-'+i)),
-      name: String(d.name || d.hostname || ('Device '+(i+1))),
-      ip: String(d.ip || '0.0.0.0'),
-      mac: String(d.mac || 'unknown'),
-      vendor: String(d.vendor || 'unknown'),
-      riskScore: Number(d.riskScore || 0),
-      quality: Number(d.quality || 0),
-      lastSeen: Number(d.lastSeen || Date.now()),
-      hostname: String(d.hostname || ''),
-      isGateway: !!d.isGateway,
-      deviceType: String(d.deviceType || '')
-    }));
-  }
-
-  function show(screen){
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-    document.querySelectorAll('.nav').forEach(s=>s.classList.remove('active'));
-    const sc = $('screen-'+screen); if(sc) sc.classList.add('active');
-    const nb = document.querySelector('.nav[data-screen="'+screen+'"]'); if(nb) nb.classList.add('active');
-    mapRenderer.setActive(screen === 'map');
-    if(screen === 'map'){ mapRenderer.fit(); }
-  }
-
-  document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
-
-  function renderDevices(){
-    const q = ($('devSearch').value||'').toLowerCase();
-    const list = $('devList'); list.innerHTML='';
-    const rows = state.devices.filter(d=> (d.name+d.ip+d.mac).toLowerCase().includes(q));
-    state.filtered = rows;
-    rows.forEach(d=>{
-      const item = document.createElement('div');
-      item.className='item';
-      item.innerHTML = '<div class="row"><div><div class="v">'+d.name+'</div><div class="mut mono">'+d.ip+' • '+(d.vendor||'unknown')+' • '+(d.mac||'unknown')+'</div></div><span class="chip">risk '+(d.riskScore||0)+'</span></div>'+
-        '<div class="row" style="margin-top:8px"><button class="btn" data-ping="'+d.id+'">Ping</button><button class="btn" data-block="'+d.id+'" disabled title="Not supported yet">Block</button><button class="btn" data-prio="'+d.id+'" disabled title="Not supported yet">Prioritize</button></div>';
-      item.addEventListener('click', (ev)=>{ if(ev.target.closest('button')) return; openDeviceModal(d); });
-      list.appendChild(item);
-    });
-    list.querySelectorAll('[data-ping]').forEach(b=>b.addEventListener('click',()=>req('device.ping',{deviceId:b.dataset.ping})));
-    list.querySelectorAll('[data-block]').forEach(b=>b.addEventListener('click',()=>req('device.block',{deviceId:b.dataset.block})));
-    list.querySelectorAll('[data-prio]').forEach(b=>b.addEventListener('click',()=>req('device.prioritize',{deviceId:b.dataset.prio})));
-    $('ovDev').textContent = rows.length;
-  }
-
-  function renderMap(){
-    const rows = state.filtered.length?state.filtered:state.devices;
-    $('mapCount').textContent = (rows.length + (rows.length?1:0))+' nodes';
-    mapRenderer.setDevices(rows);
-    renderMapList(rows);
-  }
-
-  function renderMapList(rows){
-    const box = $('mapList'); box.innerHTML='';
-    rows.forEach(d=>{
-      const n = document.createElement('div');
-      n.className='node';
-      n.innerHTML = '<div class="row"><b>'+d.name+'</b><span class="chip mono">'+d.ip+'</span></div>'+
-        '<div class="mut">vendor '+(d.vendor||'unknown')+' • score '+(d.riskScore||0)+'</div>';
-      n.addEventListener('click', ()=>openDeviceModal(d));
-      box.appendChild(n);
-    });
-  }
-
-  function openDeviceModalById(id){
-    const d = state.devices.find(x=>x.id===id);
-    if(d) openDeviceModal(d);
-  }
-
-  function openDeviceModal(device){
-    state.selectedDevice = device;
-    $('dmName').textContent = device.name;
-    $('dmMeta').textContent = device.ip+' • '+(device.vendor||'unknown')+' • '+(device.mac||'unknown');
-    $('dmRisk').textContent = String(device.riskScore||0);
-    $('deviceModal').classList.add('show');
-    mapRenderer.scheduleDraw();
-  }
-
-  function closeDeviceModal(){
-    $('deviceModal').classList.remove('show');
-    state.selectedDevice = null;
-    mapRenderer.scheduleDraw();
-  }
-
-  $('dmClose').addEventListener('click', closeDeviceModal);
-  $('deviceModal').addEventListener('click', (ev)=>{ if(ev.target.id==='deviceModal') closeDeviceModal(); });
-  $('dmPing').addEventListener('click', ()=>{ if(state.selectedDevice) req('device.ping',{deviceId:state.selectedDevice.id}); });
-  $('dmBlock').addEventListener('click', ()=>{ if(state.selectedDevice) req('device.block',{deviceId:state.selectedDevice.id}); });
-  $('dmPrio').addEventListener('click', ()=>{ if(state.selectedDevice) req('device.prioritize',{deviceId:state.selectedDevice.id}); });
-
-  function applyRouterInfo(payload){
-    state.routerControlSupported = false;
-    disableRouterControls((payload && payload.message) ? payload.message : 'Router controls are not supported yet.');
-  }
-
-  function updateOverviewFromDevices(){
-    const all = state.devices || [];
-    const online = all.length;
-    const gateway = all.find(d=>d.isGateway);
-    $('ovWan').textContent = gateway ? gateway.ip : (online ? 'ONLINE' : 'UNKNOWN');
-    $('ovDev').textContent = String(online);
-  }
-
-  function renderAnalytics(payload){
-    $('anDown').textContent = payload.downMbps!=null ? Number(payload.downMbps).toFixed(1)+' Mbps' : 'N/A';
-    $('anUp').textContent = payload.upMbps!=null ? Number(payload.upMbps).toFixed(1)+' Mbps' : 'N/A';
-    $('anLat').textContent = payload.latencyMs!=null ? Number(payload.latencyMs).toFixed(1)+' ms' : 'N/A';
-    $('anJit').textContent = payload.jitterMs!=null ? Number(payload.jitterMs).toFixed(1)+' ms' : 'N/A';
-    $('anLoss').textContent = payload.packetLossPct!=null ? Number(payload.packetLossPct).toFixed(1)+' %' : 'N/A';
-    $('anDev').textContent = String(payload.deviceCount!=null ? payload.deviceCount : (state.devices||[]).length);
-    $('ovLat').textContent = payload.avgRttMs!=null ? Number(payload.avgRttMs).toFixed(1)+' ms' : (payload.latencyMs!=null ? Number(payload.latencyMs).toFixed(1)+' ms' : 'N/A');
-    $('ovJit').textContent = payload.medianRttMs!=null ? Number(payload.medianRttMs).toFixed(1)+' ms' : 'N/A';
-    $('ovLoss').textContent = payload.packetLossPct!=null ? Number(payload.packetLossPct).toFixed(1)+' %' : 'N/A';
-  }
-
-  function disableRouterControls(reason){
-    ['btnDhcp','btnDns','btnFw','btnVpn','btnReboot','btnQos'].forEach(id=>{
-      const el = $(id);
-      if(!el) return;
-      el.disabled = true;
-      el.title = reason;
-    });
-    $('dmBlock').disabled = true;
-    $('dmPrio').disabled = true;
-    $('dmBlock').title = 'Not supported yet';
-    $('dmPrio').title = 'Not supported yet';
-    $('statusOv').textContent = reason;
-  }
-
-  function createMapRenderer(onNodeTap){
-    const renderer = {
-      canvas:null, ctx:null, stage:null, empty:null,
-      active:false, devices:[], nodes:[], edges:[],
-      scale:1, minScale:0.55, maxScale:3.0, tx:0, ty:0,
-      pointers:new Map(), pinchStart:null, dragStart:null,
-      raf:0,
-      init(){
-        this.canvas = $('mapCanvas');
-        this.ctx = this.canvas.getContext('2d', { alpha:true });
-        this.stage = $('mapStage');
-        this.empty = $('mapEmpty');
-        this.stage.addEventListener('wheel', (ev)=>{
-          ev.preventDefault();
-          const rect = this.canvas.getBoundingClientRect();
-          const px = ev.clientX - rect.left;
-          const py = ev.clientY - rect.top;
-          const before = this.screenToWorld(px, py);
-          const z = ev.deltaY < 0 ? 1.1 : 0.92;
-          this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * z));
-          const after = this.screenToWorld(px, py);
-          this.tx += (after.x - before.x) * this.scale;
-          this.ty += (after.y - before.y) * this.scale;
-          this.clampPan();
-          this.scheduleDraw();
-        }, { passive:false });
-
-        this.canvas.addEventListener('pointerdown', (ev)=>{
-          this.canvas.setPointerCapture(ev.pointerId);
-          this.pointers.set(ev.pointerId, { x:ev.clientX, y:ev.clientY });
-          if(this.pointers.size === 1){
-            this.dragStart = { x:ev.clientX, y:ev.clientY, tx:this.tx, ty:this.ty, t:Date.now() };
-          } else if(this.pointers.size === 2){
-            const pts = Array.from(this.pointers.values());
-            this.pinchStart = { dist:distance(pts[0], pts[1]), scale:this.scale };
-          }
-        });
-        this.canvas.addEventListener('pointermove', (ev)=>{
-          if(!this.pointers.has(ev.pointerId)) return;
-          this.pointers.set(ev.pointerId, { x:ev.clientX, y:ev.clientY });
-          if(this.pointers.size === 1 && this.dragStart){
-            const p = Array.from(this.pointers.values())[0];
-            this.tx = this.dragStart.tx + (p.x - this.dragStart.x);
-            this.ty = this.dragStart.ty + (p.y - this.dragStart.y);
-            this.clampPan();
-            this.scheduleDraw();
-          } else if(this.pointers.size === 2 && this.pinchStart){
-            const pts = Array.from(this.pointers.values());
-            const dist = Math.max(1, distance(pts[0], pts[1]));
-            this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.pinchStart.scale * (dist / this.pinchStart.dist)));
-            this.clampPan();
-            this.scheduleDraw();
-          }
-        });
-        this.canvas.addEventListener('pointerup', (ev)=>this.onPointerEnd(ev,onNodeTap));
-        this.canvas.addEventListener('pointercancel', (ev)=>this.onPointerEnd(ev,onNodeTap));
-
-        window.addEventListener('resize', ()=>{ this.resize(); this.fit(false); this.scheduleDraw(); });
-        this.resize();
-      },
-      onPointerEnd(ev, onNodeTap){
-        const start = this.dragStart;
-        const p = this.pointers.get(ev.pointerId);
-        this.pointers.delete(ev.pointerId);
-        if(this.pointers.size < 2) this.pinchStart = null;
-        if(!start || !p) return;
-        const moved = Math.hypot((p.x-start.x),(p.y-start.y));
-        const elapsed = Date.now() - start.t;
-        if(moved < 10 && elapsed < 280){
-          const rect = this.canvas.getBoundingClientRect();
-          const hit = this.hitNode(ev.clientX - rect.left, ev.clientY - rect.top);
-          if(hit && hit.deviceId) onNodeTap(hit.deviceId);
-        }
-        this.dragStart = null;
-      },
-      setActive(flag){
-        this.active = !!flag;
-        if(this.active){ this.resize(); this.scheduleDraw(); }
-      },
-      setDevices(devices){
-        this.devices = devices.slice();
-        this.buildTopology();
-        this.empty.classList.toggle('hidden', this.devices.length > 0);
-        this.fit(false);
-        this.scheduleDraw();
-      },
-      buildTopology(){
-        const devices = this.devices.slice();
-        if(devices.length===0){ this.nodes=[]; this.edges=[]; return; }
-        const coreDevice = devices.find(d=>d.isGateway || (d.deviceType||'').toLowerCase()==='router' || (d.name||'').toLowerCase().includes('gateway')) || devices[0];
-        const peers = devices.filter(d=>d.id!==coreDevice.id).sort((a,b)=>linkQuality(b)-linkQuality(a));
-        const nodes = [{ id:'core', deviceId:coreDevice.id, x:0, y:0, r:22, core:true, label:'GATEWAY', ip:coreDevice.ip, quality:100 }];
-        const edges = [];
-        let idx=0, ring=1;
-        const gap = 78;
-        while(idx<peers.length){
-          const radius = 95*ring;
-          const cap = Math.max(6, Math.floor((Math.PI*2*radius)/gap));
-          for(let i=0;i<cap && idx<peers.length;i++,idx++){
-            const d = peers[idx];
-            const a = -Math.PI/2 + (i/cap)*Math.PI*2;
-            const q = linkQuality(d);
-            nodes.push({ id:d.id, deviceId:d.id, x:Math.cos(a)*radius, y:Math.sin(a)*radius, r:14 + Math.max(0, Math.min(8, Math.round(q/18))), core:false, label:(d.name||'Device').slice(0,16), ip:d.ip, quality:q });
-            edges.push({ from:'core', to:d.id, quality:q });
-          }
-          ring++;
-        }
-        this.nodes = nodes;
-        this.edges = edges;
-      },
-      bounds(){
-        if(this.nodes.length===0) return { minX:-120,maxX:120,minY:-120,maxY:120 };
-        let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-        this.nodes.forEach(n=>{ minX=Math.min(minX,n.x-n.r-40); maxX=Math.max(maxX,n.x+n.r+40); minY=Math.min(minY,n.y-n.r-40); maxY=Math.max(maxY,n.y+n.r+60); });
-        return { minX,maxX,minY,maxY };
-      },
-      fit(){
-        if(this.canvas.width<=0 || this.canvas.height<=0) return;
-        const b = this.bounds();
-        const w = Math.max(220, b.maxX-b.minX);
-        const h = Math.max(220, b.maxY-b.minY);
-        const sx = (this.canvas.clientWidth*0.78)/w;
-        const sy = (this.canvas.clientHeight*0.78)/h;
-        this.scale = Math.max(this.minScale, Math.min(this.maxScale, Math.min(sx,sy)));
-        const cx = (b.minX+b.maxX)*0.5;
-        const cy = (b.minY+b.maxY)*0.5;
-        this.tx = this.canvas.clientWidth*0.5 - cx*this.scale;
-        this.ty = this.canvas.clientHeight*0.5 - cy*this.scale;
-        this.clampPan();
-      },
-      clampPan(){
-        const b = this.bounds();
-        const graphW = (b.maxX-b.minX)*this.scale;
-        const graphH = (b.maxY-b.minY)*this.scale;
-        const maxX = Math.max(140, graphW*0.6);
-        const maxY = Math.max(140, graphH*0.6);
-        this.tx = Math.max(this.canvas.clientWidth*0.5-maxX, Math.min(this.canvas.clientWidth*0.5+maxX, this.tx));
-        this.ty = Math.max(this.canvas.clientHeight*0.5-maxY, Math.min(this.canvas.clientHeight*0.5+maxY, this.ty));
-      },
-      resize(){
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        const r = this.canvas.getBoundingClientRect();
-        this.canvas.width = Math.max(1, Math.floor(r.width*dpr));
-        this.canvas.height = Math.max(1, Math.floor(r.height*dpr));
-        this.ctx.setTransform(dpr,0,0,dpr,0,0);
-      },
-      worldToScreen(x,y){ return { x:x*this.scale + this.tx, y:y*this.scale + this.ty }; },
-      screenToWorld(x,y){ return { x:(x-this.tx)/this.scale, y:(y-this.ty)/this.scale }; },
-      hitNode(sx,sy){
-        const p = this.screenToWorld(sx,sy);
-        for(let i=this.nodes.length-1;i>=0;i--){
-          const n = this.nodes[i];
-          const dx = p.x-n.x, dy = p.y-n.y;
-          if(Math.hypot(dx,dy) <= n.r + 8) return n;
-        }
-        return null;
-      },
-      scheduleDraw(){
-        if(!this.active || this.raf) return;
-        this.raf = requestAnimationFrame(()=>{ this.raf=0; this.draw(); });
-      },
-      draw(){
-        if(!this.active) return;
-        const ctx = this.ctx;
-        const w = this.canvas.clientWidth;
-        const h = this.canvas.clientHeight;
-        ctx.clearRect(0,0,w,h);
-        ctx.fillStyle = '#081117';
-        ctx.fillRect(0,0,w,h);
-
-        ctx.strokeStyle = 'rgba(130,190,230,0.12)';
-        ctx.lineWidth = 1;
-        for(let x=0;x<=w;x+=28){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-        for(let y=0;y<=h;y+=28){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-
-        this.edges.forEach(e=>{
-          const a = this.nodes.find(n=>n.id===e.from); const b = this.nodes.find(n=>n.id===e.to);
-          if(!a||!b) return;
-          const p1 = this.worldToScreen(a.x,a.y); const p2 = this.worldToScreen(b.x,b.y);
-          const q = Math.max(0.05, Math.min(1, e.quality/100));
-          ctx.strokeStyle = 'rgba(90,194,255,'+(0.25 + q*0.55)+')';
-          ctx.lineWidth = 1.8 + q*3.2;
-          ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
-        });
-
-        const labelNodes = this.nodes.slice().sort((a,b)=>b.quality-a.quality).slice(0,10).map(n=>n.id);
-        this.nodes.forEach(n=>{
-          const p = this.worldToScreen(n.x,n.y);
-          ctx.fillStyle = n.core ? '#ffae3d' : '#60cbff';
-          ctx.strokeStyle = 'rgba(4,10,14,0.9)';
-          ctx.lineWidth = 2.4;
-          ctx.beginPath(); ctx.arc(p.x,p.y,n.r,0,Math.PI*2); ctx.fill(); ctx.stroke();
-          if(state.selectedDevice && state.selectedDevice.id===n.deviceId){
-            ctx.strokeStyle = '#ffe29c';
-            ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(p.x,p.y,n.r+5,0,Math.PI*2); ctx.stroke();
-          }
-          if(n.core || labelNodes.includes(n.id) || (state.selectedDevice && state.selectedDevice.id===n.deviceId)){
-            const label = n.core ? 'GATEWAY' : (n.label || n.ip);
-            ctx.font = '12px Segoe UI';
-            const tw = ctx.measureText(label).width;
-            const bx = p.x - tw/2 - 6;
-            const by = p.y + n.r + 8;
-            ctx.fillStyle = 'rgba(4,10,14,0.84)';
-            ctx.fillRect(bx, by, tw+12, 18);
-            ctx.fillStyle = '#ecf6ff';
-            ctx.fillText(label, bx+6, by+13);
-          }
-        });
-      }
-    };
-    renderer.init();
-    return renderer;
-  }
-
-  function distance(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
-  function linkQuality(d){
-    const direct = Number(d.quality || 0);
-    if(direct > 0) return Math.max(20, Math.min(99, direct));
-    const risk = Number(d.riskScore||0);
-    return Math.max(20, Math.min(96, 88 - risk*2));
-  }
-
-  $('btnMapRunScan').addEventListener('click', ()=>{ req('scan.start',{}); req('devices.list',{}); });
-  $('btnMapRefresh').addEventListener('click', ()=>{ req('map.refresh',{}); req('devices.list',{}); mapRenderer.fit(); mapRenderer.scheduleDraw(); });
-  $('devSearch').addEventListener('input', renderDevices);
-  $('btnDevRefresh').addEventListener('click', ()=>{ req('devices.list',{}); req('scan.start',{}); });
-  $('btnQuickScan').addEventListener('click', ()=>{ req('scan.start',{}); req('devices.list',{}); $('statusOv').textContent='Deep scan requested'; });
-  $('btnRefreshOv').addEventListener('click', ()=>{ req('analytics.snapshot',{}); req('devices.list',{}); });
-
-  $('btnStartSpeed').addEventListener('click', ()=>req('speedtest.start',{}));
-  $('btnStopSpeed').addEventListener('click', ()=>req('speedtest.stop',{}));
-  $('btnResetSpeed').addEventListener('click', ()=>{ req('speedtest.stop',{}); $('spPhase').textContent='IDLE'; $('spDown').textContent='0 Mbps'; $('spUp').textContent='0 Mbps'; $('spLat').textContent='0 ms'; });
-
-  $('btnDhcp').addEventListener('click', ()=>req('router.renewDhcp',{}));
-  $('btnDns').addEventListener('click', ()=>req('router.flushDns',{}));
-  $('btnFw').addEventListener('click', ()=>req('router.toggleFirewall',{}));
-  $('btnVpn').addEventListener('click', ()=>req('router.toggleVpn',{}));
-  $('btnReboot').addEventListener('click', ()=>req('router.rebootRouter',{}));
-  $('btnQos').addEventListener('click', ()=>{ if(!state.routerControlSupported) return; req('router.setQos',{mode:$('qosMode').value}); });
-
-  $('btnAnRefresh').addEventListener('click', ()=>req('analytics.snapshot',{}));
-
-  setInterval(()=>{ req('analytics.snapshot',{}); req('devices.list',{}); }, 4000);
-  disableRouterControls('Router controls are not supported yet.');
-  show('overview');
-  req('scan.start',{});
-  req('devices.list',{});
-  req('analytics.snapshot',{});
-  req('router.info',{});
+const $=id=>document.getElementById(id); const state={devices:[],filtered:[],selectedDevice:null,routerControlSupported:false,scan:{state:'IDLE',targetsPlanned:0,probesSent:0,devicesFound:0,startedAt:0,elapsedSec:0},mapNodes:[]};
+function req(action,payload){try{if(window.NERF_NATIVE&&window.NERF_NATIVE.request)window.NERF_NATIVE.request(action,JSON.stringify(payload||{}));else log('Bridge unavailable: '+action);}catch(e){log('Bridge error: '+e.message)}}
+function log(msg){const el=document.createElement('div');el.textContent='['+new Date().toLocaleTimeString()+'] '+msg;$('log').prepend(el)}
+function normalizeDevices(rows){return(rows||[]).map((d,i)=>({id:String(d.id||('node-'+i)),name:String(d.name||d.hostname||('Device '+(i+1))),hostname:String(d.hostname||''),ip:String(d.ip||'0.0.0.0'),mac:String(d.mac||'unknown'),vendor:String(d.vendor||'unknown'),riskScore:Number(d.riskScore||0),quality:Number(d.quality||0),lastSeen:Number(d.lastSeen||Date.now()),isGateway:!!d.isGateway,deviceType:String(d.deviceType||''),online:d.online==null?true:!!d.online,latencyMs:d.latencyMs==null?null:Number(d.latencyMs)}))}
+function applyThemeVars(vars){if(!vars||typeof vars!=='object')return;const root=document.documentElement;Object.keys(vars).forEach(k=>root.style.setProperty(k.startsWith('--')?k:'--'+k,String(vars[k])))}
+function formatElapsed(sec){if(sec<60)return sec+'s';const m=Math.floor(sec/60);return m+'m '+(sec%60)+'s'}
+function updateScanProgress(progress){const p=progress||{};const st=String(p.state||p.phase||state.scan.state||'IDLE').toUpperCase();if(st==='SCANNING'||st==='RUNNING'||st==='STARTED'){if(!state.scan.startedAt)state.scan.startedAt=Number(p.startedAt||Date.now());state.scan.state='SCANNING'}else state.scan.state=st;if(p.targetsPlanned!=null)state.scan.targetsPlanned=Number(p.targetsPlanned)||0;if(p.probesSent!=null)state.scan.probesSent=Number(p.probesSent)||0;if(p.devicesFound!=null)state.scan.devicesFound=Number(p.devicesFound)||0;state.scan.elapsedSec=state.scan.state==='SCANNING'?Math.max(0,Math.floor((Date.now()-state.scan.startedAt)/1000)):state.scan.elapsedSec;const total=Math.max(0,state.scan.targetsPlanned),done=Math.max(0,state.scan.probesSent),pct=total>0?Math.min(1,done/total):0;$('scanState').textContent=state.scan.state;$('scanTargets').textContent=String(total);$('scanProbes').textContent=String(done);$('scanFound').textContent=String(state.scan.devicesFound);$('scanElapsed').textContent=formatElapsed(state.scan.elapsedSec);$('scanProgressBar').style.width=Math.round(pct*100)+'%';$('statusOv').textContent=state.scan.state==='SCANNING'?('Scan '+done+'/'+total+' found '+state.scan.devicesFound):(state.scan.state==='DONE'?'Scan complete':state.scan.state==='CANCELLED'?'Scan cancelled':state.scan.state==='ERROR'?(p.message||'Scan failed'):$('statusOv').textContent)}
+function startScan(){updateScanProgress({state:'SCANNING',targetsPlanned:0,probesSent:0,devicesFound:0,startedAt:Date.now()});req('scan.start',{});req('devices.list',{})}
+function stopScan(){req('scan.stop',{});updateScanProgress({state:'CANCELLED'})}
+function show(screen){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.nav').forEach(s=>s.classList.remove('active'));const sc=$('screen-'+screen);if(sc)sc.classList.add('active');const nb=document.querySelector('.nav[data-screen="'+screen+'"]');if(nb)nb.classList.add('active');if(screen==='map')drawMap()}
+function maskMac(mac){const p=String(mac||'').split(':');if(p.length<6)return mac||'-';return p[0]+':'+p[1]+':xx:xx:xx:'+p[5]}
+function formatRelativeTime(ts){const t=Number(ts||0);if(!t)return '-';const s=Math.max(0,Math.floor((Date.now()-t)/1000));if(s<10)return'just now';if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
+function copyText(v,label){if(!v){$('statusOv').textContent='Nothing to copy for '+label;return}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(()=>$('statusOv').textContent=label+' copied').catch(()=>$('statusOv').textContent='Copy failed for '+label)}else $('statusOv').textContent='Clipboard unavailable'}
+function renderDevices(devicesArg){if(Array.isArray(devicesArg))state.devices=normalizeDevices(devicesArg);const q=($('devSearch').value||'').toLowerCase(),list=$('devList');list.innerHTML='';const rows=state.devices.filter(d=>(d.name+d.hostname+d.ip+d.mac).toLowerCase().includes(q));state.filtered=rows;rows.forEach(d=>{const item=document.createElement('div');item.className='item';item.innerHTML='<div class="row"><div><div class="v">'+d.name+'</div><div class="mut mono">'+d.ip+' • '+(d.vendor||'unknown')+' • '+maskMac(d.mac||'')+'</div></div><span class="chip">'+(d.online===false?'OFFLINE':'ONLINE')+'</span></div><div class="row" style="margin-top:6px"><div class="mut">latency '+(d.latencyMs!=null?(d.latencyMs+' ms'):'N/A')+'</div><div class="mut">last '+formatRelativeTime(d.lastSeen)+'</div></div><div class="row" style="margin-top:8px"><button class="btn" data-ping="'+d.id+'">Ping</button><button class="btn" disabled title="Not supported yet">Block</button><button class="btn" disabled title="Not supported yet">Prioritize</button></div>';item.addEventListener('click',ev=>{if(ev.target.closest('button'))return;openDeviceModal(d)});list.appendChild(item)});list.querySelectorAll('[data-ping]').forEach(b=>b.addEventListener('click',()=>req('device.ping',{deviceId:b.dataset.ping})));$('ovDev').textContent=String(rows.length);drawMap();renderMapList(rows)}
+function renderMapList(rows){const box=$('mapList');box.innerHTML='';rows.forEach(d=>{const n=document.createElement('div');n.className='node';n.innerHTML='<div class="row"><b>'+d.name+'</b><span class="chip mono">'+d.ip+'</span></div><div class="mut">vendor '+(d.vendor||'unknown')+' • score '+(d.riskScore||0)+'</div>';n.addEventListener('click',()=>openDeviceModal(d));box.appendChild(n)})}
+function linkQuality(d){const direct=Number(d.quality||0);if(direct>0)return Math.max(20,Math.min(99,direct));const risk=Number(d.riskScore||0);return Math.max(20,Math.min(96,88-risk*2))}
+function drawMap(){const rows=state.filtered.length?state.filtered:state.devices;const canvas=$('mapCanvas');const empty=$('mapEmpty');empty.classList.toggle('hidden',rows.length>0);$('mapCount').textContent=(rows.length+(rows.length?1:0))+' nodes';const ctx=canvas.getContext('2d');const w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=w;canvas.height=h;ctx.clearRect(0,0,w,h);ctx.fillStyle='#081117';ctx.fillRect(0,0,w,h);state.mapNodes=[];if(!rows.length)return;const core=rows.find(d=>d.isGateway)||rows[0];const peers=rows.filter(d=>d.id!==core.id).sort((a,b)=>linkQuality(b)-linkQuality(a);state.mapNodes.push({id:core.id,x:w/2,y:h/2,r:20,device:core});ctx.fillStyle='#ffae3d';ctx.beginPath();ctx.arc(w/2,h/2,20,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ecf6ff';ctx.fillText('GATEWAY',w/2-28,h/2+4);const radius=Math.min(w,h)/2-32;peers.forEach((d,i)=>{const a=(i/Math.max(1,peers.length))*Math.PI*2-Math.PI/2;const x=w/2+Math.cos(a)*radius*.72,y=h/2+Math.sin(a)*radius*.72,q=linkQuality(d),r=12+Math.round(q/24);ctx.strokeStyle='rgba(90,194,255,'+(.25+q/130)+')';ctx.lineWidth=1.2+q/35;ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle='#60cbff';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ecf6ff';ctx.fillText((d.name||'Device').slice(0,10),x-r,y+r+12);state.mapNodes.push({id:d.id,x,y,r,device:d})})}
+function openDeviceModalById(id){const d=state.devices.find(x=>x.id===id);if(d)openDeviceModal(d)}
+function openDeviceModal(device){state.selectedDevice=device;$('dmName').textContent=device.name;$('dmMeta').textContent=(device.deviceType||'UNKNOWN')+' • '+(device.online===false?'OFFLINE':'ONLINE');$('dmHostname').textContent=device.hostname||'-';$('dmIp').textContent=device.ip||'-';$('dmMac').textContent=maskMac(device.mac||'');$('dmVendor').textContent=device.vendor||'-';$('dmLatency').textContent=device.latencyMs!=null?(device.latencyMs+' ms'):'N/A';$('dmOnline').textContent=device.online===false?'OFFLINE':'ONLINE';$('dmLastSeen').textContent=formatRelativeTime(device.lastSeen);$('dmRisk').textContent=String(device.riskScore||0);$('deviceModal').classList.add('show')}
+function closeDeviceModal(){$('deviceModal').classList.remove('show');state.selectedDevice=null}
+function setRouterInfo(info){const p=info||{};$('routerGateway').textContent=p.gatewayIp||'-';$('routerSsid').textContent=p.ssid||'-';$('routerRssi').textContent=p.wifiRssi!=null?(p.wifiRssi+' dBm'):'N/A';$('routerDns').textContent=Array.isArray(p.dnsServers)?p.dnsServers.join(', '):'-';$('routerSubnet').textContent=p.subnet||p.prefixLength||p.localIp||'-';disableRouterControls('No verified API endpoint for write actions. Read-only mode.')}
+function renderAnalytics(payload){$('anDown').textContent=payload.downMbps!=null?Number(payload.downMbps).toFixed(1)+' Mbps':'N/A';$('anUp').textContent=payload.upMbps!=null?Number(payload.upMbps).toFixed(1)+' Mbps':'N/A';$('anLat').textContent=payload.latencyMs!=null?Number(payload.latencyMs).toFixed(1)+' ms':'N/A';$('anJit').textContent=payload.jitterMs!=null?Number(payload.jitterMs).toFixed(1)+' ms':'N/A';$('anLoss').textContent=payload.packetLossPct!=null?Number(payload.packetLossPct).toFixed(1)+' %':'N/A';$('anDev').textContent=String(payload.deviceCount!=null?payload.deviceCount:(state.devices||[]).length);$('ovLat').textContent=payload.avgRttMs!=null?Number(payload.avgRttMs).toFixed(1)+' ms':(payload.latencyMs!=null?Number(payload.latencyMs).toFixed(1)+' ms':'N/A');$('ovJit').textContent=payload.medianRttMs!=null?Number(payload.medianRttMs).toFixed(1)+' ms':'N/A';$('ovLoss').textContent=payload.packetLossPct!=null?Number(payload.packetLossPct).toFixed(1)+' %':'N/A'}
+function disableRouterControls(reason){['btnDhcp','btnDns','btnFw','btnVpn','btnReboot','btnQos'].forEach(id=>{const el=$(id);if(el){el.disabled=true;el.title=reason}});$('dmBlock').disabled=true;$('dmPrio').disabled=true;$('dmActionReason').textContent=reason;$('statusOv').textContent=reason}
+window.startScan=startScan;window.stopScan=stopScan;window.renderDevices=renderDevices;window.updateScanProgress=updateScanProgress;window.openDeviceModal=openDeviceModalById;window.setRouterInfo=setRouterInfo;window.applyThemeVars=applyThemeVars;window.NERF=window.NERF||{};window.NERF.request=req;window.NERF.startScan=startScan;window.NERF.stopScan=stopScan;window.NERF.renderDevices=renderDevices;window.NERF.updateScanProgress=updateScanProgress;window.NERF.openDeviceModal=openDeviceModalById;window.NERF.setRouterInfo=setRouterInfo;window.NERF.applyThemeVars=applyThemeVars;
+window.NERF.onEvent=function(eventName,payload){const p=payload||{};if(eventName==='action.result'){if(p.devices)renderDevices(p.devices);if(p.downMbps!=null||p.deviceCount!=null||p.latencyMs!=null)renderAnalytics(p);if(p.code==='ROUTER_INFO'||p.gatewayIp!=null||p.dnsServers!=null||p.ssid!=null)setRouterInfo(p);if(p.status==='NOT_SUPPORTED'&&p.message)$('statusOv').textContent=p.message;log('EVENT '+eventName)}else if(eventName==='scan_progress'){updateScanProgress(Object.assign({},p,{state:'SCANNING'}))}else if(eventName==='scan_done'){updateScanProgress(Object.assign({},p,{state:'DONE'}));req('devices.list',{})}else if(eventName==='scan_error'){updateScanProgress(Object.assign({},p,{state:'ERROR'}))}};
+setInterval(()=>{if(document.visibilityState!=='visible')return; if(state.scan.state==='SCANNING')updateScanProgress({state:'SCANNING'}); req('analytics.snapshot',{});req('devices.list',{})},4000);
+$('mapCanvas').addEventListener('click',ev=>{const r=$('mapCanvas').getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top;const hit=state.mapNodes.find(n=>Math.hypot(n.x-x,n.y-y)<=n.r+4);if(hit)openDeviceModal(hit.device)});
+$('dmClose').addEventListener('click',closeDeviceModal);$('deviceModal').addEventListener('click',ev=>{if(ev.target.id==='deviceModal')closeDeviceModal()});$('dmPing').addEventListener('click',()=>{if(state.selectedDevice)req('device.ping',{deviceId:state.selectedDevice.id})});$('dmCopyIp').addEventListener('click',()=>{if(state.selectedDevice)copyText(state.selectedDevice.ip,'IP')});$('dmCopyMac').addEventListener('click',()=>{if(state.selectedDevice)copyText(state.selectedDevice.mac,'MAC')});
+document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));$('btnMapRunScan').addEventListener('click',startScan);$('btnMapRefresh').addEventListener('click',()=>{req('map.refresh',{});req('devices.list',{})});$('devSearch').addEventListener('input',()=>renderDevices());$('btnDevRefresh').addEventListener('click',()=>{req('devices.list',{});req('scan.start',{})});$('btnQuickScan').addEventListener('click',startScan);$('btnStartScan').addEventListener('click',startScan);$('btnStopScan').addEventListener('click',stopScan);$('btnRouterInfo').addEventListener('click',()=>req('router.info',{}));$('btnRefreshOv').addEventListener('click',()=>{req('analytics.snapshot',{});req('devices.list',{})});$('btnStartSpeed').addEventListener('click',()=>req('speedtest.start',{}));$('btnStopSpeed').addEventListener('click',()=>req('speedtest.stop',{}));$('btnResetSpeed').addEventListener('click',()=>{req('speedtest.stop',{});$('spPhase').textContent='IDLE';$('spDown').textContent='0 Mbps';$('spUp').textContent='0 Mbps';$('spLat').textContent='0 ms'});$('btnDhcp').addEventListener('click',()=>req('router.renewDhcp',{}));$('btnDns').addEventListener('click',()=>req('router.flushDns',{}));$('btnFw').addEventListener('click',()=>req('router.toggleFirewall',{}));$('btnVpn').addEventListener('click',()=>req('router.toggleVpn',{}));$('btnReboot').addEventListener('click',()=>req('router.rebootRouter',{}));$('btnQos').addEventListener('click',()=>{if(!state.routerControlSupported)return;req('router.setQos',{mode:$('qosMode').value})});$('btnAnRefresh').addEventListener('click',()=>req('analytics.snapshot',{}));
+disableRouterControls('Router controls are not supported yet.');show('overview');updateScanProgress({state:'IDLE'});req('devices.list',{});req('analytics.snapshot',{});req('router.info',{});
 })();
 </script>
 </body>
 </html>
-
-
 
