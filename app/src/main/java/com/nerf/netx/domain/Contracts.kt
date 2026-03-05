@@ -5,13 +5,72 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface SpeedtestService {
   val ui: StateFlow<SpeedtestUiState>
+  val servers: StateFlow<List<SpeedtestServer>>
+  val config: StateFlow<SpeedtestConfig>
+  val history: StateFlow<List<SpeedtestHistoryEntry>>
+  val latestResult: StateFlow<SpeedtestResult?>
   suspend fun start()
   suspend fun stop()
   suspend fun reset()
+  suspend fun updateConfig(config: SpeedtestConfig)
+  suspend fun clearHistory()
 }
 
 enum class ServiceStatus { OK, NO_DATA, NOT_SUPPORTED, ERROR, RUNNING, IDLE }
 enum class MeasurementMode { REAL, SIMULATED, NOT_AVAILABLE }
+enum class SpeedtestPhase { IDLE, PING, DOWNLOAD, UPLOAD, DONE, ERROR, ABORTED }
+
+data class SpeedtestServer(
+  val id: String,
+  val name: String,
+  val baseUrl: String,
+  val pingUrl: String,
+  val downloadPaths: Map<Int, String>,
+  val uploadUrl: String
+)
+
+data class SpeedtestConfig(
+  val serverMode: String = "AUTO",
+  val selectedServerId: String? = null,
+  val downloadSizesBytes: List<Int> = listOf(5_000_000, 20_000_000),
+  val uploadSizesBytes: List<Int> = listOf(2_000_000, 10_000_000),
+  val threads: Int = 4,
+  val durationMs: Long = 8_000,
+  val timeoutMs: Long = 5_000
+)
+
+data class ThroughputSample(
+  val phase: SpeedtestPhase,
+  val tMs: Long,
+  val mbps: Double
+)
+
+data class SpeedtestResult(
+  val phase: SpeedtestPhase,
+  val serverId: String?,
+  val serverName: String?,
+  val pingMs: Double?,
+  val jitterMs: Double?,
+  val packetLossPct: Double?,
+  val downloadMbps: Double?,
+  val uploadMbps: Double?,
+  val samples: List<ThroughputSample>,
+  val error: String?,
+  val startedAt: Long,
+  val finishedAt: Long,
+  val reasons: Map<String, String> = emptyMap()
+)
+
+data class SpeedtestHistoryEntry(
+  val id: String,
+  val timestamp: Long,
+  val serverName: String?,
+  val pingMs: Double?,
+  val downMbps: Double?,
+  val upMbps: Double?,
+  val jitterMs: Double?,
+  val lossPct: Double?
+)
 
 data class SpeedtestUiState(
   val running: Boolean,
@@ -20,9 +79,18 @@ data class SpeedtestUiState(
   val upMbps: Double?,
   val latencyMs: Int?,
   val phase: String,
+  val phaseEnum: SpeedtestPhase = SpeedtestPhase.IDLE,
+  val currentMbps: Double? = null,
+  val samples: List<ThroughputSample> = emptyList(),
+  val pingMs: Double? = null,
+  val jitterMs: Double? = null,
+  val packetLossPct: Double? = null,
+  val activeServerId: String? = null,
+  val activeServerName: String? = null,
   val mode: MeasurementMode = MeasurementMode.NOT_AVAILABLE,
   val status: ServiceStatus = ServiceStatus.IDLE,
-  val message: String? = null
+  val message: String? = null,
+  val reason: String? = null
 )
 
 enum class ScanPhase { IDLE, RUNNING, COMPLETE, ERROR }

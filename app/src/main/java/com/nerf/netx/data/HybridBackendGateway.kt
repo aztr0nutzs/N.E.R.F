@@ -28,13 +28,21 @@ import com.nerf.netx.domain.ScanPhase
 import com.nerf.netx.domain.ScanService
 import com.nerf.netx.domain.ScanState
 import com.nerf.netx.domain.ServiceStatus
+import com.nerf.netx.domain.SpeedtestConfig
+import com.nerf.netx.domain.SpeedtestHistoryEntry
+import com.nerf.netx.domain.SpeedtestPhase
+import com.nerf.netx.domain.SpeedtestResult
 import com.nerf.netx.domain.SpeedtestService
+import com.nerf.netx.domain.SpeedtestServer
+import com.nerf.netx.domain.ThroughputSample
 import com.nerf.netx.domain.SpeedtestUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,9 +52,20 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import java.net.InetSocketAddress
-import java.net.Socket
-import kotlin.math.max
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedInputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.Locale
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.sqrt
 
 class HybridBackendGateway(
   context: Context,
@@ -58,7 +77,7 @@ class HybridBackendGateway(
   private val sharedDevices = MutableStateFlow<List<Device>>(emptyList())
   private val selectedNodeId = MutableStateFlow<String?>(null)
 
-  override val speedtest: SpeedtestService = HybridSpeedtest(scope)
+  override val speedtest: SpeedtestService = HybridSpeedtest(context, scope)
   override val scan: ScanService = HybridScanService(scope, lanScanner, sharedDevices)
   override val devices: DevicesService = HybridDevicesService(sharedDevices, scan)
   override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner)
@@ -110,7 +129,29 @@ data class RouterCredentials(
   fun configured(): Boolean = host.isNotBlank() && username.isNotBlank() && token.isNotBlank()
 }
 
-private class HybridSpeedtest(private val scope: CoroutineScope) : SpeedtestService {
+private class HybridSpeedtest(
+  context: Context,
+  private val scope: CoroutineScope
+) : SpeedtestService {
+  private val appContext = context.applicationContext
+  private val prefs = appContext.getSharedPreferences("nerf_speedtest_prefs", Context.MODE_PRIVATE)
+  private val historyKey = "speedtest_history_json"
+  private val uiMutex = Mutex()
+  private val activeConnections = linkedSetOf<HttpURLConnection>()
+  private val connectionMutex = Mutex()
+
+  private val _servers = MutableStateFlow(defaultServers())
+  override val servers: StateFlow<List<SpeedtestServer>> = _servers.asStateFlow()
+
+  private val _config = MutableStateFlow(defaultConfig())
+  override val config: StateFlow<SpeedtestConfig> = _config.asStateFlow()
+
+  private val _history = MutableStateFlow(loadHistory())
+  override val history: StateFlow<List<SpeedtestHistoryEntry>> = _history.asStateFlow()
+
+  private val _latestResult = MutableStateFlow<SpeedtestResult?>(null)
+  override val latestResult: StateFlow<SpeedtestResult?> = _latestResult.asStateFlow()
+
   private val _ui = MutableStateFlow(
     SpeedtestUiState(
       running = false,
@@ -118,10 +159,11 @@ private class HybridSpeedtest(private val scope: CoroutineScope) : SpeedtestServ
       downMbps = null,
       upMbps = null,
       latencyMs = null,
-      phase = "IDLE",
+      phase = SpeedtestPhase.IDLE.name,
+      phaseEnum = SpeedtestPhase.IDLE,
       mode = MeasurementMode.NOT_AVAILABLE,
       status = ServiceStatus.IDLE,
-      message = "Download/upload benchmark endpoints are not configured."
+      message = "Ready"
     )
   )
   override val ui: StateFlow<SpeedtestUiState> = _ui.asStateFlow()
@@ -131,70 +173,697 @@ private class HybridSpeedtest(private val scope: CoroutineScope) : SpeedtestServ
     if (_ui.value.running) return
     job?.cancel()
     job = scope.launch {
-      _ui.value = _ui.value.copy(
-        running = true,
-        progress01 = 0.1f,
-        phase = "PING",
-        status = ServiceStatus.RUNNING,
-        message = "Running best-effort latency check only; throughput endpoints not available."
-      )
-
-      val ping = measureInternetPingMs()
-      _ui.value = _ui.value.copy(
-        running = false,
-        progress01 = 1f,
-        latencyMs = ping,
-        downMbps = null,
-        upMbps = null,
-        phase = "DONE",
-        mode = MeasurementMode.NOT_AVAILABLE,
-        status = ServiceStatus.NOT_SUPPORTED,
-        message = "Speed throughput is NOT_SUPPORTED until real test endpoints are configured."
-      )
+      runSpeedtest()
     }
   }
 
   override suspend fun stop() {
-    job?.cancel()
+    job?.cancel(CancellationException("ABORT_REQUESTED"))
+    closeActiveConnections()
     job = null
-    _ui.value = _ui.value.copy(running = false, phase = "STOPPED", status = ServiceStatus.IDLE)
+    uiMutex.withLock {
+      _ui.value = _ui.value.copy(
+        running = false,
+        phase = SpeedtestPhase.ABORTED.name,
+        phaseEnum = SpeedtestPhase.ABORTED,
+        status = ServiceStatus.IDLE,
+        message = "Test aborted by user."
+      )
+    }
   }
 
   override suspend fun reset() {
-    job?.cancel()
+    job?.cancel(CancellationException("RESET_REQUESTED"))
+    closeActiveConnections()
     job = null
-    _ui.value = SpeedtestUiState(
-      running = false,
-      progress01 = 0f,
-      downMbps = null,
-      upMbps = null,
-      latencyMs = null,
-      phase = "IDLE",
-      mode = MeasurementMode.NOT_AVAILABLE,
-      status = ServiceStatus.IDLE,
-      message = "Download/upload benchmark endpoints are not configured."
+    uiMutex.withLock {
+      _ui.value = SpeedtestUiState(
+        running = false,
+        progress01 = 0f,
+        downMbps = null,
+        upMbps = null,
+        latencyMs = null,
+        phase = SpeedtestPhase.IDLE.name,
+        phaseEnum = SpeedtestPhase.IDLE,
+        mode = MeasurementMode.NOT_AVAILABLE,
+        status = ServiceStatus.IDLE,
+        message = "Ready"
+      )
+    }
+    _latestResult.value = null
+  }
+
+  override suspend fun updateConfig(config: SpeedtestConfig) {
+    _config.value = config.sanitize()
+  }
+
+  override suspend fun clearHistory() {
+    _history.value = emptyList()
+    prefs.edit().remove(historyKey).apply()
+  }
+
+  private suspend fun runSpeedtest() {
+    val startedAt = System.currentTimeMillis()
+    val cfg = _config.value.sanitize()
+    _config.value = cfg
+    val allSamples = mutableListOf<ThroughputSample>()
+    val reasons = mutableMapOf<String, String>()
+
+    uiMutex.withLock {
+      _ui.value = _ui.value.copy(
+        running = true,
+        progress01 = 0f,
+        phase = SpeedtestPhase.PING.name,
+        phaseEnum = SpeedtestPhase.PING,
+        currentMbps = null,
+        samples = emptyList(),
+        downMbps = null,
+        upMbps = null,
+        pingMs = null,
+        jitterMs = null,
+        packetLossPct = null,
+        latencyMs = null,
+        mode = MeasurementMode.REAL,
+        status = ServiceStatus.RUNNING,
+        message = "Selecting server and measuring ping...",
+        reason = null
+      )
+    }
+
+    try {
+      val selected = selectServer(cfg)
+      if (selected == null) {
+        val message = if (_servers.value.isEmpty()) {
+          "NOT_CONFIGURED: Add valid speedtest servers with ping/download/upload endpoints."
+        } else {
+          "No reachable speedtest server found."
+        }
+        reasons["server"] = message
+        completeWithError(
+          startedAt = startedAt,
+          message = message,
+          reasons = reasons
+        )
+        return
+      }
+
+      val server = selected.server
+      val pingStats = pingServer(server, samples = 10, timeoutMs = cfg.timeoutMs)
+      pingStats.reason?.let { reasons["ping"] = it }
+
+      uiMutex.withLock {
+        _ui.value = _ui.value.copy(
+          progress01 = 0.2f,
+          phase = SpeedtestPhase.DOWNLOAD.name,
+          phaseEnum = SpeedtestPhase.DOWNLOAD,
+          activeServerId = server.id,
+          activeServerName = server.name,
+          pingMs = pingStats.medianMs,
+          jitterMs = pingStats.jitterMs,
+          packetLossPct = pingStats.packetLossPct,
+          latencyMs = pingStats.medianMs?.toInt(),
+          message = "Running download throughput..."
+        )
+      }
+
+      val downOutcome = runDownloadPhase(server, cfg) { progress, sample ->
+        allSamples += sample
+        updateUiSample(
+          phase = SpeedtestPhase.DOWNLOAD,
+          progress01 = 0.2f + (0.35f * progress),
+          currentMbps = sample.mbps,
+          samples = allSamples
+        )
+      }
+      downOutcome.reason?.let { reasons["download"] = it }
+
+      uiMutex.withLock {
+        _ui.value = _ui.value.copy(
+          progress01 = 0.58f,
+          phase = SpeedtestPhase.UPLOAD.name,
+          phaseEnum = SpeedtestPhase.UPLOAD,
+          downMbps = downOutcome.mbps,
+          message = "Running upload throughput..."
+        )
+      }
+
+      val upOutcome = runUploadPhase(server, cfg) { progress, sample ->
+        allSamples += sample
+        updateUiSample(
+          phase = SpeedtestPhase.UPLOAD,
+          progress01 = 0.58f + (0.35f * progress),
+          currentMbps = sample.mbps,
+          samples = allSamples
+        )
+      }
+      upOutcome.reason?.let { reasons["upload"] = it }
+
+      val finishedAt = System.currentTimeMillis()
+      val result = SpeedtestResult(
+        phase = SpeedtestPhase.DONE,
+        serverId = server.id,
+        serverName = server.name,
+        pingMs = pingStats.medianMs,
+        jitterMs = pingStats.jitterMs,
+        packetLossPct = pingStats.packetLossPct,
+        downloadMbps = downOutcome.mbps,
+        uploadMbps = upOutcome.mbps,
+        samples = allSamples.toList(),
+        error = null,
+        startedAt = startedAt,
+        finishedAt = finishedAt,
+        reasons = reasons
+      )
+      _latestResult.value = result
+      appendHistory(result)
+
+      uiMutex.withLock {
+        _ui.value = _ui.value.copy(
+          running = false,
+          progress01 = 1f,
+          phase = SpeedtestPhase.DONE.name,
+          phaseEnum = SpeedtestPhase.DONE,
+          downMbps = downOutcome.mbps,
+          upMbps = upOutcome.mbps,
+          latencyMs = pingStats.medianMs?.toInt(),
+          pingMs = pingStats.medianMs,
+          jitterMs = pingStats.jitterMs,
+          packetLossPct = pingStats.packetLossPct,
+          currentMbps = null,
+          samples = allSamples.toList(),
+          mode = MeasurementMode.REAL,
+          status = ServiceStatus.OK,
+          message = "Speedtest completed."
+        )
+      }
+    } catch (ce: CancellationException) {
+      val abortedAt = System.currentTimeMillis()
+      val aborted = SpeedtestResult(
+        phase = SpeedtestPhase.ABORTED,
+        serverId = _ui.value.activeServerId,
+        serverName = _ui.value.activeServerName,
+        pingMs = _ui.value.pingMs,
+        jitterMs = _ui.value.jitterMs,
+        packetLossPct = _ui.value.packetLossPct,
+        downloadMbps = _ui.value.downMbps,
+        uploadMbps = _ui.value.upMbps,
+        samples = _ui.value.samples,
+        error = "Aborted",
+        startedAt = startedAt,
+        finishedAt = abortedAt
+      )
+      _latestResult.value = aborted
+      uiMutex.withLock {
+        _ui.value = _ui.value.copy(
+          running = false,
+          phase = SpeedtestPhase.ABORTED.name,
+          phaseEnum = SpeedtestPhase.ABORTED,
+          status = ServiceStatus.IDLE,
+          message = "Test aborted by user."
+        )
+      }
+    } catch (t: Throwable) {
+      reasons["error"] = t.message ?: "Unhandled speedtest error"
+      completeWithError(
+        startedAt = startedAt,
+        message = t.message ?: "Speedtest failed.",
+        reasons = reasons
+      )
+    }
+  }
+
+  private suspend fun completeWithError(
+    startedAt: Long,
+    message: String,
+    reasons: Map<String, String>
+  ) {
+    val finishedAt = System.currentTimeMillis()
+    val result = SpeedtestResult(
+      phase = SpeedtestPhase.ERROR,
+      serverId = _ui.value.activeServerId,
+      serverName = _ui.value.activeServerName,
+      pingMs = _ui.value.pingMs,
+      jitterMs = _ui.value.jitterMs,
+      packetLossPct = _ui.value.packetLossPct,
+      downloadMbps = _ui.value.downMbps,
+      uploadMbps = _ui.value.upMbps,
+      samples = _ui.value.samples,
+      error = message,
+      startedAt = startedAt,
+      finishedAt = finishedAt,
+      reasons = reasons
+    )
+    _latestResult.value = result
+    uiMutex.withLock {
+      _ui.value = _ui.value.copy(
+        running = false,
+        phase = SpeedtestPhase.ERROR.name,
+        phaseEnum = SpeedtestPhase.ERROR,
+        status = ServiceStatus.ERROR,
+        message = message,
+        reason = reasons.entries.joinToString(" | ") { "${it.key}:${it.value}" }
+      )
+    }
+  }
+
+  private suspend fun updateUiSample(
+    phase: SpeedtestPhase,
+    progress01: Float,
+    currentMbps: Double,
+    samples: List<ThroughputSample>
+  ) {
+    uiMutex.withLock {
+      _ui.value = _ui.value.copy(
+        progress01 = progress01.coerceIn(0f, 0.99f),
+        phase = phase.name,
+        phaseEnum = phase,
+        currentMbps = currentMbps,
+        samples = samples.takeLast(600)
+      )
+    }
+  }
+
+  private suspend fun selectServer(config: SpeedtestConfig): SelectedServer? = coroutineScope {
+    val available = _servers.value.filter { it.baseUrl.isNotBlank() && it.pingUrl.isNotBlank() }
+    if (available.isEmpty()) return@coroutineScope null
+
+    if (config.serverMode.uppercase(Locale.US) == "MANUAL") {
+      val chosen = available.firstOrNull { it.id == config.selectedServerId } ?: return@coroutineScope null
+      return@coroutineScope SelectedServer(chosen, null)
+    }
+
+    val scored = available.map { server ->
+      async(Dispatchers.IO) {
+        server to pingServer(server, samples = 5, timeoutMs = minOf(1_500L, config.timeoutMs))
+      }
+    }.map { it.await() }
+
+    val winner = scored
+      .filter { it.second.medianMs != null }
+      .minByOrNull { it.second.medianMs ?: Double.MAX_VALUE }
+      ?: return@coroutineScope null
+    SelectedServer(winner.first, winner.second)
+  }
+
+  private suspend fun pingServer(server: SpeedtestServer, samples: Int, timeoutMs: Long): PingStats {
+    val successful = mutableListOf<Double>()
+    var lost = 0
+    repeat(samples) {
+      val elapsed = measureHttpPing(server, timeoutMs)
+      if (elapsed == null) {
+        lost += 1
+      } else {
+        successful += elapsed
+      }
+      delay(90)
+    }
+    val median = successful.median()
+    val jitter = successful.standardDeviation()
+    val packetLoss = if (samples > 0) (lost.toDouble() / samples.toDouble()) * 100.0 else null
+    val reason = when {
+      successful.isEmpty() -> "All ping attempts timed out/failed for ${server.name}"
+      lost > 0 -> "Packet loss estimated from ping timeouts"
+      else -> null
+    }
+    return PingStats(
+      medianMs = median,
+      jitterMs = jitter,
+      packetLossPct = packetLoss,
+      reason = reason
     )
   }
 
-  private fun measureInternetPingMs(): Int? {
-    val samples = mutableListOf<Int>()
-    repeat(3) {
-      val started = System.nanoTime()
-      val ok = runCatching {
-        Socket().use { socket ->
-          socket.connect(InetSocketAddress("1.1.1.1", 443), 350)
+  private suspend fun measureHttpPing(server: SpeedtestServer, timeoutMs: Long): Double? {
+    return withContext(Dispatchers.IO) {
+      val url = buildUrl(server.baseUrl, server.pingUrl)
+      timedHttpRequest(url, "HEAD", timeoutMs) ?: timedHttpRequest(url, "GET", timeoutMs)
+    }
+  }
+
+  private suspend fun runDownloadPhase(
+    server: SpeedtestServer,
+    config: SpeedtestConfig,
+    onSample: suspend (progress: Float, sample: ThroughputSample) -> Unit
+  ): ThroughputPhaseOutcome {
+    val size = config.downloadSizesBytes.maxOrNull() ?: 20_000_000
+    val downloadPath = resolveDownloadPath(server, size) ?: return ThroughputPhaseOutcome(
+      mbps = null,
+      reason = "Download path not configured for server ${server.name}"
+    )
+
+    return runThroughputPhase(
+      phase = SpeedtestPhase.DOWNLOAD,
+      durationMs = config.durationMs,
+      threads = config.threads,
+      onSample = onSample
+    ) { bytesCounter ->
+      val nonce = System.currentTimeMillis()
+      val url = buildUrl(server.baseUrl, downloadPath)
+      val urlWithNonce = if (url.contains("?")) "$url&nocache=$nonce" else "$url?nocache=$nonce"
+      withTimeoutOrNull(config.timeoutMs) {
+        val connection = (URL(urlWithNonce).openConnection() as HttpURLConnection).apply {
+          requestMethod = "GET"
+          connectTimeout = config.timeoutMs.toInt()
+          readTimeout = config.timeoutMs.toInt()
+          useCaches = false
+          doInput = true
         }
-        true
-      }.getOrDefault(false)
-      if (ok) {
-        val elapsed = ((System.nanoTime() - started) / 1_000_000L).toInt()
-        samples += max(1, elapsed)
+        try {
+          trackConnection(connection)
+          connection.connect()
+          val stream = BufferedInputStream(connection.inputStream)
+          stream.use { input ->
+            val buffer = ByteArray(16 * 1024)
+            while (true) {
+              val read = input.read(buffer)
+              if (read <= 0) break
+              bytesCounter.addAndGet(read.toLong())
+            }
+          }
+        } finally {
+          untrackConnection(connection)
+          connection.disconnect()
+        }
       }
     }
-    if (samples.isEmpty()) return null
-    val sorted = samples.sorted()
+  }
+
+  private suspend fun runUploadPhase(
+    server: SpeedtestServer,
+    config: SpeedtestConfig,
+    onSample: suspend (progress: Float, sample: ThroughputSample) -> Unit
+  ): ThroughputPhaseOutcome {
+    val payloadSize = config.uploadSizesBytes.maxOrNull() ?: 10_000_000
+    if (server.uploadUrl.isBlank()) {
+      return ThroughputPhaseOutcome(
+        mbps = null,
+        reason = "Upload endpoint not configured for server ${server.name}"
+      )
+    }
+    val uploadUrl = buildUrl(server.baseUrl, server.uploadUrl)
+
+    return runThroughputPhase(
+      phase = SpeedtestPhase.UPLOAD,
+      durationMs = config.durationMs,
+      threads = config.threads,
+      onSample = onSample
+    ) { bytesCounter ->
+      withTimeoutOrNull(config.timeoutMs) {
+        val connection = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
+          requestMethod = "POST"
+          connectTimeout = config.timeoutMs.toInt()
+          readTimeout = config.timeoutMs.toInt()
+          doOutput = true
+          doInput = true
+          useCaches = false
+          setRequestProperty("Content-Type", "application/octet-stream")
+          setFixedLengthStreamingMode(payloadSize)
+        }
+        try {
+          trackConnection(connection)
+          connection.connect()
+          connection.outputStream.use { output ->
+            val chunk = ByteArray(16 * 1024) { 0x5A.toByte() }
+            var remaining = payloadSize
+            while (remaining > 0) {
+              val writeSize = minOf(remaining, chunk.size)
+              output.write(chunk, 0, writeSize)
+              bytesCounter.addAndGet(writeSize.toLong())
+              remaining -= writeSize
+            }
+            output.flush()
+          }
+          connection.inputStream.use { input ->
+            drainStream(input)
+          }
+        } finally {
+          untrackConnection(connection)
+          connection.disconnect()
+        }
+      }
+    }
+  }
+
+  private suspend fun runThroughputPhase(
+    phase: SpeedtestPhase,
+    durationMs: Long,
+    threads: Int,
+    onSample: suspend (progress: Float, sample: ThroughputSample) -> Unit,
+    worker: suspend (AtomicLong) -> Unit
+  ): ThroughputPhaseOutcome = coroutineScope {
+    val safeThreads = threads.coerceIn(1, 8)
+    val start = System.currentTimeMillis()
+    val end = start + durationMs.coerceAtLeast(1_000L)
+    val totalBytes = AtomicLong(0)
+
+    val workers = (0 until safeThreads).map {
+      launch(Dispatchers.IO) {
+        while (isActive && System.currentTimeMillis() < end) {
+          worker(totalBytes)
+        }
+      }
+    }
+
+    var lastBytes = 0L
+    var lastTick = start
+    while (isActive && System.currentTimeMillis() < end) {
+      delay(300)
+      val now = System.currentTimeMillis()
+      val currentBytes = totalBytes.get()
+      val deltaBytes = (currentBytes - lastBytes).coerceAtLeast(0L)
+      val deltaMs = (now - lastTick).coerceAtLeast(1L)
+      val mbps = (deltaBytes.toDouble() * 8.0) / (deltaMs.toDouble() / 1000.0) / 1_000_000.0
+      val sample = ThroughputSample(
+        phase = phase,
+        tMs = now - start,
+        mbps = mbps
+      )
+      onSample(((now - start).toFloat() / durationMs.toFloat()).coerceIn(0f, 1f), sample)
+      lastBytes = currentBytes
+      lastTick = now
+    }
+
+    workers.forEach {
+      it.cancel()
+      runCatching { it.join() }
+    }
+
+    val actualDurationMs = (System.currentTimeMillis() - start).coerceAtLeast(1L)
+    val finalMbps = if (totalBytes.get() <= 0L) null else {
+      (totalBytes.get().toDouble() * 8.0) / (actualDurationMs.toDouble() / 1000.0) / 1_000_000.0
+    }
+    ThroughputPhaseOutcome(
+      mbps = finalMbps,
+      reason = if (finalMbps == null) {
+        "${phase.name} transferred 0 bytes in ${actualDurationMs}ms. Verify endpoint supports this test."
+      } else {
+        null
+      }
+    )
+  }
+
+  private fun resolveDownloadPath(server: SpeedtestServer, requestedSize: Int): String? {
+    if (server.downloadPaths.isEmpty()) return null
+    server.downloadPaths[requestedSize]?.let { return it }
+    return server.downloadPaths
+      .entries
+      .sortedBy { kotlin.math.abs(it.key - requestedSize) }
+      .firstOrNull()
+      ?.value
+  }
+
+  private fun buildUrl(baseUrl: String, path: String): String {
+    val trimmedBase = baseUrl.trimEnd('/')
+    val trimmedPath = if (path.startsWith("/")) path else "/$path"
+    return trimmedBase + trimmedPath
+  }
+
+  private suspend fun timedHttpRequest(url: String, method: String, timeoutMs: Long): Double? {
+    return runCatching {
+      val started = System.nanoTime()
+      val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        requestMethod = method
+        connectTimeout = timeoutMs.toInt()
+        readTimeout = timeoutMs.toInt()
+        useCaches = false
+      }
+      try {
+        trackConnection(connection)
+        connection.connect()
+        if (method == "GET") {
+          connection.inputStream.use { input -> drainStream(input) }
+        } else {
+          connection.responseCode
+        }
+      } finally {
+        untrackConnection(connection)
+        connection.disconnect()
+      }
+      (System.nanoTime() - started).toDouble() / 1_000_000.0
+    }.getOrNull()
+  }
+
+  private fun drainStream(input: InputStream) {
+    val buffer = ByteArray(8 * 1024)
+    while (true) {
+      val read = input.read(buffer)
+      if (read <= 0) break
+    }
+  }
+
+  private fun appendHistory(result: SpeedtestResult) {
+    val entry = SpeedtestHistoryEntry(
+      id = UUID.randomUUID().toString(),
+      timestamp = result.finishedAt,
+      serverName = result.serverName,
+      pingMs = result.pingMs,
+      downMbps = result.downloadMbps,
+      upMbps = result.uploadMbps,
+      jitterMs = result.jitterMs,
+      lossPct = result.packetLossPct
+    )
+    val updated = (listOf(entry) + _history.value).take(25)
+    _history.value = updated
+    persistHistory(updated)
+  }
+
+  private fun loadHistory(): List<SpeedtestHistoryEntry> {
+    val raw = prefs.getString(historyKey, null) ?: return emptyList()
+    return runCatching {
+      val arr = JSONArray(raw)
+      (0 until arr.length()).mapNotNull { idx ->
+        val obj = arr.optJSONObject(idx) ?: return@mapNotNull null
+        SpeedtestHistoryEntry(
+          id = obj.optString("id"),
+          timestamp = obj.optLong("timestamp"),
+          serverName = obj.optString("serverName").ifBlank { null },
+          pingMs = obj.optDoubleOrNull("pingMs"),
+          downMbps = obj.optDoubleOrNull("downMbps"),
+          upMbps = obj.optDoubleOrNull("upMbps"),
+          jitterMs = obj.optDoubleOrNull("jitterMs"),
+          lossPct = obj.optDoubleOrNull("lossPct")
+        )
+      }
+    }.getOrDefault(emptyList())
+  }
+
+  private fun persistHistory(entries: List<SpeedtestHistoryEntry>) {
+    val arr = JSONArray()
+    entries.forEach { entry ->
+      arr.put(
+        JSONObject()
+          .put("id", entry.id)
+          .put("timestamp", entry.timestamp)
+          .put("serverName", entry.serverName)
+          .put("pingMs", entry.pingMs)
+          .put("downMbps", entry.downMbps)
+          .put("upMbps", entry.upMbps)
+          .put("jitterMs", entry.jitterMs)
+          .put("lossPct", entry.lossPct)
+      )
+    }
+    prefs.edit().putString(historyKey, arr.toString()).apply()
+  }
+
+  private fun defaultConfig(): SpeedtestConfig {
+    return SpeedtestConfig(
+      serverMode = "AUTO",
+      selectedServerId = null,
+      downloadSizesBytes = listOf(5_000_000, 20_000_000),
+      uploadSizesBytes = listOf(2_000_000, 10_000_000),
+      threads = 4,
+      durationMs = 8_000,
+      timeoutMs = 5_000
+    )
+  }
+
+  private fun defaultServers(): List<SpeedtestServer> {
+    return listOf(
+      SpeedtestServer(
+        id = "librespeed_org",
+        name = "LibreSpeed Main",
+        baseUrl = "https://librespeed.org/backend",
+        pingUrl = "/empty.php",
+        downloadPaths = mapOf(
+          5_000_000 to "/garbage.php?ckSize=5000",
+          20_000_000 to "/garbage.php?ckSize=20000"
+        ),
+        uploadUrl = "/empty.php"
+      ),
+      SpeedtestServer(
+        id = "librespeed_backup",
+        name = "LibreSpeed Backup",
+        baseUrl = "https://librespeedtest.net/backend",
+        pingUrl = "/empty.php",
+        downloadPaths = mapOf(
+          5_000_000 to "/garbage.php?ckSize=5000",
+          20_000_000 to "/garbage.php?ckSize=20000"
+        ),
+        uploadUrl = "/empty.php"
+      )
+    )
+  }
+
+  private fun SpeedtestConfig.sanitize(): SpeedtestConfig {
+    return copy(
+      serverMode = if (serverMode.uppercase(Locale.US) == "MANUAL") "MANUAL" else "AUTO",
+      threads = threads.coerceIn(1, 8),
+      durationMs = durationMs.coerceIn(2_000L, 30_000L),
+      timeoutMs = timeoutMs.coerceIn(1_000L, 20_000L),
+      downloadSizesBytes = downloadSizesBytes.filter { it > 0 }.ifEmpty { listOf(5_000_000, 20_000_000) },
+      uploadSizesBytes = uploadSizesBytes.filter { it > 0 }.ifEmpty { listOf(2_000_000, 10_000_000) }
+    )
+  }
+
+  private fun List<Double>.median(): Double? {
+    if (isEmpty()) return null
+    val sorted = sorted()
     return sorted[sorted.size / 2]
   }
+
+  private fun List<Double>.standardDeviation(): Double? {
+    if (size < 2) return null
+    val mean = average()
+    val variance = map { (it - mean) * (it - mean) }.average()
+    return sqrt(variance)
+  }
+
+  private fun JSONObject.optDoubleOrNull(name: String): Double? {
+    if (!has(name) || isNull(name)) return null
+    return optDouble(name)
+  }
+
+  private suspend fun trackConnection(connection: HttpURLConnection) {
+    connectionMutex.withLock { activeConnections += connection }
+  }
+
+  private suspend fun untrackConnection(connection: HttpURLConnection) {
+    connectionMutex.withLock { activeConnections -= connection }
+  }
+
+  private suspend fun closeActiveConnections() {
+    connectionMutex.withLock {
+      activeConnections.forEach { runCatching { it.disconnect() } }
+      activeConnections.clear()
+    }
+  }
+
+  private data class SelectedServer(
+    val server: SpeedtestServer,
+    val quickPing: PingStats?
+  )
+
+  private data class PingStats(
+    val medianMs: Double?,
+    val jitterMs: Double?,
+    val packetLossPct: Double?,
+    val reason: String?
+  )
+
+  private data class ThroughputPhaseOutcome(
+    val mbps: Double?,
+    val reason: String?
+  )
 }
 
 private class HybridScanService(
@@ -650,3 +1319,4 @@ private fun toStrength(device: Device): Int {
   }
   return if (device.online) 55 else 8
 }
+
