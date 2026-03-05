@@ -1,7 +1,6 @@
 package com.nerf.netx.ui.screens
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.compose.foundation.background
@@ -37,31 +36,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.nerf.netx.data.RouterAccessMode
+import com.nerf.netx.data.RouterCapability
 import com.nerf.netx.data.RouterCredentials
 import com.nerf.netx.data.RouterCredentialsStore
 import com.nerf.netx.ui.theme.ThemeId
 import com.nerf.netx.ui.theme.ThemeType
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.InetSocketAddress
-import java.net.Socket
-import java.net.URL
-import java.util.Base64
-
-private enum class RouterValidationState {
-  VALIDATED,
-  REACHABLE,
-  UNREACHABLE,
-  INVALID_INPUT,
-  ERROR
-}
-
-private data class RouterValidationResult(
-  val state: RouterValidationState,
-  val message: String
-)
 
 private data class ThemePalette(
   val primary: Color,
@@ -97,11 +78,9 @@ fun SettingsScreen(
   var host by remember { mutableStateOf(creds.host) }
   var username by remember { mutableStateOf(creds.username) }
   var token by remember { mutableStateOf(creds.token) }
-  var saveStatus by remember {
-    mutableStateOf("Router write-actions remain NOT_SUPPORTED until vendor API integration exists.")
-  }
-  var validationResult by remember { mutableStateOf<RouterValidationResult?>(null) }
+  var saveStatus by remember { mutableStateOf("Credentials not validated yet.") }
   var validating by remember { mutableStateOf(false) }
+  var profile by remember { mutableStateOf(credentialsStore.readProfile()) }
 
   val appliedTheme = themeId
   val previewUrl = htmlAssetUrlProvider(previewTheme)
@@ -226,68 +205,140 @@ fun SettingsScreen(
         Text("Router Credentials", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
           value = host,
-          onValueChange = {
-            host = it
-            validationResult = null
-          },
+          onValueChange = { host = it },
           modifier = Modifier.fillMaxWidth(),
           label = { Text("Router IP / URL") },
-          placeholder = { Text("192.168.1.1 or http://192.168.1.1") }
+          placeholder = { Text("192.168.1.1 or https://192.168.1.1") }
         )
         OutlinedTextField(
           value = username,
-          onValueChange = {
-            username = it
-            validationResult = null
-          },
+          onValueChange = { username = it },
           modifier = Modifier.fillMaxWidth(),
           label = { Text("Username") }
         )
         OutlinedTextField(
           value = token,
-          onValueChange = {
-            token = it
-            validationResult = null
-          },
+          onValueChange = { token = it },
           modifier = Modifier.fillMaxWidth(),
-          label = { Text("Token / Password") },
+          label = { Text("Password") },
           visualTransformation = PasswordVisualTransformation()
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          Button(onClick = {
-            credentialsStore.write(
-              RouterCredentials(host = host.trim(), username = username.trim(), token = token.trim())
-            )
-            saveStatus = if (host.isNotBlank() && username.isNotBlank() && token.isNotBlank()) {
-              "Credentials saved. Read-only checks can run; write-actions remain NOT_SUPPORTED."
-            } else {
-              "Saved, but credentials are incomplete."
-            }
-          }) {
-            Text("Save Credentials")
-          }
-
           OutlinedButton(
             enabled = !validating,
             onClick = {
               scope.launch {
                 validating = true
-                validationResult = validateRouterCredentials(host.trim(), username.trim(), token.trim())
+                val check = credentialsStore.testConnection(
+                  RouterCredentials(
+                    host = host.trim(),
+                    username = username.trim(),
+                    token = token
+                  )
+                )
+                profile = check.profile ?: profile
+                saveStatus = check.message
                 validating = false
               }
             }
           ) {
-            Text(if (validating) "Validating..." else "Validate Credentials")
+            Text(if (validating) "Testing..." else "Test Connection")
+          }
+
+          Button(
+            enabled = !validating,
+            onClick = {
+              scope.launch {
+                validating = true
+                val check = credentialsStore.validateAndSave(
+                  RouterCredentials(
+                    host = host.trim(),
+                    username = username.trim(),
+                    token = token
+                  )
+                )
+                profile = check.profile ?: profile
+                saveStatus = check.message
+                validating = false
+              }
+            }
+          ) {
+            Text(if (validating) "Validating..." else "Validate & Save")
           }
         }
 
         Text(saveStatus, style = MaterialTheme.typography.bodySmall)
-        validationResult?.let {
-          Text("Validation: ${it.state} - ${it.message}", style = MaterialTheme.typography.bodySmall)
+
+        Text("Router Profile", style = MaterialTheme.typography.titleSmall)
+        Text("Vendor: ${profile.vendorName ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+        Text("Model: ${profile.modelName ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+        Text("Firmware: ${profile.firmwareVersion ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+        Text("Admin URL: ${profile.adminUrl ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+        Text("Auth: ${profile.authType.name}", style = MaterialTheme.typography.bodySmall)
+        Text("Mode: ${profile.mode.name}", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Last Validated: ${profile.lastValidatedEpochMs?.toString() ?: "Never"}",
+          style = MaterialTheme.typography.bodySmall
+        )
+
+        Text("Capabilities", style = MaterialTheme.typography.titleSmall)
+        RouterCapability.entries.forEach { cap ->
+          val enabled = profile.capabilities.contains(cap)
+          Text(
+            (if (enabled) "[x] " else "[ ] ") + cap.name,
+            style = MaterialTheme.typography.bodySmall
+          )
         }
+
+        Text("Router Actions (gated)", style = MaterialTheme.typography.titleSmall)
+        CapabilityActionRow(
+          label = "Flush DNS",
+          enabled = profile.capabilities.contains(RouterCapability.DNS_FLUSH),
+          mode = profile.mode
+        )
+        CapabilityActionRow(
+          label = "Firewall Toggle",
+          enabled = profile.capabilities.contains(RouterCapability.FIREWALL_TOGGLE),
+          mode = profile.mode
+        )
+        CapabilityActionRow(
+          label = "VPN Toggle",
+          enabled = profile.capabilities.contains(RouterCapability.VPN_TOGGLE),
+          mode = profile.mode
+        )
+        CapabilityActionRow(
+          label = "QoS Configure",
+          enabled = profile.capabilities.contains(RouterCapability.QOS_CONFIG),
+          mode = profile.mode
+        )
+        CapabilityActionRow(
+          label = "Guest Wi-Fi",
+          enabled = profile.capabilities.contains(RouterCapability.GUEST_WIFI_TOGGLE),
+          mode = profile.mode
+        )
+        CapabilityActionRow(
+          label = "Reboot Router",
+          enabled = profile.capabilities.contains(RouterCapability.REBOOT),
+          mode = profile.mode
+        )
       }
     }
+  }
+}
+
+@Composable
+private fun CapabilityActionRow(label: String, enabled: Boolean, mode: RouterAccessMode) {
+  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    OutlinedButton(onClick = {}, enabled = enabled && mode == RouterAccessMode.READ_WRITE) {
+      Text(label)
+    }
+    val reason = if (enabled && mode == RouterAccessMode.READ_WRITE) {
+      "Supported"
+    } else {
+      "No verified endpoint (READ_ONLY)"
+    }
+    Text(reason, style = MaterialTheme.typography.bodySmall)
   }
 }
 
@@ -319,121 +370,6 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
       highlight = Color(0xFFFF8F00),
       panel = Color(0xFF10151A),
       text = Color(0xFFEAF2F8)
-    )
-  }
-}
-
-private suspend fun validateRouterCredentials(
-  hostInput: String,
-  username: String,
-  token: String
-): RouterValidationResult = withContext(Dispatchers.IO) {
-  if (hostInput.isBlank() || username.isBlank() || token.isBlank()) {
-    return@withContext RouterValidationResult(
-      RouterValidationState.INVALID_INPUT,
-      "Host, username, and password/token are required."
-    )
-  }
-
-  val target = parseHostAndPorts(hostInput)
-    ?: return@withContext RouterValidationResult(
-      RouterValidationState.INVALID_INPUT,
-      "Host format invalid. Use IP, host, or http(s)://host[:port][/path]."
-    )
-
-  val reachablePort = target.ports.firstOrNull { port ->
-    runCatching {
-      Socket().use { socket ->
-        socket.connect(InetSocketAddress(target.host, port), 700)
-      }
-      true
-    }.getOrDefault(false)
-  }
-
-  if (reachablePort == null) {
-    return@withContext RouterValidationResult(
-      RouterValidationState.UNREACHABLE,
-      "Router not reachable on ports 443/80 within timeout."
-    )
-  }
-
-  val urlForAuth = target.urlForAuth
-  if (urlForAuth == null) {
-    return@withContext RouterValidationResult(
-      RouterValidationState.REACHABLE,
-      "Host reachable on port $reachablePort; auth not verifiable without vendor-specific endpoint."
-    )
-  }
-
-  runCatching {
-    val url = URL(urlForAuth)
-    val conn = (url.openConnection() as HttpURLConnection)
-    conn.connectTimeout = 1200
-    conn.readTimeout = 1200
-    conn.requestMethod = "GET"
-    val basic = Base64.getEncoder().encodeToString("$username:$token".toByteArray())
-    conn.setRequestProperty("Authorization", "Basic $basic")
-    conn.instanceFollowRedirects = false
-
-    val code = conn.responseCode
-    conn.disconnect()
-
-    when {
-      code in 200..299 -> RouterValidationResult(
-        RouterValidationState.VALIDATED,
-        "Credentials validated against endpoint response $code."
-      )
-
-      code == 401 || code == 403 -> RouterValidationResult(
-        RouterValidationState.REACHABLE,
-        "Router reachable but credentials not verified (HTTP $code)."
-      )
-
-      else -> RouterValidationResult(
-        RouterValidationState.REACHABLE,
-        "Router reachable; auth endpoint returned HTTP $code (not verifiable)."
-      )
-    }
-  }.getOrElse { err ->
-    RouterValidationResult(
-      RouterValidationState.ERROR,
-      "Validation error: ${err.message ?: "unknown"}"
-    )
-  }
-}
-
-private data class ValidationTarget(
-  val host: String,
-  val ports: List<Int>,
-  val urlForAuth: String?
-)
-
-private fun parseHostAndPorts(raw: String): ValidationTarget? {
-  val trimmed = raw.trim()
-  if (trimmed.isBlank()) return null
-
-  return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    val uri = Uri.parse(trimmed)
-    val host = uri.host ?: return null
-    val uriPort = if (uri.port > 0) uri.port else null
-    val ports = listOfNotNull(uriPort, 443, 80).distinct().take(3)
-    val path = uri.path ?: ""
-    val hasEndpointPath = path.isNotBlank() && path != "/"
-    ValidationTarget(
-      host = host,
-      ports = ports,
-      urlForAuth = if (hasEndpointPath) trimmed else null
-    )
-  } else {
-    val withScheme = if (":" in trimmed) "http://$trimmed" else "http://$trimmed"
-    val uri = Uri.parse(withScheme)
-    val host = uri.host ?: return null
-    val uriPort = if (uri.port > 0) uri.port else null
-    val ports = listOfNotNull(uriPort, 443, 80).distinct().take(3)
-    ValidationTarget(
-      host = host,
-      ports = ports,
-      urlForAuth = null
     )
   }
 }

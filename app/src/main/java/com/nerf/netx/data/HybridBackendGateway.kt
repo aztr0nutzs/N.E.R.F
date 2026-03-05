@@ -4,8 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.nerf.netx.domain.ActionResult
 import com.nerf.netx.domain.AnalyticsService
 import com.nerf.netx.domain.AnalyticsSnapshot
@@ -85,48 +83,6 @@ class HybridBackendGateway(
   override val topology: MapTopologyService = HybridTopologyService(sharedDevices, selectedNodeId)
   override val analytics: AnalyticsService = HybridAnalytics(speedtest, sharedDevices, scan)
   override val routerControl: RouterControlService = HybridRouterControl(context, credentialsStore)
-}
-
-class RouterCredentialsStore(context: Context) {
-  private val prefs = run {
-    val key = MasterKey.Builder(context)
-      .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-      .build()
-    EncryptedSharedPreferences.create(
-      context,
-      "nerf_router_creds",
-      key,
-      EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-      EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
-  }
-  private val keyHost = "host"
-  private val keyUser = "user"
-  private val keyToken = "token"
-
-  fun read(): RouterCredentials {
-    return RouterCredentials(
-      host = prefs.getString(keyHost, "") ?: "",
-      username = prefs.getString(keyUser, "") ?: "",
-      token = prefs.getString(keyToken, "") ?: ""
-    )
-  }
-
-  fun write(creds: RouterCredentials) {
-    prefs.edit()
-      .putString(keyHost, creds.host)
-      .putString(keyUser, creds.username)
-      .putString(keyToken, creds.token)
-      .apply()
-  }
-}
-
-data class RouterCredentials(
-  val host: String,
-  val username: String,
-  val token: String
-) {
-  fun configured(): Boolean = host.isNotBlank() && username.isNotBlank() && token.isNotBlank()
 }
 
 private class HybridSpeedtest(
@@ -1262,35 +1218,162 @@ private class HybridRouterControl(
     val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
       ?: return RouterInfoResult(ServiceStatus.ERROR, "ConnectivityManager unavailable")
 
-    val active = cm.activeNetwork
-      ?: return RouterInfoResult(ServiceStatus.NO_DATA, "No active network")
+    val active = cm.activeNetwork ?: return RouterInfoResult(ServiceStatus.NO_DATA, "No active network")
     val link = cm.getLinkProperties(active)
-    val caps = cm.getNetworkCapabilities(active)
-    val gatewayIp = link?.routes?.firstOrNull { it.hasGateway() }?.gateway?.hostAddress
+    val netCaps = cm.getNetworkCapabilities(active)
     val dns = link?.dnsServers?.mapNotNull { it.hostAddress } ?: emptyList()
 
     val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-    val onWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    val onWifi = netCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     val ssid = if (onWifi) wifi?.connectionInfo?.ssid?.trim('"') else null
     val linkSpeed = if (onWifi) wifi?.connectionInfo?.linkSpeed else null
 
+    val api = buildRouterApi()
+    if (api == null) {
+      val gatewayIp = link?.routes?.firstOrNull { it.hasGateway() }?.gateway?.hostAddress
+      return RouterInfoResult(
+        status = ServiceStatus.NO_DATA,
+        message = "Router credentials not configured.",
+        gatewayIp = gatewayIp,
+        dnsServers = dns,
+        ssid = ssid,
+        linkSpeedMbps = linkSpeed
+      )
+    }
+
+    val detected = api.detect(connectionInfoFromStore())
+    val capabilities = api.getCapabilities()
+    val mode = if (capabilities.any { it != RouterCapability.READ_INFO && it != RouterCapability.DHCP_LEASES_READ }) {
+      "READ_WRITE"
+    } else {
+      "READ_ONLY"
+    }
+    val message = buildString {
+      append("Router detected")
+      detected.vendorName?.let { append(": ").append(it) }
+      detected.modelName?.let { append(" ").append(it) }
+      append(" | auth=").append(detected.detectedAuthType.name)
+      append(" | mode=").append(mode)
+      append(" | capabilities=").append(capabilities.joinToString(",") { it.name })
+    }
+
     return RouterInfoResult(
       status = ServiceStatus.OK,
-      message = "Read-only router/network info available",
-      gatewayIp = gatewayIp,
+      message = message,
+      gatewayIp = detected.routerIp,
       dnsServers = dns,
       ssid = ssid,
       linkSpeedMbps = linkSpeed
     )
   }
 
-  private fun notSupported(action: String): ActionResult {
-    val configured = credentialsStore.read().configured()
-    val reason = if (configured) {
-      "Router control requires vendor-specific API implementation and is not integrated yet."
-    } else {
-      "Router credentials are not configured and vendor API integration is not implemented."
+  override suspend fun toggleGuest(): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.GUEST_WIFI_TOGGLE,
+      code = "GUEST_WIFI"
+    ) { api -> api.setGuestWifiEnabled(true) }
+  }
+
+  override suspend fun setQos(mode: QosMode): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.QOS_CONFIG,
+      code = "QOS"
+    ) { api ->
+      api.setQosConfig(
+        QosConfig(
+          mode = mode.name
+        )
+      )
     }
+  }
+
+  override suspend fun renewDhcp(): ActionResult {
+    val api = buildRouterApi() ?: return routerNotConfigured("renewDhcp")
+    val caps = api.getCapabilities()
+    if (!caps.contains(RouterCapability.DHCP_LEASES_WRITE)) {
+      return notSupportedAction("renewDhcp", "No verified API endpoint for DHCP lease write/renew. Read-only mode.")
+    }
+    return notSupportedAction("renewDhcp", "Renew DHCP endpoint is not verified for this router model. Read-only mode.")
+  }
+
+  override suspend fun flushDns(): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.DNS_FLUSH,
+      code = "DNS_FLUSH"
+    ) { api -> api.flushDns() }
+  }
+
+  override suspend fun rebootRouter(): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.REBOOT,
+      code = "REBOOT"
+    ) { api -> api.reboot() }
+  }
+
+  override suspend fun toggleFirewall(): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.FIREWALL_TOGGLE,
+      code = "FIREWALL"
+    ) { api -> api.setFirewallEnabled(true) }
+  }
+
+  override suspend fun toggleVpn(): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.VPN_TOGGLE,
+      code = "VPN"
+    ) { api -> api.setVpnEnabled(true) }
+  }
+
+  private suspend fun performCapabilityAction(
+    capability: RouterCapability,
+    code: String,
+    call: suspend (RouterApi) -> RouterActionResult
+  ): ActionResult {
+    val api = buildRouterApi() ?: return routerNotConfigured(code)
+    val caps = api.getCapabilities()
+    if (!caps.contains(capability)) {
+      return notSupportedAction(code, "No verified API endpoint for this action. Read-only mode.")
+    }
+    val result = call(api)
+    return mapRouterActionResult(result, code)
+  }
+
+  private fun mapRouterActionResult(result: RouterActionResult, code: String): ActionResult {
+    return when (result.status) {
+      RouterActionStatus.OK -> ActionResult(
+        ok = true,
+        status = ServiceStatus.OK,
+        code = code,
+        message = result.message
+      )
+      RouterActionStatus.NOT_SUPPORTED -> ActionResult(
+        ok = false,
+        status = ServiceStatus.NOT_SUPPORTED,
+        code = "NOT_SUPPORTED",
+        message = "$code is NOT_SUPPORTED",
+        errorReason = result.message
+      )
+      RouterActionStatus.ERROR -> ActionResult(
+        ok = false,
+        status = ServiceStatus.ERROR,
+        code = result.errorCode ?: "ROUTER_ACTION_ERROR",
+        message = result.message,
+        errorReason = result.message
+      )
+    }
+  }
+
+  private fun routerNotConfigured(action: String): ActionResult {
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NO_DATA,
+      code = "ROUTER_NOT_CONFIGURED",
+      message = "$action unavailable",
+      errorReason = "Router credentials are not configured or validated."
+    )
+  }
+
+  private fun notSupportedAction(action: String, reason: String): ActionResult {
     return ActionResult(
       ok = false,
       status = ServiceStatus.NOT_SUPPORTED,
@@ -1300,13 +1383,25 @@ private class HybridRouterControl(
     )
   }
 
-  override suspend fun toggleGuest(): ActionResult = notSupported("toggleGuest")
-  override suspend fun setQos(mode: QosMode): ActionResult = notSupported("setQos")
-  override suspend fun renewDhcp(): ActionResult = notSupported("renewDhcp")
-  override suspend fun flushDns(): ActionResult = notSupported("flushDns")
-  override suspend fun rebootRouter(): ActionResult = notSupported("rebootRouter")
-  override suspend fun toggleFirewall(): ActionResult = notSupported("toggleFirewall")
-  override suspend fun toggleVpn(): ActionResult = notSupported("toggleVpn")
+  private fun connectionInfoFromStore(): RouterConnectionInfo {
+    val creds = credentialsStore.read()
+    val profile = credentialsStore.readProfile()
+    return RouterConnectionInfo(
+      routerIp = profile.routerIp ?: creds.host,
+      adminUrl = profile.adminUrl ?: creds.adminUrl,
+      username = creds.username.ifBlank { null },
+      password = creds.token.ifBlank { null },
+      preferredAuthType = profile.authType
+    )
+  }
+
+  private fun buildRouterApi(): RouterApi? {
+    val creds = credentialsStore.read()
+    val profile = credentialsStore.readProfile()
+    val ip = (profile.routerIp ?: creds.host).trim()
+    if (ip.isBlank()) return null
+    return RouterApiHttp(connectionInfoFromStore())
+  }
 }
 
 private fun toStrength(device: Device): Int {
