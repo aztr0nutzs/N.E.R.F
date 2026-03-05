@@ -50,7 +50,19 @@ data class ScanExecutionResult(
   val metadata: ScanMetadata
 )
 
-class RealLanScanner(private val context: Context) {
+data class RealLanScannerOverrides(
+  val resolvePlan: (() -> ScanNetworkPlan)? = null,
+  val probeReachability: (suspend (String) -> ReachabilityResult)? = null,
+  val reverseLookupHostname: (suspend (String) -> Pair<String?, String?>)? = null,
+  val measureLatencyMedian: (suspend (String, ReachabilityResult) -> Pair<Int?, String?>)? = null,
+  val parseArpTable: (() -> Map<String, String>)? = null,
+  val lookupVendor: ((String) -> String?)? = null
+)
+
+class RealLanScanner(
+  private val context: Context,
+  private val overrides: RealLanScannerOverrides? = null
+) {
   private val tcpFallbackPorts = intArrayOf(443, 80, 53)
   private val probeTimeoutMs = 325
   private val resolverTimeoutMs = 325L
@@ -62,7 +74,7 @@ class RealLanScanner(private val context: Context) {
     onDevice: (device: Device, updated: Boolean) -> Unit
   ): ScanExecutionResult = coroutineScope {
     val startedAt = System.currentTimeMillis()
-    val plan = resolvePlan()
+    val plan = overrides?.resolvePlan?.invoke() ?: resolvePlan()
     val baseMetadata = ScanMetadata(
       localIp = plan.localIp,
       prefixLength = plan.prefixLength,
@@ -200,6 +212,7 @@ class RealLanScanner(private val context: Context) {
   }
 
   suspend fun probeReachability(host: String): ReachabilityResult {
+    overrides?.probeReachability?.let { return it(host) }
     val icmp = probeIcmp(host, probeTimeoutMs)
     if (icmp.reachable) {
       return ReachabilityResult(
@@ -234,6 +247,7 @@ class RealLanScanner(private val context: Context) {
   }
 
   fun parseArpTable(): Map<String, String> {
+    overrides?.parseArpTable?.let { return it() }
     return runCatching {
       val arpFile = File("/proc/net/arp")
       if (!arpFile.exists()) return emptyMap<String, String>()
@@ -251,12 +265,13 @@ class RealLanScanner(private val context: Context) {
   }
 
   fun lookupVendor(mac: String): String? {
+    overrides?.lookupVendor?.let { return it(mac) }
     val normalized = normalizeMac(mac) ?: return null
-    val oui = normalized.take(8)
-    return ouiVendors[oui]
+    return OuiLookup.lookup(normalized)
   }
 
   private suspend fun measureLatencyMedian(host: String, probe: ReachabilityResult): Pair<Int?, String?> {
+    overrides?.measureLatencyMedian?.let { return it(host, probe) }
     if (!probe.reachable) return null to "Host unreachable"
 
     val samples = mutableListOf<Int>()
@@ -286,6 +301,7 @@ class RealLanScanner(private val context: Context) {
   }
 
   private suspend fun reverseLookupHostname(ip: String): Pair<String?, String?> {
+    overrides?.reverseLookupHostname?.let { return it(ip) }
     val host = withContext(Dispatchers.IO) {
       withTimeoutOrNull(resolverTimeoutMs) {
         runCatching {
@@ -434,18 +450,7 @@ class RealLanScanner(private val context: Context) {
   }
 
   private fun inferDeviceTypeFromHostname(hostname: String?): String {
-    if (hostname.isNullOrBlank()) return "UNKNOWN"
-    val h = hostname.lowercase()
-    return when {
-      h.contains("iphone") || h.contains("ipad") -> "PHONE"
-      h.contains("android") || h.contains("pixel") || h.contains("samsung") -> "PHONE"
-      h.contains("macbook") || h.contains("imac") -> "COMPUTER"
-      h.contains("windows") || h.contains("desktop") || h.contains("laptop") -> "COMPUTER"
-      h.contains("tv") || h.contains("roku") || h.contains("chromecast") -> "MEDIA"
-      h.contains("printer") -> "PRINTER"
-      h.contains("cam") || h.contains("camera") -> "CAMERA"
-      else -> "UNKNOWN"
-    }
+    return BackendMath.inferDeviceType(hostname)
   }
 
   private fun probeIcmp(host: String, timeoutMs: Int): ReachabilityResult {
@@ -541,27 +546,5 @@ class RealLanScanner(private val context: Context) {
   private companion object {
     val macRegex = Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}")
 
-    val ouiVendors = mapOf(
-      "28:CF:E9" to "Apple, Inc.",
-      "D8:96:95" to "Apple, Inc.",
-      "BC:92:6B" to "Apple, Inc.",
-      "3C:5A:B4" to "Google, Inc.",
-      "F4:F5:D8" to "Google, Inc.",
-      "A4:77:33" to "Google, Inc.",
-      "10:9A:DD" to "Samsung Electronics Co.,Ltd",
-      "40:4E:36" to "Samsung Electronics Co.,Ltd",
-      "CC:F9:E4" to "Samsung Electronics Co.,Ltd",
-      "B8:27:EB" to "Raspberry Pi Trading Ltd",
-      "DC:A6:32" to "Raspberry Pi Trading Ltd",
-      "00:1A:79" to "Cisco Systems, Inc",
-      "F0:9F:C2" to "Ubiquiti Inc",
-      "24:A4:3C" to "Ubiquiti Inc",
-      "44:65:0D" to "Amazon Technologies Inc.",
-      "FC:A1:83" to "Amazon Technologies Inc.",
-      "00:17:88" to "Philips Lighting BV",
-      "3C:84:6A" to "Roku, Inc",
-      "AC:63:BE" to "LG Electronics",
-      "00:0C:29" to "VMware, Inc."
-    )
   }
 }
