@@ -90,8 +90,8 @@ fun SettingsScreen(
   val palette = themePalette(previewTheme)
   val themeDescriptions = remember {
     mapOf(
-      ThemeId.NERF_MAIN_DASH_HTML to "High-contrast HUD, dense telemetry cards, orange/cyan emphasis.",
-      ThemeId.NERF_HUD_ALT_HTML to "Alt HUD palette with brighter accents and identical controls."
+      ThemeId.NERF_MAIN_DASH_HTML to "Default dashboard - High-contrast HUD, dense telemetry cards, orange/cyan emphasis.",
+      ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard."
     )
   }
   val screenshotAssetPath = remember {
