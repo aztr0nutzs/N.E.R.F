@@ -24,12 +24,20 @@ fun AnalyticsScreen(service: AnalyticsService) {
 
     ElevatedCard {
       Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Down ${"%.1f".format(snap.downMbps)} Mbps")
-        Text("Up ${"%.1f".format(snap.upMbps)} Mbps")
-        Text("Latency ${"%.1f".format(snap.latencyMs)} ms")
-        Text("Jitter ${"%.1f".format(snap.jitterMs)} ms")
-        Text("Loss ${"%.1f".format(snap.packetLossPct)} %")
+        Text("Status ${snap.status}")
+        Text("Down ${snap.downMbps?.let { "%.1f".format(it) + " Mbps" } ?: "N/A"}")
+        Text("Up ${snap.upMbps?.let { "%.1f".format(it) + " Mbps" } ?: "N/A"}")
+        Text("Latency ${snap.latencyMs?.let { "%.1f".format(it) + " ms" } ?: "N/A"}")
+        Text("Jitter ${snap.jitterMs?.let { "%.1f".format(it) + " ms" } ?: "N/A"}")
+        Text("Loss ${snap.packetLossPct?.let { "%.1f".format(it) + " %" } ?: "N/A"}")
         Text("Devices ${snap.deviceCount}")
+        Text("Reachable ${snap.reachableCount}")
+        Text("Avg RTT ${snap.avgRttMs?.let { "%.1f".format(it) + " ms" } ?: "N/A"}")
+        Text("Median RTT ${snap.medianRttMs?.let { "%.1f".format(it) + " ms" } ?: "N/A"}")
+        Text("Scan Duration ${snap.scanDurationMs?.toString()?.plus(" ms") ?: "N/A"}")
+        if (!snap.message.isNullOrBlank()) {
+          Text(snap.message ?: "", style = MaterialTheme.typography.bodySmall)
+        }
       }
     }
 

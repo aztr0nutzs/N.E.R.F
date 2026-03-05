@@ -22,7 +22,7 @@ fun SettingsScreen(
   var host by remember { mutableStateOf(creds.host) }
   var username by remember { mutableStateOf(creds.username) }
   var token by remember { mutableStateOf(creds.token) }
-  var status by remember { mutableStateOf("Router controls require configured credentials.") }
+  var status by remember { mutableStateOf("Router write-actions are NOT_SUPPORTED until vendor API integration is implemented.") }
 
   Column(
     Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -75,9 +75,9 @@ fun SettingsScreen(
               RouterCredentials(host = host.trim(), username = username.trim(), token = token.trim())
             )
             status = if (host.isNotBlank() && username.isNotBlank() && token.isNotBlank()) {
-              "Credentials saved. Router controls enabled."
+              "Credentials saved. Read-only router info can be used; write-actions remain NOT_SUPPORTED."
             } else {
-              "Saved, but credentials are incomplete."
+              "Saved, but credentials are incomplete. Write-actions remain NOT_SUPPORTED."
             }
           }
         ) { Text("Save Credentials") }

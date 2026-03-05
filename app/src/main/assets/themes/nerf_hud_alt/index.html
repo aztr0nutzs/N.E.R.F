@@ -18,6 +18,7 @@
     .btn{ border:1px solid #2c3f4f; color:var(--txt); background:#13202b; border-radius:10px; padding:10px; font-weight:600; min-height:44px; }
     .btn.pri{ border-color:#7a3f0f; background:#46250a; color:#ffd4b2; }
     .btn.acc{ border-color:#165274; background:#0a273a; color:#bcecff; }
+    .btn:disabled{ opacity:0.45; filter:grayscale(0.25); }
     .mut{ color:var(--mut); font-size:12px; }
     .kv{ font-size:13px; color:var(--mut); }
     .v{ color:var(--txt); font-weight:700; }
@@ -167,15 +168,22 @@
 <script>
 (function(){
   const $=(id)=>document.getElementById(id);
-  const state={ devices:[], filtered:[], selectedDevice:null };
+  const state={ devices:[], filtered:[], selectedDevice:null, routerControlSupported:false };
   const mapRenderer = createMapRenderer(openDeviceModalById);
 
   window.NERF = window.NERF || {};
   window.NERF.onEvent = function(eventName,payload){
     if(eventName==='action.result'){
       if(payload.devices){ state.devices = normalizeDevices(payload.devices); renderDevices(); renderMap(); updateOverviewFromDevices(); }
-      if(payload.downMbps!=null){ renderAnalytics(payload); }
+      if(payload.downMbps!=null || payload.deviceCount!=null){ renderAnalytics(payload); }
+      if(payload.code==='ROUTER_INFO'){ applyRouterInfo(payload); }
+      if(payload.status==='NOT_SUPPORTED' && payload.message){ $('statusOv').textContent = payload.message; }
       log('EVENT '+eventName+' '+JSON.stringify(payload));
+    } else if(eventName==='scan_progress'){
+      $('statusOv').textContent = 'Scan '+(payload.probesSent||0)+'/'+(payload.targetsPlanned||0)+' found '+(payload.devicesFound||0);
+    } else if(eventName==='scan_done'){
+      $('statusOv').textContent = 'Scan complete: '+(payload.devicesFound||0)+' devices';
+      req('devices.list',{});
     }
   };
 
@@ -230,7 +238,7 @@
       const item = document.createElement('div');
       item.className='item';
       item.innerHTML = '<div class="row"><div><div class="v">'+d.name+'</div><div class="mut mono">'+d.ip+' • '+(d.vendor||'unknown')+' • '+(d.mac||'unknown')+'</div></div><span class="chip">risk '+(d.riskScore||0)+'</span></div>'+
-        '<div class="row" style="margin-top:8px"><button class="btn" data-ping="'+d.id+'">Ping</button><button class="btn" data-block="'+d.id+'">Block</button><button class="btn" data-prio="'+d.id+'">Prioritize</button></div>';
+        '<div class="row" style="margin-top:8px"><button class="btn" data-ping="'+d.id+'">Ping</button><button class="btn" data-block="'+d.id+'" disabled title="Not supported yet">Block</button><button class="btn" data-prio="'+d.id+'" disabled title="Not supported yet">Prioritize</button></div>';
       item.addEventListener('click', (ev)=>{ if(ev.target.closest('button')) return; openDeviceModal(d); });
       list.appendChild(item);
     });
@@ -284,6 +292,45 @@
   $('dmPing').addEventListener('click', ()=>{ if(state.selectedDevice) req('device.ping',{deviceId:state.selectedDevice.id}); });
   $('dmBlock').addEventListener('click', ()=>{ if(state.selectedDevice) req('device.block',{deviceId:state.selectedDevice.id}); });
   $('dmPrio').addEventListener('click', ()=>{ if(state.selectedDevice) req('device.prioritize',{deviceId:state.selectedDevice.id}); });
+
+  function applyRouterInfo(payload){
+    state.routerControlSupported = false;
+    disableRouterControls((payload && payload.message) ? payload.message : 'Router controls are not supported yet.');
+  }
+
+  function updateOverviewFromDevices(){
+    const all = state.devices || [];
+    const online = all.length;
+    const gateway = all.find(d=>d.isGateway);
+    $('ovWan').textContent = gateway ? gateway.ip : (online ? 'ONLINE' : 'UNKNOWN');
+    $('ovDev').textContent = String(online);
+  }
+
+  function renderAnalytics(payload){
+    $('anDown').textContent = payload.downMbps!=null ? Number(payload.downMbps).toFixed(1)+' Mbps' : 'N/A';
+    $('anUp').textContent = payload.upMbps!=null ? Number(payload.upMbps).toFixed(1)+' Mbps' : 'N/A';
+    $('anLat').textContent = payload.latencyMs!=null ? Number(payload.latencyMs).toFixed(1)+' ms' : 'N/A';
+    $('anJit').textContent = payload.jitterMs!=null ? Number(payload.jitterMs).toFixed(1)+' ms' : 'N/A';
+    $('anLoss').textContent = payload.packetLossPct!=null ? Number(payload.packetLossPct).toFixed(1)+' %' : 'N/A';
+    $('anDev').textContent = String(payload.deviceCount!=null ? payload.deviceCount : (state.devices||[]).length);
+    $('ovLat').textContent = payload.avgRttMs!=null ? Number(payload.avgRttMs).toFixed(1)+' ms' : (payload.latencyMs!=null ? Number(payload.latencyMs).toFixed(1)+' ms' : 'N/A');
+    $('ovJit').textContent = payload.medianRttMs!=null ? Number(payload.medianRttMs).toFixed(1)+' ms' : 'N/A';
+    $('ovLoss').textContent = payload.packetLossPct!=null ? Number(payload.packetLossPct).toFixed(1)+' %' : 'N/A';
+  }
+
+  function disableRouterControls(reason){
+    ['btnDhcp','btnDns','btnFw','btnVpn','btnReboot','btnQos'].forEach(id=>{
+      const el = $(id);
+      if(!el) return;
+      el.disabled = true;
+      el.title = reason;
+    });
+    $('dmBlock').disabled = true;
+    $('dmPrio').disabled = true;
+    $('dmBlock').title = 'Not supported yet';
+    $('dmPrio').title = 'Not supported yet';
+    $('statusOv').textContent = reason;
+  }
 
   function createMapRenderer(onNodeTap){
     const renderer = {
@@ -524,15 +571,17 @@
   $('btnFw').addEventListener('click', ()=>req('router.toggleFirewall',{}));
   $('btnVpn').addEventListener('click', ()=>req('router.toggleVpn',{}));
   $('btnReboot').addEventListener('click', ()=>req('router.rebootRouter',{}));
-  $('btnQos').addEventListener('click', ()=>req('router.setQos',{mode:$('qosMode').value}));
+  $('btnQos').addEventListener('click', ()=>{ if(!state.routerControlSupported) return; req('router.setQos',{mode:$('qosMode').value}); });
 
   $('btnAnRefresh').addEventListener('click', ()=>req('analytics.snapshot',{}));
 
   setInterval(()=>{ req('analytics.snapshot',{}); req('devices.list',{}); }, 4000);
+  disableRouterControls('Router controls are not supported yet.');
   show('overview');
   req('scan.start',{});
   req('devices.list',{});
   req('analytics.snapshot',{});
+  req('router.info',{});
 })();
 </script>
 </body>

@@ -1,9 +1,35 @@
 package com.nerf.netx.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiManager
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.nerf.netx.domain.*
+import com.nerf.netx.domain.ActionResult
+import com.nerf.netx.domain.AnalyticsService
+import com.nerf.netx.domain.AnalyticsSnapshot
+import com.nerf.netx.domain.AppServices
+import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceControlService
+import com.nerf.netx.domain.DeviceDetails
+import com.nerf.netx.domain.DevicesService
+import com.nerf.netx.domain.MapLayoutMode
+import com.nerf.netx.domain.MapLink
+import com.nerf.netx.domain.MapNode
+import com.nerf.netx.domain.MapService
+import com.nerf.netx.domain.MapTopologyService
+import com.nerf.netx.domain.MeasurementMode
+import com.nerf.netx.domain.QosMode
+import com.nerf.netx.domain.RouterControlService
+import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.ScanEvent
+import com.nerf.netx.domain.ScanPhase
+import com.nerf.netx.domain.ScanService
+import com.nerf.netx.domain.ScanState
+import com.nerf.netx.domain.ServiceStatus
+import com.nerf.netx.domain.SpeedtestService
+import com.nerf.netx.domain.SpeedtestUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +42,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlin.random.Random
+import java.net.InetSocketAddress
+import java.net.Socket
+import kotlin.math.max
 
 class HybridBackendGateway(
   context: Context,
@@ -35,8 +64,8 @@ class HybridBackendGateway(
   override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner)
   override val map: MapService = HybridMapService(sharedDevices, selectedNodeId)
   override val topology: MapTopologyService = HybridTopologyService(sharedDevices, selectedNodeId)
-  override val analytics: AnalyticsService = HybridAnalytics(speedtest, sharedDevices)
-  override val routerControl: RouterControlService = HybridRouterControl(credentialsStore)
+  override val analytics: AnalyticsService = HybridAnalytics(speedtest, sharedDevices, scan)
+  override val routerControl: RouterControlService = HybridRouterControl(context, credentialsStore)
 }
 
 class RouterCredentialsStore(context: Context) {
@@ -82,7 +111,19 @@ data class RouterCredentials(
 }
 
 private class HybridSpeedtest(private val scope: CoroutineScope) : SpeedtestService {
-  private val _ui = MutableStateFlow(SpeedtestUiState(false, 0f, 0.0, 0.0, 0, "IDLE"))
+  private val _ui = MutableStateFlow(
+    SpeedtestUiState(
+      running = false,
+      progress01 = 0f,
+      downMbps = null,
+      upMbps = null,
+      latencyMs = null,
+      phase = "IDLE",
+      mode = MeasurementMode.NOT_AVAILABLE,
+      status = ServiceStatus.IDLE,
+      message = "Download/upload benchmark endpoints are not configured."
+    )
+  )
   override val ui: StateFlow<SpeedtestUiState> = _ui.asStateFlow()
   private var job: Job? = null
 
@@ -90,36 +131,69 @@ private class HybridSpeedtest(private val scope: CoroutineScope) : SpeedtestServ
     if (_ui.value.running) return
     job?.cancel()
     job = scope.launch {
-      val phases = listOf("PING", "DOWNLOAD", "UPLOAD", "DONE")
-      var p = 0f
-      var down = 0.0
-      var up = 0.0
-      var lat = 11
-      _ui.value = SpeedtestUiState(true, p, down, up, lat, "PING")
-      for (phase in phases) {
-        repeat(45) {
-          delay(65)
-          p = (p + 1f / (phases.size * 45f)).coerceAtMost(1f)
-          if (phase == "PING") lat = (lat + Random.nextInt(-1, 2)).coerceIn(4, 90)
-          if (phase == "DOWNLOAD") down = (down + Random.nextDouble(7.0, 30.0)).coerceAtMost(1200.0)
-          if (phase == "UPLOAD") up = (up + Random.nextDouble(2.0, 12.0)).coerceAtMost(350.0)
-          _ui.value = SpeedtestUiState(true, p, down, up, lat, phase)
-        }
-      }
-      _ui.value = _ui.value.copy(running = false, phase = "DONE", progress01 = 1f)
+      _ui.value = _ui.value.copy(
+        running = true,
+        progress01 = 0.1f,
+        phase = "PING",
+        status = ServiceStatus.RUNNING,
+        message = "Running best-effort latency check only; throughput endpoints not available."
+      )
+
+      val ping = measureInternetPingMs()
+      _ui.value = _ui.value.copy(
+        running = false,
+        progress01 = 1f,
+        latencyMs = ping,
+        downMbps = null,
+        upMbps = null,
+        phase = "DONE",
+        mode = MeasurementMode.NOT_AVAILABLE,
+        status = ServiceStatus.NOT_SUPPORTED,
+        message = "Speed throughput is NOT_SUPPORTED until real test endpoints are configured."
+      )
     }
   }
 
   override suspend fun stop() {
     job?.cancel()
     job = null
-    _ui.value = _ui.value.copy(running = false, phase = "STOPPED")
+    _ui.value = _ui.value.copy(running = false, phase = "STOPPED", status = ServiceStatus.IDLE)
   }
 
   override suspend fun reset() {
     job?.cancel()
     job = null
-    _ui.value = SpeedtestUiState(false, 0f, 0.0, 0.0, 0, "IDLE")
+    _ui.value = SpeedtestUiState(
+      running = false,
+      progress01 = 0f,
+      downMbps = null,
+      upMbps = null,
+      latencyMs = null,
+      phase = "IDLE",
+      mode = MeasurementMode.NOT_AVAILABLE,
+      status = ServiceStatus.IDLE,
+      message = "Download/upload benchmark endpoints are not configured."
+    )
+  }
+
+  private fun measureInternetPingMs(): Int? {
+    val samples = mutableListOf<Int>()
+    repeat(3) {
+      val started = System.nanoTime()
+      val ok = runCatching {
+        Socket().use { socket ->
+          socket.connect(InetSocketAddress("1.1.1.1", 443), 350)
+        }
+        true
+      }.getOrDefault(false)
+      if (ok) {
+        val elapsed = ((System.nanoTime() - started) / 1_000_000L).toInt()
+        samples += max(1, elapsed)
+      }
+    }
+    if (samples.isEmpty()) return null
+    val sorted = samples.sorted()
+    return sorted[sorted.size / 2]
   }
 }
 
@@ -229,33 +303,69 @@ private class HybridDeviceControl(
 ) : DeviceControlService {
   override suspend fun ping(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
-      ?: return ActionResult(false, "Device not found")
+      ?: return ActionResult(
+        ok = false,
+        status = ServiceStatus.ERROR,
+        code = "DEVICE_NOT_FOUND",
+        message = "Device not found",
+        errorReason = "No device with id=$deviceId"
+      )
+
     val probe = lanScanner.probeReachability(d.ip)
     return if (probe.reachable) {
       ActionResult(
         ok = true,
-        message = "Ping OK",
+        status = ServiceStatus.OK,
+        code = "PING_OK",
+        message = "Ping completed",
         details = mapOf(
           "ip" to d.ip,
-          "pingMs" to (probe.latencyMs?.toString() ?: "N/A"),
-          "method" to probe.methodUsed
+          "latencyMs" to (probe.latencyMs?.toString() ?: "N/A"),
+          "methodUsed" to probe.methodUsed,
+          "reachable" to "true"
         )
       )
     } else {
-      ActionResult(false, "Device unreachable", mapOf("ip" to d.ip, "method" to probe.methodUsed))
+      ActionResult(
+        ok = false,
+        status = ServiceStatus.NO_DATA,
+        code = "PING_UNAVAILABLE",
+        message = "Reachability unavailable",
+        details = mapOf(
+          "ip" to d.ip,
+          "latencyMs" to "N/A",
+          "methodUsed" to "UNAVAILABLE",
+          "reachable" to "false"
+        ),
+        errorReason = "ICMP blocked and TCP fallback ports did not accept connections."
+      )
     }
   }
 
   override suspend fun block(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
-      ?: return ActionResult(false, "Device not found")
-    return ActionResult(true, "Block request created", mapOf("device" to d.name))
+      ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NOT_SUPPORTED,
+      code = "ROUTER_API_REQUIRED",
+      message = "Block action is NOT_SUPPORTED",
+      details = mapOf("device" to d.name),
+      errorReason = "Blocking devices requires router vendor API integration and authenticated credentials."
+    )
   }
 
   override suspend fun prioritize(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
-      ?: return ActionResult(false, "Device not found")
-    return ActionResult(true, "QoS priority request created", mapOf("device" to d.name))
+      ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NOT_SUPPORTED,
+      code = "ROUTER_API_REQUIRED",
+      message = "Prioritize action is NOT_SUPPORTED",
+      details = mapOf("device" to d.name),
+      errorReason = "QoS prioritization requires router vendor API integration and authenticated credentials."
+    )
   }
 
   override suspend fun deviceDetails(deviceId: String): DeviceDetails? {
@@ -264,7 +374,7 @@ private class HybridDeviceControl(
     return DeviceDetails(
       device = d,
       pingMs = probe.latencyMs,
-      notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Unreachable"
+      notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Reachability unavailable"
     )
   }
 }
@@ -311,9 +421,12 @@ private class HybridTopologyService(
         selected = selectedNodeId.value == it.id
       )
     }
+
     val gateway = devices.firstOrNull { it.isGateway || it.deviceType.equals("router", true) || it.name.equals("GATEWAY", true) }
       ?: devices.firstOrNull()
-    _links.value = if (gateway == null) emptyList() else {
+    _links.value = if (gateway == null) {
+      emptyList()
+    } else {
       devices
         .filter { it.id != gateway.id }
         .map { MapLink(gateway.id, it.id, toStrength(it)) }
@@ -328,27 +441,76 @@ private class HybridTopologyService(
 
 private class HybridAnalytics(
   speedtestService: SpeedtestService,
-  devicesFlow: StateFlow<List<Device>>
+  devicesFlow: StateFlow<List<Device>>,
+  scanService: ScanService
 ) : AnalyticsService {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-  private val _events = MutableStateFlow<List<String>>(listOf("BOOT: Hybrid backend online"))
+  private val _events = MutableStateFlow<List<String>>(listOf("BOOT: backend online"))
   override val events: StateFlow<List<String>> = _events.asStateFlow()
-  private val _snapshot = MutableStateFlow(AnalyticsSnapshot(0.0, 0.0, 0.0, 0.0, 0.0, 0))
+  private val _snapshot = MutableStateFlow(
+    AnalyticsSnapshot(
+      downMbps = null,
+      upMbps = null,
+      latencyMs = null,
+      jitterMs = null,
+      packetLossPct = null,
+      deviceCount = 0,
+      reachableCount = 0,
+      avgRttMs = null,
+      medianRttMs = null,
+      scanDurationMs = null,
+      lastScanEpochMs = null,
+      status = ServiceStatus.NO_DATA,
+      message = "No scan data available yet."
+    )
+  )
   override val snapshot: StateFlow<AnalyticsSnapshot> = _snapshot.asStateFlow()
 
+  private val scanStartedAt = MutableStateFlow<Long?>(null)
+  private val lastScanDuration = MutableStateFlow<Int?>(null)
+  private val lastScanTimestamp = MutableStateFlow<Long?>(null)
+
   init {
+    scope.launch {
+      scanService.events.collect { event ->
+        when (event) {
+          is ScanEvent.ScanStarted -> scanStartedAt.value = event.startedAtEpochMs
+          is ScanEvent.ScanDone -> {
+            lastScanTimestamp.value = event.completedAtEpochMs
+            val started = scanStartedAt.value
+            lastScanDuration.value = if (started == null) null else ((event.completedAtEpochMs - started).coerceAtLeast(0L)).toInt()
+          }
+          else -> Unit
+        }
+      }
+    }
+
     scope.launch {
       while (true) {
         val st = speedtestService.ui.value
         val devices = devicesFlow.value
-        val avgRisk = if (devices.isEmpty()) 0.0 else devices.map { it.riskScore }.average()
+        val reachable = devices.filter { it.online }
+        val rtts = reachable.mapNotNull { it.latencyMs }.sorted()
+        val avgRtt = if (rtts.isEmpty()) null else rtts.average()
+        val medianRtt = if (rtts.isEmpty()) null else rtts[rtts.size / 2].toDouble()
+
+        val status = if (devices.isEmpty()) ServiceStatus.NO_DATA else ServiceStatus.OK
+        val message = if (devices.isEmpty()) "No scan data available yet." else null
+
         _snapshot.value = AnalyticsSnapshot(
           downMbps = st.downMbps,
           upMbps = st.upMbps,
-          latencyMs = st.latencyMs.toDouble(),
-          jitterMs = (4.0 + avgRisk / 10.0),
-          packetLossPct = (avgRisk / 8.0).coerceIn(0.0, 12.0),
-          deviceCount = devices.size
+          latencyMs = st.latencyMs?.toDouble(),
+          jitterMs = null,
+          packetLossPct = null,
+          deviceCount = devices.size,
+          reachableCount = reachable.size,
+          avgRttMs = avgRtt,
+          medianRttMs = medianRtt,
+          scanDurationMs = lastScanDuration.value,
+          lastScanEpochMs = lastScanTimestamp.value,
+          status = status,
+          message = message
         )
         delay(1000)
       }
@@ -358,38 +520,74 @@ private class HybridAnalytics(
   override suspend fun refresh() {
     val s = snapshot.value
     _events.value = listOf(
-      "SNAPSHOT: down=${"%.1f".format(s.downMbps)} up=${"%.1f".format(s.upMbps)}",
-      "LAT=${"%.0f".format(s.latencyMs)}ms JIT=${"%.1f".format(s.jitterMs)}ms LOSS=${"%.1f".format(s.packetLossPct)}%",
-      "DEVICES=${s.deviceCount}"
+      "STATUS=${s.status}",
+      "DEVICES=${s.deviceCount} REACHABLE=${s.reachableCount}",
+      "RTT_AVG=${s.avgRttMs?.let { "%.1f".format(it) } ?: "N/A"}ms RTT_MED=${s.medianRttMs?.let { "%.1f".format(it) } ?: "N/A"}ms",
+      "LAST_SCAN=${s.lastScanEpochMs ?: 0} DURATION_MS=${s.scanDurationMs ?: -1}"
     )
   }
 }
 
 private class HybridRouterControl(
+  private val context: Context,
   private val credentialsStore: RouterCredentialsStore
 ) : RouterControlService {
-  private fun capabilityMessage(): ActionResult {
-    val configured = credentialsStore.read().configured()
-    return if (configured) {
-      ActionResult(true, "Request accepted", mapOf("provider" to "router-api"))
-    } else {
-      ActionResult(false, "Capability unavailable: configure router credentials in Settings")
-    }
+
+  override suspend fun info(): RouterInfoResult {
+    val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+      ?: return RouterInfoResult(ServiceStatus.ERROR, "ConnectivityManager unavailable")
+
+    val active = cm.activeNetwork
+      ?: return RouterInfoResult(ServiceStatus.NO_DATA, "No active network")
+    val link = cm.getLinkProperties(active)
+    val caps = cm.getNetworkCapabilities(active)
+    val gatewayIp = link?.routes?.firstOrNull { it.hasGateway() }?.gateway?.hostAddress
+    val dns = link?.dnsServers?.mapNotNull { it.hostAddress } ?: emptyList()
+
+    val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+    val onWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    val ssid = if (onWifi) wifi?.connectionInfo?.ssid?.trim('"') else null
+    val linkSpeed = if (onWifi) wifi?.connectionInfo?.linkSpeed else null
+
+    return RouterInfoResult(
+      status = ServiceStatus.OK,
+      message = "Read-only router/network info available",
+      gatewayIp = gatewayIp,
+      dnsServers = dns,
+      ssid = ssid,
+      linkSpeedMbps = linkSpeed
+    )
   }
 
-  override suspend fun toggleGuest(): ActionResult = capabilityMessage()
-  override suspend fun setQos(mode: QosMode): ActionResult = capabilityMessage().copy(
-    details = mapOf("qos" to mode.name)
-  )
-  override suspend fun renewDhcp(): ActionResult = capabilityMessage()
-  override suspend fun flushDns(): ActionResult = capabilityMessage()
-  override suspend fun rebootRouter(): ActionResult = capabilityMessage()
-  override suspend fun toggleFirewall(): ActionResult = capabilityMessage()
-  override suspend fun toggleVpn(): ActionResult = capabilityMessage()
+  private fun notSupported(action: String): ActionResult {
+    val configured = credentialsStore.read().configured()
+    val reason = if (configured) {
+      "Router control requires vendor-specific API implementation and is not integrated yet."
+    } else {
+      "Router credentials are not configured and vendor API integration is not implemented."
+    }
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NOT_SUPPORTED,
+      code = "NOT_SUPPORTED",
+      message = "$action is NOT_SUPPORTED",
+      errorReason = reason
+    )
+  }
+
+  override suspend fun toggleGuest(): ActionResult = notSupported("toggleGuest")
+  override suspend fun setQos(mode: QosMode): ActionResult = notSupported("setQos")
+  override suspend fun renewDhcp(): ActionResult = notSupported("renewDhcp")
+  override suspend fun flushDns(): ActionResult = notSupported("flushDns")
+  override suspend fun rebootRouter(): ActionResult = notSupported("rebootRouter")
+  override suspend fun toggleFirewall(): ActionResult = notSupported("toggleFirewall")
+  override suspend fun toggleVpn(): ActionResult = notSupported("toggleVpn")
 }
 
 private fun toStrength(device: Device): Int {
-  device.rssiDbm?.let { return (it + 100).coerceIn(5, 99) }
+  if (device.isGateway) {
+    device.rssiDbm?.let { return (it + 100).coerceIn(5, 99) }
+  }
   device.latencyMs?.let {
     val score = 100 - it
     return score.coerceIn(8, 95)

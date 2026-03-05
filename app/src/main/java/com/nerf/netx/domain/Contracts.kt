@@ -10,13 +10,19 @@ interface SpeedtestService {
   suspend fun reset()
 }
 
+enum class ServiceStatus { OK, NO_DATA, NOT_SUPPORTED, ERROR, RUNNING, IDLE }
+enum class MeasurementMode { REAL, SIMULATED, NOT_AVAILABLE }
+
 data class SpeedtestUiState(
   val running: Boolean,
   val progress01: Float,
-  val downMbps: Double,
-  val upMbps: Double,
-  val latencyMs: Int,
-  val phase: String
+  val downMbps: Double?,
+  val upMbps: Double?,
+  val latencyMs: Int?,
+  val phase: String,
+  val mode: MeasurementMode = MeasurementMode.NOT_AVAILABLE,
+  val status: ServiceStatus = ServiceStatus.IDLE,
+  val message: String? = null
 )
 
 enum class ScanPhase { IDLE, RUNNING, COMPLETE, ERROR }
@@ -132,12 +138,19 @@ interface MapTopologyService {
 }
 
 data class AnalyticsSnapshot(
-  val downMbps: Double,
-  val upMbps: Double,
-  val latencyMs: Double,
-  val jitterMs: Double,
-  val packetLossPct: Double,
-  val deviceCount: Int
+  val downMbps: Double?,
+  val upMbps: Double?,
+  val latencyMs: Double?,
+  val jitterMs: Double?,
+  val packetLossPct: Double?,
+  val deviceCount: Int,
+  val reachableCount: Int,
+  val avgRttMs: Double?,
+  val medianRttMs: Double?,
+  val scanDurationMs: Int?,
+  val lastScanEpochMs: Long?,
+  val status: ServiceStatus,
+  val message: String? = null
 )
 
 interface AnalyticsService {
@@ -150,11 +163,24 @@ enum class QosMode { BALANCED, GAMING, STREAMING }
 
 data class ActionResult(
   val ok: Boolean,
+  val status: ServiceStatus,
+  val code: String,
   val message: String,
-  val details: Map<String, String> = emptyMap()
+  val details: Map<String, String> = emptyMap(),
+  val errorReason: String? = null
+)
+
+data class RouterInfoResult(
+  val status: ServiceStatus,
+  val message: String,
+  val gatewayIp: String? = null,
+  val dnsServers: List<String> = emptyList(),
+  val ssid: String? = null,
+  val linkSpeedMbps: Int? = null
 )
 
 interface RouterControlService {
+  suspend fun info(): RouterInfoResult
   suspend fun toggleGuest(): ActionResult
   suspend fun setQos(mode: QosMode): ActionResult
   suspend fun renewDhcp(): ActionResult

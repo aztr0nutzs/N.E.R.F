@@ -21,10 +21,14 @@ fun SpeedtestScreen(service: SpeedtestService) {
         Text("Gauge (mobile-safe sizing)", style = MaterialTheme.typography.titleMedium)
         LinearProgressIndicator(progress = { ui.progress01 }, modifier = Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-          Text("DL " + String.format("%.1f", ui.downMbps) + " Mbps")
-          Text("UL " + String.format("%.1f", ui.upMbps) + " Mbps")
+          Text("DL " + (ui.downMbps?.let { String.format("%.1f", it) + " Mbps" } ?: "N/A"))
+          Text("UL " + (ui.upMbps?.let { String.format("%.1f", it) + " Mbps" } ?: "N/A"))
         }
-        Text("Latency " + ui.latencyMs.toString() + " ms  |  " + ui.phase)
+        Text("Latency " + (ui.latencyMs?.toString()?.plus(" ms") ?: "N/A") + "  |  " + ui.phase)
+        Text("Status ${ui.status}  |  Mode ${ui.mode}", style = MaterialTheme.typography.bodySmall)
+        if (!ui.message.isNullOrBlank()) {
+          Text(ui.message ?: "", style = MaterialTheme.typography.bodySmall)
+        }
       }
     }
 

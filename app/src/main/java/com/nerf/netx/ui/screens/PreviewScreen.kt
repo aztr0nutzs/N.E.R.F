@@ -7,15 +7,19 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.nerf.netx.data.ThemeRepository
+import com.nerf.netx.domain.ActionResult
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.QosMode
+import com.nerf.netx.domain.RouterInfoResult
 import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.ui.theme.ThemeId
 import kotlinx.coroutines.CoroutineScope
@@ -140,88 +144,82 @@ private class NerfWebBridge(private val services: AppServices) {
       val out = when (action) {
         "scan.start" -> {
           services.scan.startDeepScan()
-          """{"ok":true,"message":"scan started"}"""
+          """{"ok":true,"status":"OK","code":"SCAN_STARTED","message":"scan started"}"""
         }
         "scan.stop" -> {
           services.scan.stopScan()
-          """{"ok":true,"message":"scan stopped"}"""
+          """{"ok":true,"status":"OK","code":"SCAN_STOPPED","message":"scan stopped"}"""
         }
         "devices.list" -> {
           val items = services.devices.devices.value.joinToString(",") {
             val quality = it.rssiDbm?.let { rssi -> (rssi + 100).coerceIn(5, 99) } ?: latencyToQuality(it.latencyMs)
             """{"id":"${escape(it.id)}","name":"${escape(it.name)}","hostname":"${escape(it.hostname)}","ip":"${escape(it.ip)}","vendor":"${escape(it.vendor)}","mac":"${escape(it.mac)}","deviceType":"${escape(it.deviceType)}","riskScore":${it.riskScore},"quality":$quality,"latencyMs":${it.latencyMs ?: "null"},"signalStrength":${it.rssiDbm ?: "null"},"reachability":"${escape(it.reachabilityMethod)}","lastSeen":${it.lastSeenEpochMs},"isGateway":${it.isGateway}}"""
           }
-          """{"ok":true,"devices":[$items]}"""
+          """{"ok":true,"status":"OK","code":"DEVICES_LIST","devices":[$items]}"""
         }
         "device.ping" -> {
           val id = extractField(payloadJson, "deviceId")
-          val res = services.deviceControl.ping(id)
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
+          actionResultJson(services.deviceControl.ping(id))
         }
         "device.block" -> {
           val id = extractField(payloadJson, "deviceId")
-          val res = services.deviceControl.block(id)
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
+          actionResultJson(services.deviceControl.block(id))
         }
         "device.prioritize" -> {
           val id = extractField(payloadJson, "deviceId")
-          val res = services.deviceControl.prioritize(id)
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
+          actionResultJson(services.deviceControl.prioritize(id))
         }
         "map.refresh" -> {
           services.map.refresh()
           services.topology.refreshTopology()
-          """{"ok":true,"nodes":${services.map.nodes.value.size}}"""
+          """{"ok":true,"status":"OK","code":"MAP_REFRESHED","nodes":${services.map.nodes.value.size}}"""
         }
         "speedtest.start" -> {
           services.speedtest.start()
-          """{"ok":true}"""
+          """{"ok":true,"status":"OK","code":"SPEEDTEST_STARTED"}"""
         }
         "speedtest.stop" -> {
           services.speedtest.stop()
-          """{"ok":true}"""
+          """{"ok":true,"status":"OK","code":"SPEEDTEST_STOPPED"}"""
         }
-        "router.toggleGuest" -> {
-          val res = services.routerControl.toggleGuest()
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
-        }
-        "router.renewDhcp" -> {
-          val res = services.routerControl.renewDhcp()
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
-        }
-        "router.flushDns" -> {
-          val res = services.routerControl.flushDns()
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
-        }
-        "router.rebootRouter" -> {
-          val res = services.routerControl.rebootRouter()
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
-        }
-        "router.toggleFirewall" -> {
-          val res = services.routerControl.toggleFirewall()
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
-        }
-        "router.toggleVpn" -> {
-          val res = services.routerControl.toggleVpn()
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
-        }
+        "router.info" -> routerInfoJson(services.routerControl.info())
+        "router.toggleGuest" -> actionResultJson(services.routerControl.toggleGuest())
+        "router.renewDhcp" -> actionResultJson(services.routerControl.renewDhcp())
+        "router.flushDns" -> actionResultJson(services.routerControl.flushDns())
+        "router.rebootRouter" -> actionResultJson(services.routerControl.rebootRouter())
+        "router.toggleFirewall" -> actionResultJson(services.routerControl.toggleFirewall())
+        "router.toggleVpn" -> actionResultJson(services.routerControl.toggleVpn())
         "router.setQos" -> {
           val mode = extractField(payloadJson, "mode").uppercase()
           val qos = runCatching { QosMode.valueOf(mode) }.getOrDefault(QosMode.BALANCED)
-          val res = services.routerControl.setQos(qos)
-          """{"ok":${res.ok},"message":"${escape(res.message)}"}"""
+          actionResultJson(services.routerControl.setQos(qos))
         }
         "analytics.snapshot" -> {
           services.analytics.refresh()
           val s = services.analytics.snapshot.value
-          """{"ok":true,"downMbps":${s.downMbps},"upMbps":${s.upMbps},"latencyMs":${s.latencyMs},"jitterMs":${s.jitterMs},"packetLossPct":${s.packetLossPct},"deviceCount":${s.deviceCount}}"""
+          """{"ok":true,"status":"${s.status}","downMbps":${s.downMbps ?: "null"},"upMbps":${s.upMbps ?: "null"},"latencyMs":${s.latencyMs ?: "null"},"jitterMs":${s.jitterMs ?: "null"},"packetLossPct":${s.packetLossPct ?: "null"},"deviceCount":${s.deviceCount},"reachableCount":${s.reachableCount},"avgRttMs":${s.avgRttMs ?: "null"},"medianRttMs":${s.medianRttMs ?: "null"},"scanDurationMs":${s.scanDurationMs ?: "null"},"lastScanEpochMs":${s.lastScanEpochMs ?: "null"},"message":"${escape(s.message ?: "")}"}"""
         }
-        else -> """{"ok":false,"message":"unknown action"}"""
+        else -> """{"ok":false,"status":"ERROR","code":"UNKNOWN_ACTION","message":"unknown action"}"""
       }
       emit("action.result", out)
     }
     return """{"accepted":true}"""
   }
+
+  private fun actionResultJson(res: ActionResult): String {
+    val detailPairs = res.details.entries.joinToString(",") { (k, v) ->
+      "\"${escape(k)}\":\"${escape(v)}\""
+    }
+    val details = if (detailPairs.isBlank()) "{}" else "{$detailPairs}"
+    return """{"ok":${res.ok},"status":"${res.status}","code":"${escape(res.code)}","message":"${escape(res.message)}","errorReason":"${escape(res.errorReason ?: "")}","details":$details}"""
+  }
+
+  private fun routerInfoJson(info: RouterInfoResult): String {
+    val dns = info.dnsServers.joinToString(",") { "\"${escape(it)}\"" }
+    return """{"ok":${info.status == com.nerf.netx.domain.ServiceStatus.OK},"status":"${info.status}","code":"ROUTER_INFO","message":"${escape(info.message)}","gatewayIp":${jsonString(info.gatewayIp)},"dnsServers":[$dns],"ssid":${jsonString(info.ssid)},"linkSpeedMbps":${info.linkSpeedMbps ?: "null"}}"""
+  }
+
+  private fun jsonString(value: String?): String = if (value == null) "null" else "\"${escape(value)}\""
 
   private fun emit(eventName: String, payloadJson: String) {
     val js = "window.NERF && window.NERF.onEvent && window.NERF.onEvent('${escape(eventName)}',$payloadJson);"
