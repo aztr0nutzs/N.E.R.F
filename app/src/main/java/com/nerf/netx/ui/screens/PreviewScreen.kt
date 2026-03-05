@@ -1,7 +1,9 @@
 package com.nerf.netx.ui.screens
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
@@ -25,6 +27,12 @@ import kotlinx.coroutines.launch
 fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: AppServices) {
   val url = themeRepository.htmlAssetUrl(themeId)
   val bridge = remember { NerfWebBridge(services) }
+  val allowedMainUrls = remember {
+    setOf(
+      "file:///android_asset/themes/nerf_main_dash/index.html",
+      "file:///android_asset/themes/nerf_hud_alt/index.html"
+    )
+  }
 
   Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Text("THEME PREVIEW", style = MaterialTheme.typography.titleLarge)
@@ -46,7 +54,25 @@ fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: 
               settings.javaScriptEnabled = true
               settings.domStorageEnabled = true
               settings.allowFileAccess = true
-              webViewClient = WebViewClient()
+              webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, loadedUrl: String?) {
+                  super.onPageFinished(view, loadedUrl)
+                  Log.d("NERF.WebView", "Loaded URL=$loadedUrl, selectedTheme=${themeId.id}")
+                }
+
+                override fun shouldOverrideUrlLoading(
+                  view: WebView,
+                  request: WebResourceRequest
+                ): Boolean {
+                  if (!request.isForMainFrame) return false
+                  val next = request.url.toString()
+                  val allowed = next in allowedMainUrls
+                  if (!allowed) {
+                    Log.w("NERF.WebView", "Blocked main-frame URL=$next")
+                  }
+                  return !allowed
+                }
+              }
               addJavascriptInterface(bridge.attach(this), "NERF_NATIVE")
               loadUrl(url)
             }

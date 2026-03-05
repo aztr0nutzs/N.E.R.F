@@ -20,20 +20,28 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   override val selected: StateFlow<ThemeId> = _selected
 
   override fun set(themeId: ThemeId) {
-    prefs.edit().putString(key, themeId.id).apply()
-    _selected.value = themeId
+    val safeTheme = if (themeId == ThemeId.NERF_MAIN_DASH_HTML || themeId == ThemeId.NERF_HUD_ALT_HTML) {
+      themeId
+    } else {
+      defaultTheme
+    }
+    prefs.edit().putString(key, safeTheme.id).apply()
+    _selected.value = safeTheme
   }
 
   override fun htmlAssetUrl(themeId: ThemeId): String? = when (themeId) {
     ThemeId.NERF_MAIN_DASH_HTML -> "file:///android_asset/themes/nerf_main_dash/index.html"
     ThemeId.NERF_HUD_ALT_HTML -> "file:///android_asset/themes/nerf_hud_alt/index.html"
-    ThemeId.SPEEDTEST6_HTML -> "file:///android_asset/themes/speedtest6/index.html"
-    ThemeId.NERF_SPEED2_HTML -> "file:///android_asset/themes/nerf_speed2/index.html"
   }
 
   private fun readTheme(): ThemeId {
     val saved = prefs.getString(key, null)
-    if (saved == "NEON_NERF" || saved == "neon_nerf") {
+    if (
+      saved == "NEON_NERF" ||
+      saved == "neon_nerf" ||
+      saved == "speedtest6" ||
+      saved == "nerf_speed2"
+    ) {
       prefs.edit().putString(key, defaultTheme.id).apply()
       return defaultTheme
     }
