@@ -43,6 +43,7 @@ fun AppRoot(
           SettingsScreen(
             themeId = themeId,
             onThemeSelected = themeRepository::set,
+            htmlAssetUrlProvider = themeRepository::htmlAssetUrl,
             credentialsStore = credentialsStore
           )
         }
