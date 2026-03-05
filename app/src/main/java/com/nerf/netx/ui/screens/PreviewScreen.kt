@@ -107,7 +107,9 @@ private class NerfWebBridge(private val services: AppServices) {
         }
         "devices.list" -> {
           val items = services.devices.devices.value.joinToString(",") {
-            """{"id":"${it.id}","name":"${it.name}","ip":"${it.ip}","vendor":"${it.vendor}","mac":"${it.mac}","riskScore":${it.riskScore}}"""
+            val quality = (it.rssiDbm + 100).coerceIn(5, 99)
+            val isGateway = it.deviceType.equals("router", true) || it.name.equals("GATEWAY", true)
+            """{"id":"${it.id}","name":"${it.name}","hostname":"${it.hostname}","ip":"${it.ip}","vendor":"${it.vendor}","mac":"${it.mac}","deviceType":"${it.deviceType}","riskScore":${it.riskScore},"quality":$quality,"lastSeen":${it.lastSeenEpochMs},"isGateway":$isGateway}"""
           }
           """{"ok":true,"devices":[$items]}"""
         }
