@@ -57,12 +57,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
+import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 class HybridBackendGateway(
@@ -81,7 +83,7 @@ class HybridBackendGateway(
   override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner)
   override val map: MapService = HybridMapService(sharedDevices, selectedNodeId)
   override val topology: MapTopologyService = HybridTopologyService(sharedDevices, selectedNodeId)
-  override val analytics: AnalyticsService = HybridAnalytics(speedtest, sharedDevices, scan)
+  override val analytics: AnalyticsService = HybridAnalytics(context, speedtest, sharedDevices, scan)
   override val routerControl: RouterControlService = HybridRouterControl(context, credentialsStore)
 }
 
@@ -1121,12 +1123,16 @@ private class HybridTopologyService(
 }
 
 private class HybridAnalytics(
-  speedtestService: SpeedtestService,
-  devicesFlow: StateFlow<List<Device>>,
-  scanService: ScanService
+  context: Context,
+  private val speedtestService: SpeedtestService,
+  private val devicesFlow: StateFlow<List<Device>>,
+  private val scanService: ScanService
 ) : AnalyticsService {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-  private val _events = MutableStateFlow<List<String>>(listOf("BOOT: backend online"))
+  private val appContext = context.applicationContext
+  private val prefs = appContext.getSharedPreferences("nerf_analytics_store", Context.MODE_PRIVATE)
+
+  private val _events = MutableStateFlow<List<String>>(listOf("BOOT: analytics online"))
   override val events: StateFlow<List<String>> = _events.asStateFlow()
   private val _snapshot = MutableStateFlow(
     AnalyticsSnapshot(
@@ -1142,24 +1148,36 @@ private class HybridAnalytics(
       scanDurationMs = null,
       lastScanEpochMs = null,
       status = ServiceStatus.NO_DATA,
-      message = "No scan data available yet."
+      message = "No analytics data yet. Run a scan or speedtest."
     )
   )
   override val snapshot: StateFlow<AnalyticsSnapshot> = _snapshot.asStateFlow()
 
+  private val keySamples = "analytics_samples"
+  private val keyReports = "analytics_reports"
+  private val keyDeviceStats = "analytics_device_stats"
+  private val keyLastScanDevices = "analytics_last_scan_devices"
+  private val keyLastExportPath = "analytics_last_export_path"
+  private val maxSamples = 200
+  private val maxReports = 60
+  private val maxDeviceStats = 400
+  private val retentionMs = 7L * 24L * 60L * 60L * 1000L
+
   private val scanStartedAt = MutableStateFlow<Long?>(null)
-  private val lastScanDuration = MutableStateFlow<Int?>(null)
-  private val lastScanTimestamp = MutableStateFlow<Long?>(null)
+  private var samples = mutableListOf<AnalyticsPoint>()
+  private var reports = mutableListOf<ScanReport>()
+  private var deviceStats = linkedMapOf<String, DeviceHistory>()
+  private var lastScanDevices = linkedMapOf<String, DeviceSnapshot>()
+  private var lastSpeedtestSampleAt = 0L
 
   init {
+    loadPersisted()
     scope.launch {
       scanService.events.collect { event ->
         when (event) {
           is ScanEvent.ScanStarted -> scanStartedAt.value = event.startedAtEpochMs
           is ScanEvent.ScanDone -> {
-            lastScanTimestamp.value = event.completedAtEpochMs
-            val started = scanStartedAt.value
-            lastScanDuration.value = if (started == null) null else ((event.completedAtEpochMs - started).coerceAtLeast(0L)).toInt()
+            onScanCompleted(event)
           }
           else -> Unit
         }
@@ -1167,45 +1185,696 @@ private class HybridAnalytics(
     }
 
     scope.launch {
+      speedtestService.latestResult.collect { result ->
+        if (result == null) return@collect
+        if (result.phase != SpeedtestPhase.DONE && result.phase != SpeedtestPhase.ERROR) return@collect
+        if (result.finishedAt <= lastSpeedtestSampleAt) return@collect
+        lastSpeedtestSampleAt = result.finishedAt
+        addSpeedtestSample(result)
+      }
+    }
+
+    scope.launch {
       while (true) {
-        val st = speedtestService.ui.value
-        val devices = devicesFlow.value
-        val reachable = devices.filter { it.online }
-        val rtts = reachable.mapNotNull { it.latencyMs }.sorted()
-        val avgRtt = if (rtts.isEmpty()) null else rtts.average()
-        val medianRtt = if (rtts.isEmpty()) null else rtts[rtts.size / 2].toDouble()
-
-        val status = if (devices.isEmpty()) ServiceStatus.NO_DATA else ServiceStatus.OK
-        val message = if (devices.isEmpty()) "No scan data available yet." else null
-
-        _snapshot.value = AnalyticsSnapshot(
-          downMbps = st.downMbps,
-          upMbps = st.upMbps,
-          latencyMs = st.latencyMs?.toDouble(),
-          jitterMs = null,
-          packetLossPct = null,
-          deviceCount = devices.size,
-          reachableCount = reachable.size,
-          avgRttMs = avgRtt,
-          medianRttMs = medianRtt,
-          scanDurationMs = lastScanDuration.value,
-          lastScanEpochMs = lastScanTimestamp.value,
-          status = status,
-          message = message
-        )
+        recomputeSnapshot()
         delay(1000)
       }
     }
   }
 
   override suspend fun refresh() {
-    val s = snapshot.value
-    _events.value = listOf(
-      "STATUS=${s.status}",
-      "DEVICES=${s.deviceCount} REACHABLE=${s.reachableCount}",
-      "RTT_AVG=${s.avgRttMs?.let { "%.1f".format(it) } ?: "N/A"}ms RTT_MED=${s.medianRttMs?.let { "%.1f".format(it) } ?: "N/A"}ms",
-      "LAST_SCAN=${s.lastScanEpochMs ?: 0} DURATION_MS=${s.scanDurationMs ?: -1}"
+    recomputeSnapshot()
+    val payload = buildPayloadJson()
+    val trend = computeTrendSummary(samples)
+    val warnings = reports.takeLast(8).flatMap { it.warnings }.distinct().take(6)
+    val healthRows = computeHealthRows(deviceStats).take(10)
+    val latestReport = reports.lastOrNull()
+
+    _events.value = buildList {
+      add("STATUS=${_snapshot.value.status}")
+      add("SAMPLES=${samples.size} REPORTS=${reports.size}")
+      add("TREND_LATENCY=${trend.latencyDirection}:${"%.2f".format(trend.latencySlope)}")
+      add("TREND_ONLINE=${trend.onlineDirection}:${"%.2f".format(trend.onlineSlope)}")
+      add("TREND_THROUGHPUT=${trend.throughputDirection}:${"%.2f".format(trend.throughputSlope)}")
+      if (healthRows.isNotEmpty()) {
+        add("HEALTH_WORST=${healthRows.first().name}(${healthRows.first().score})")
+      } else {
+        add("HEALTH_WORST=N/A")
+      }
+      if (latestReport != null) {
+        add(
+          "REPORT=${latestReport.timestamp}|found=${latestReport.devicesFound}|online=${latestReport.devicesOnline}|new=${latestReport.newDevices.size}|offline=${latestReport.offlineDevices.size}"
+        )
+      } else {
+        add("REPORT=N/A")
+      }
+      if (warnings.isNotEmpty()) add("WARNINGS=${warnings.joinToString(" | ")}")
+      val exportPath = prefs.getString(keyLastExportPath, null)
+      if (!exportPath.isNullOrBlank()) add("LAST_EXPORT=$exportPath")
+      add("PAYLOAD_JSON=$payload")
+    }
+  }
+
+  fun getAnalyticsPayloadJson(): String = buildPayloadJson()
+
+  fun exportAnalyticsJsonToFile(): String {
+    val payload = buildPayloadJson()
+    if (samples.isEmpty() && reports.isEmpty()) {
+      throw IllegalStateException("No analytics data to export yet.")
+    }
+    val dir = File(appContext.filesDir, "analytics_exports")
+    if (!dir.exists()) dir.mkdirs()
+    val file = File(dir, "analytics-${System.currentTimeMillis()}.json")
+    file.writeText(payload)
+    prefs.edit().putString(keyLastExportPath, file.absolutePath).apply()
+    return file.absolutePath
+  }
+
+  private suspend fun onScanCompleted(event: ScanEvent.ScanDone) {
+    val devices = devicesFlow.value
+    val reachable = devices.filter { it.online }
+    val latencies = reachable.mapNotNull { it.latencyMs }.sorted()
+    val medianLatency = latencies.median()
+    val p90Latency = latencies.p90()
+    val now = event.completedAtEpochMs
+    val scanDuration = event.metadata?.durationMs?.toInt()
+      ?: run {
+        val started = scanStartedAt.value
+        if (started == null) null else ((now - started).coerceAtLeast(0L)).toInt()
+      }
+    val gateway = devices.firstOrNull { it.isGateway }
+    val sample = AnalyticsPoint(
+      timestamp = now,
+      source = "SCAN",
+      deviceCountTotal = devices.size,
+      deviceCountOnline = reachable.size,
+      medianLatencyOnline = medianLatency,
+      p90LatencyOnline = p90Latency,
+      scanDurationMs = scanDuration,
+      gatewayPresent = gateway != null,
+      wifiRssi = gateway?.rssiDbm ?: event.metadata?.wifiRssi,
+      pingMs = speedtestService.latestResult.value?.pingMs,
+      jitterMs = speedtestService.latestResult.value?.jitterMs,
+      packetLossPct = speedtestService.latestResult.value?.packetLossPct,
+      downloadMbps = speedtestService.latestResult.value?.downloadMbps,
+      uploadMbps = speedtestService.latestResult.value?.uploadMbps
     )
+
+    val report = generateReport(now, scanDuration, devices, latencies, medianLatency)
+    updateDeviceHistory(devices)
+    lastScanDevices = currentScanSnapshot(devices)
+    samples += sample
+    reports += report
+    pruneAndPersist()
+    recomputeSnapshot()
+  }
+
+  private suspend fun addSpeedtestSample(result: SpeedtestResult) {
+    val devices = devicesFlow.value
+    val reachable = devices.count { it.online }
+    val latencies = devices.filter { it.online }.mapNotNull { it.latencyMs }.sorted()
+    val sample = AnalyticsPoint(
+      timestamp = result.finishedAt,
+      source = "SPEEDTEST",
+      deviceCountTotal = devices.size,
+      deviceCountOnline = reachable,
+      medianLatencyOnline = latencies.median(),
+      p90LatencyOnline = latencies.p90(),
+      scanDurationMs = null,
+      gatewayPresent = devices.any { it.isGateway },
+      wifiRssi = devices.firstOrNull { it.isGateway }?.rssiDbm,
+      pingMs = result.pingMs,
+      jitterMs = result.jitterMs,
+      packetLossPct = result.packetLossPct,
+      downloadMbps = result.downloadMbps,
+      uploadMbps = result.uploadMbps
+    )
+    samples += sample
+    pruneAndPersist()
+    recomputeSnapshot()
+  }
+
+  private fun generateReport(
+    timestamp: Long,
+    durationMs: Int?,
+    devices: List<Device>,
+    latencies: List<Int>,
+    medianLatency: Double?
+  ): ScanReport {
+    val current = currentScanSnapshot(devices)
+    val previous = lastScanDevices
+    val newDevices = current.keys.filter { !previous.containsKey(it) }
+    val offlineDevices = previous.keys.filter { !current.containsKey(it) || current[it]?.online != true }
+    val slow = devices
+      .filter { it.online && it.latencyMs != null }
+      .sortedByDescending { it.latencyMs ?: 0 }
+      .take(5)
+      .map { "${it.name.ifBlank { it.ip }}(${it.latencyMs}ms)" }
+
+    val warnings = mutableListOf<String>()
+    if (medianLatency != null && medianLatency > 120.0) warnings += "High latency median (${medianLatency.toInt()}ms)"
+    if (devices.isNotEmpty() && devices.count { !it.online } >= maxOf(3, (devices.size * 0.4f).toInt())) warnings += "Many devices offline"
+    if (latencies.isEmpty()) warnings += "Latency source missing for online devices"
+
+    return ScanReport(
+      timestamp = timestamp,
+      durationMs = durationMs,
+      devicesFound = devices.size,
+      devicesOnline = devices.count { it.online },
+      newDevices = newDevices,
+      offlineDevices = offlineDevices,
+      slowDevices = slow,
+      warnings = warnings
+    )
+  }
+
+  private fun currentScanSnapshot(devices: List<Device>): LinkedHashMap<String, DeviceSnapshot> {
+    val map = linkedMapOf<String, DeviceSnapshot>()
+    devices.forEach { d ->
+      val key = deviceKey(d)
+      map[key] = DeviceSnapshot(
+        key = key,
+        name = d.name.ifBlank { d.ip },
+        ip = d.ip,
+        mac = d.mac.ifBlank { null },
+        online = d.online,
+        latencyMs = d.latencyMs
+      )
+    }
+    return map
+  }
+
+  private fun updateDeviceHistory(devices: List<Device>) {
+    val now = System.currentTimeMillis()
+    val presentKeys = devices.map { deviceKey(it) }.toSet()
+
+    val existingKeys = deviceStats.keys.toList()
+    existingKeys.forEach { key ->
+      val old = deviceStats[key] ?: return@forEach
+      if (!presentKeys.contains(key)) {
+        deviceStats[key] = old.copy(
+          scansSeen = old.scansSeen + 1
+        )
+      }
+    }
+
+    devices.forEach { d ->
+      val key = deviceKey(d)
+      val prev = deviceStats[key]
+      val latencies = (prev?.latencySamples.orEmpty() + listOfNotNull(d.latencyMs)).takeLast(24)
+      val next = DeviceHistory(
+        key = key,
+        name = d.name.ifBlank { d.ip },
+        ip = d.ip,
+        mac = d.mac.ifBlank { null },
+        scansSeen = (prev?.scansSeen ?: 0) + 1,
+        onlineCount = (prev?.onlineCount ?: 0) + if (d.online) 1 else 0,
+        latencySamples = latencies,
+        lastSeen = d.lastSeen,
+        lastUpdated = now
+      )
+      deviceStats[key] = next
+    }
+  }
+
+  private suspend fun recomputeSnapshot() {
+    val st = speedtestService.ui.value
+    val devices = devicesFlow.value
+    val reachable = devices.filter { it.online }
+    val rtts = reachable.mapNotNull { it.latencyMs }.sorted()
+    val avgRtt = if (rtts.isEmpty()) null else rtts.average()
+    val medianRtt = if (rtts.isEmpty()) null else rtts[rtts.size / 2].toDouble()
+    val lastScan = samples.lastOrNull { it.source == "SCAN" }
+    val status = if (samples.isEmpty() && devices.isEmpty()) ServiceStatus.NO_DATA else ServiceStatus.OK
+    val missing = mutableListOf<String>()
+    if (samples.none { it.source == "SCAN" }) missing += "scan source missing"
+    if (samples.none { it.source == "SPEEDTEST" }) missing += "speedtest source missing"
+    if (devices.isEmpty()) missing += "device state missing"
+    val message = if (status == ServiceStatus.NO_DATA) {
+      "No analytics data yet. Run a scan or speedtest."
+    } else if (missing.isNotEmpty()) {
+      "Partial analytics: ${missing.joinToString(", ")}"
+    } else {
+      null
+    }
+
+    _snapshot.value = AnalyticsSnapshot(
+      downMbps = st.downMbps ?: samples.lastOrNull { it.downloadMbps != null }?.downloadMbps,
+      upMbps = st.upMbps ?: samples.lastOrNull { it.uploadMbps != null }?.uploadMbps,
+      latencyMs = st.latencyMs?.toDouble() ?: medianRtt,
+      jitterMs = st.jitterMs,
+      packetLossPct = st.packetLossPct,
+      deviceCount = devices.size,
+      reachableCount = reachable.size,
+      avgRttMs = avgRtt,
+      medianRttMs = medianRtt,
+      scanDurationMs = lastScan?.scanDurationMs,
+      lastScanEpochMs = lastScan?.timestamp,
+      status = status,
+      message = message
+    )
+  }
+
+  private fun buildPayloadJson(): String {
+    val trend = computeTrendSummary(samples)
+    val health = computeHealthRows(deviceStats)
+    val latest = _snapshot.value
+    val warnings = reports.takeLast(8).flatMap { it.warnings }.distinct()
+
+    val root = JSONObject()
+    val latestObj = JSONObject()
+      .put("status", latest.status.name)
+      .put("downMbps", latest.downMbps)
+      .put("upMbps", latest.upMbps)
+      .put("latencyMs", latest.latencyMs)
+      .put("jitterMs", latest.jitterMs)
+      .put("packetLossPct", latest.packetLossPct)
+      .put("deviceCount", latest.deviceCount)
+      .put("reachableCount", latest.reachableCount)
+      .put("medianRttMs", latest.medianRttMs)
+      .put("scanDurationMs", latest.scanDurationMs)
+      .put("lastScanEpochMs", latest.lastScanEpochMs)
+      .put("message", latest.message)
+
+    val trendObj = JSONObject()
+      .put("latencyDirection", trend.latencyDirection)
+      .put("latencySlope", trend.latencySlope)
+      .put("onlineDirection", trend.onlineDirection)
+      .put("onlineSlope", trend.onlineSlope)
+      .put("throughputDirection", trend.throughputDirection)
+      .put("throughputSlope", trend.throughputSlope)
+
+    val seriesArr = JSONArray()
+    samples.forEach { seriesArr.put(it.toJson()) }
+    val reportsArr = JSONArray()
+    reports.takeLast(30).forEach { reportsArr.put(it.toJson()) }
+    val healthArr = JSONArray()
+    health.forEach { healthArr.put(it.toJson()) }
+    val warningsArr = JSONArray()
+    warnings.forEach { warningsArr.put(it) }
+
+    root.put("latest", latestObj)
+    root.put("trend", trendObj)
+    root.put("series", seriesArr)
+    root.put("deviceHealth", healthArr)
+    root.put("scanReports", reportsArr)
+    root.put("warnings", warningsArr)
+    root.put("missingSources", missingSourcesArray())
+    return root.toString()
+  }
+
+  private fun missingSourcesArray(): JSONArray {
+    val arr = JSONArray()
+    if (samples.none { it.source == "SCAN" }) arr.put("scan source missing")
+    if (samples.none { it.source == "SPEEDTEST" }) arr.put("speedtest source missing")
+    if (deviceStats.isEmpty()) arr.put("device history missing")
+    return arr
+  }
+
+  private fun computeTrendSummary(series: List<AnalyticsPoint>): TrendSummary {
+    val lastN = series.takeLast(12)
+    val latencySlope = slope(lastN.mapNotNull { it.medianLatencyOnline })
+    val onlineSlope = slope(lastN.map { it.deviceCountOnline.toDouble() })
+    val throughputSlope = slope(lastN.mapNotNull { it.downloadMbps })
+
+    return TrendSummary(
+      latencyDirection = when {
+        latencySlope < -1.2 -> "IMPROVING"
+        latencySlope > 1.2 -> "WORSENING"
+        else -> "STABLE"
+      },
+      latencySlope = latencySlope,
+      onlineDirection = when {
+        onlineSlope > 0.25 -> "IMPROVING"
+        onlineSlope < -0.25 -> "WORSENING"
+        else -> "STABLE"
+      },
+      onlineSlope = onlineSlope,
+      throughputDirection = when {
+        throughputSlope > 0.7 -> "IMPROVING"
+        throughputSlope < -0.7 -> "WORSENING"
+        else -> "STABLE"
+      },
+      throughputSlope = throughputSlope
+    )
+  }
+
+  private fun computeHealthRows(history: Map<String, DeviceHistory>): List<DeviceHealthRow> {
+    return history.values.map { h ->
+      val onlineRatio = if (h.scansSeen <= 0) 0.0 else h.onlineCount.toDouble() / h.scansSeen.toDouble()
+      val medianLatency = h.latencySamples.sorted().median()
+      val recencyMin = ((System.currentTimeMillis() - h.lastSeen).coerceAtLeast(0L) / 60_000.0)
+      var score = 100.0
+      val reasons = mutableListOf<String>()
+      if (onlineRatio < 0.7) {
+        score -= (0.7 - onlineRatio) * 45.0
+        reasons += "Offline frequently"
+      }
+      if (medianLatency != null && medianLatency > 120.0) {
+        score -= minOf(30.0, (medianLatency - 120.0) * 0.12)
+        reasons += "High latency"
+      }
+      if (recencyMin > 90.0) {
+        score -= minOf(25.0, (recencyMin - 90.0) * 0.08)
+        reasons += "Not seen recently"
+      }
+      DeviceHealthRow(
+        key = h.key,
+        name = h.name,
+        ip = h.ip,
+        macMasked = h.mac?.let(::maskMac),
+        score = score.coerceIn(0.0, 100.0).toInt(),
+        onlineRatio = onlineRatio,
+        medianLatencyMs = medianLatency,
+        reasons = reasons
+      )
+    }.sortedBy { it.score }
+  }
+
+  private fun maskMac(mac: String): String {
+    val parts = mac.split(":")
+    return if (parts.size < 3) mac else "${parts[0]}:${parts[1]}:xx:xx:xx:${parts.last()}"
+  }
+
+  private fun slope(values: List<Double>): Double {
+    if (values.size < 2) return 0.0
+    val n = values.size.toDouble()
+    val xMean = (n - 1.0) / 2.0
+    val yMean = values.average()
+    var num = 0.0
+    var den = 0.0
+    values.forEachIndexed { idx, y ->
+      val x = idx.toDouble()
+      num += (x - xMean) * (y - yMean)
+      den += (x - xMean) * (x - xMean)
+    }
+    return if (abs(den) < 1e-9) 0.0 else num / den
+  }
+
+  private fun List<Int>.median(): Double? {
+    if (isEmpty()) return null
+    val sorted = sorted()
+    return sorted[sorted.size / 2].toDouble()
+  }
+
+  private fun List<Int>.p90(): Int? {
+    if (isEmpty()) return null
+    val sorted = sorted()
+    val idx = ((sorted.size - 1) * 0.90).toInt().coerceIn(0, sorted.lastIndex)
+    return sorted[idx]
+  }
+
+  private fun deviceKey(device: Device): String {
+    val mac = device.mac.trim()
+    return if (mac.isNotBlank()) mac.lowercase(Locale.US) else "ip:${device.ip}"
+  }
+
+  private fun pruneAndPersist() {
+    val cutoff = System.currentTimeMillis() - retentionMs
+    samples = samples.filter { it.timestamp >= cutoff }.takeLast(maxSamples).toMutableList()
+    reports = reports.filter { it.timestamp >= cutoff }.takeLast(maxReports).toMutableList()
+    if (deviceStats.size > maxDeviceStats) {
+      val trimmed = deviceStats.values.sortedByDescending { it.lastUpdated }.take(maxDeviceStats)
+      deviceStats = linkedMapOf<String, DeviceHistory>().apply { trimmed.forEach { put(it.key, it) } }
+    }
+    persistAll()
+  }
+
+  private fun persistAll() {
+    val sampleArr = JSONArray()
+    samples.forEach { sampleArr.put(it.toJson()) }
+    val reportArr = JSONArray()
+    reports.forEach { reportArr.put(it.toJson()) }
+    val deviceObj = JSONObject()
+    deviceStats.forEach { (key, value) -> deviceObj.put(key, value.toJson()) }
+    val lastScanObj = JSONObject()
+    lastScanDevices.forEach { (key, value) -> lastScanObj.put(key, value.toJson()) }
+    prefs.edit()
+      .putString(keySamples, sampleArr.toString())
+      .putString(keyReports, reportArr.toString())
+      .putString(keyDeviceStats, deviceObj.toString())
+      .putString(keyLastScanDevices, lastScanObj.toString())
+      .apply()
+  }
+
+  private fun loadPersisted() {
+    samples = parsePoints(prefs.getString(keySamples, null)).toMutableList()
+    reports = parseReports(prefs.getString(keyReports, null)).toMutableList()
+    deviceStats = parseDeviceHistory(prefs.getString(keyDeviceStats, null))
+    lastScanDevices = parseScanDevices(prefs.getString(keyLastScanDevices, null))
+  }
+
+  private fun parsePoints(raw: String?): List<AnalyticsPoint> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return runCatching {
+      val arr = JSONArray(raw)
+      (0 until arr.length()).mapNotNull { idx ->
+        arr.optJSONObject(idx)?.let { AnalyticsPoint.fromJson(it) }
+      }
+    }.getOrDefault(emptyList())
+  }
+
+  private fun parseReports(raw: String?): List<ScanReport> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return runCatching {
+      val arr = JSONArray(raw)
+      (0 until arr.length()).mapNotNull { idx ->
+        arr.optJSONObject(idx)?.let { ScanReport.fromJson(it) }
+      }
+    }.getOrDefault(emptyList())
+  }
+
+  private fun parseDeviceHistory(raw: String?): LinkedHashMap<String, DeviceHistory> {
+    if (raw.isNullOrBlank()) return linkedMapOf()
+    return runCatching {
+      val obj = JSONObject(raw)
+      val keys = obj.keys()
+      val out = linkedMapOf<String, DeviceHistory>()
+      while (keys.hasNext()) {
+        val key = keys.next()
+        val value = obj.optJSONObject(key) ?: continue
+        out[key] = DeviceHistory.fromJson(value)
+      }
+      out
+    }.getOrDefault(linkedMapOf())
+  }
+
+  private fun parseScanDevices(raw: String?): LinkedHashMap<String, DeviceSnapshot> {
+    if (raw.isNullOrBlank()) return linkedMapOf()
+    return runCatching {
+      val obj = JSONObject(raw)
+      val keys = obj.keys()
+      val out = linkedMapOf<String, DeviceSnapshot>()
+      while (keys.hasNext()) {
+        val key = keys.next()
+        val value = obj.optJSONObject(key) ?: continue
+        out[key] = DeviceSnapshot.fromJson(value)
+      }
+      out
+    }.getOrDefault(linkedMapOf())
+  }
+
+  private data class AnalyticsPoint(
+    val timestamp: Long,
+    val source: String,
+    val deviceCountTotal: Int,
+    val deviceCountOnline: Int,
+    val medianLatencyOnline: Double?,
+    val p90LatencyOnline: Int?,
+    val scanDurationMs: Int?,
+    val gatewayPresent: Boolean,
+    val wifiRssi: Int?,
+    val pingMs: Double?,
+    val jitterMs: Double?,
+    val packetLossPct: Double?,
+    val downloadMbps: Double?,
+    val uploadMbps: Double?
+  ) {
+    fun toJson(): JSONObject = JSONObject()
+      .put("timestamp", timestamp)
+      .put("source", source)
+      .put("deviceCountTotal", deviceCountTotal)
+      .put("deviceCountOnline", deviceCountOnline)
+      .put("medianLatencyOnline", medianLatencyOnline)
+      .put("p90LatencyOnline", p90LatencyOnline)
+      .put("scanDurationMs", scanDurationMs)
+      .put("gatewayPresent", gatewayPresent)
+      .put("wifiRssi", wifiRssi)
+      .put("pingMs", pingMs)
+      .put("jitterMs", jitterMs)
+      .put("packetLossPct", packetLossPct)
+      .put("downloadMbps", downloadMbps)
+      .put("uploadMbps", uploadMbps)
+
+    companion object {
+      fun fromJson(obj: JSONObject): AnalyticsPoint = AnalyticsPoint(
+        timestamp = obj.optLong("timestamp"),
+        source = obj.optString("source"),
+        deviceCountTotal = obj.optInt("deviceCountTotal"),
+        deviceCountOnline = obj.optInt("deviceCountOnline"),
+        medianLatencyOnline = obj.optDoubleOrNull("medianLatencyOnline"),
+        p90LatencyOnline = obj.optIntOrNull("p90LatencyOnline"),
+        scanDurationMs = obj.optIntOrNull("scanDurationMs"),
+        gatewayPresent = obj.optBoolean("gatewayPresent"),
+        wifiRssi = obj.optIntOrNull("wifiRssi"),
+        pingMs = obj.optDoubleOrNull("pingMs"),
+        jitterMs = obj.optDoubleOrNull("jitterMs"),
+        packetLossPct = obj.optDoubleOrNull("packetLossPct"),
+        downloadMbps = obj.optDoubleOrNull("downloadMbps"),
+        uploadMbps = obj.optDoubleOrNull("uploadMbps")
+      )
+    }
+  }
+
+  private data class ScanReport(
+    val timestamp: Long,
+    val durationMs: Int?,
+    val devicesFound: Int,
+    val devicesOnline: Int,
+    val newDevices: List<String>,
+    val offlineDevices: List<String>,
+    val slowDevices: List<String>,
+    val warnings: List<String>
+  ) {
+    fun toJson(): JSONObject = JSONObject()
+      .put("timestamp", timestamp)
+      .put("durationMs", durationMs)
+      .put("devicesFound", devicesFound)
+      .put("devicesOnline", devicesOnline)
+      .put("newDevices", JSONArray(newDevices))
+      .put("offlineDevices", JSONArray(offlineDevices))
+      .put("slowDevices", JSONArray(slowDevices))
+      .put("warnings", JSONArray(warnings))
+
+    companion object {
+      fun fromJson(obj: JSONObject): ScanReport = ScanReport(
+        timestamp = obj.optLong("timestamp"),
+        durationMs = obj.optIntOrNull("durationMs"),
+        devicesFound = obj.optInt("devicesFound"),
+        devicesOnline = obj.optInt("devicesOnline"),
+        newDevices = obj.optStringList("newDevices"),
+        offlineDevices = obj.optStringList("offlineDevices"),
+        slowDevices = obj.optStringList("slowDevices"),
+        warnings = obj.optStringList("warnings")
+      )
+    }
+  }
+
+  private data class DeviceHistory(
+    val key: String,
+    val name: String,
+    val ip: String,
+    val mac: String?,
+    val scansSeen: Int,
+    val onlineCount: Int,
+    val latencySamples: List<Int>,
+    val lastSeen: Long,
+    val lastUpdated: Long
+  ) {
+    fun toJson(): JSONObject = JSONObject()
+      .put("key", key)
+      .put("name", name)
+      .put("ip", ip)
+      .put("mac", mac)
+      .put("scansSeen", scansSeen)
+      .put("onlineCount", onlineCount)
+      .put("latencySamples", JSONArray(latencySamples))
+      .put("lastSeen", lastSeen)
+      .put("lastUpdated", lastUpdated)
+
+    companion object {
+      fun fromJson(obj: JSONObject): DeviceHistory = DeviceHistory(
+        key = obj.optString("key"),
+        name = obj.optString("name"),
+        ip = obj.optString("ip"),
+        mac = obj.optString("mac").takeIf { it.isNotBlank() },
+        scansSeen = obj.optInt("scansSeen"),
+        onlineCount = obj.optInt("onlineCount"),
+        latencySamples = obj.optIntList("latencySamples"),
+        lastSeen = obj.optLong("lastSeen"),
+        lastUpdated = obj.optLong("lastUpdated")
+      )
+    }
+  }
+
+  private data class DeviceSnapshot(
+    val key: String,
+    val name: String,
+    val ip: String,
+    val mac: String?,
+    val online: Boolean,
+    val latencyMs: Int?
+  ) {
+    fun toJson(): JSONObject = JSONObject()
+      .put("key", key)
+      .put("name", name)
+      .put("ip", ip)
+      .put("mac", mac)
+      .put("online", online)
+      .put("latencyMs", latencyMs)
+
+    companion object {
+      fun fromJson(obj: JSONObject): DeviceSnapshot = DeviceSnapshot(
+        key = obj.optString("key"),
+        name = obj.optString("name"),
+        ip = obj.optString("ip"),
+        mac = obj.optString("mac").takeIf { it.isNotBlank() },
+        online = obj.optBoolean("online"),
+        latencyMs = obj.optIntOrNull("latencyMs")
+      )
+    }
+  }
+
+  private data class DeviceHealthRow(
+    val key: String,
+    val name: String,
+    val ip: String,
+    val macMasked: String?,
+    val score: Int,
+    val onlineRatio: Double,
+    val medianLatencyMs: Double?,
+    val reasons: List<String>
+  ) {
+    fun toJson(): JSONObject = JSONObject()
+      .put("key", key)
+      .put("name", name)
+      .put("ip", ip)
+      .put("macMasked", macMasked)
+      .put("score", score)
+      .put("onlineRatio", onlineRatio)
+      .put("medianLatencyMs", medianLatencyMs)
+      .put("reasons", JSONArray(reasons))
+  }
+
+  private data class TrendSummary(
+    val latencyDirection: String,
+    val latencySlope: Double,
+    val onlineDirection: String,
+    val onlineSlope: Double,
+    val throughputDirection: String,
+    val throughputSlope: Double
+  )
+
+  private fun JSONObject.optDoubleOrNull(name: String): Double? {
+    if (!has(name) || isNull(name)) return null
+    return optDouble(name)
+  }
+
+  private fun JSONObject.optIntOrNull(name: String): Int? {
+    if (!has(name) || isNull(name)) return null
+    return optInt(name)
+  }
+
+  private fun JSONObject.optStringList(name: String): List<String> {
+    val arr = optJSONArray(name) ?: return emptyList()
+    return (0 until arr.length()).mapNotNull { idx -> arr.optString(idx).takeIf { it.isNotBlank() } }
+  }
+
+  private fun JSONObject.optIntList(name: String): List<Int> {
+    val arr = optJSONArray(name) ?: return emptyList()
+    return (0 until arr.length()).mapNotNull { idx ->
+      if (arr.isNull(idx)) null else arr.optInt(idx)
+    }
   }
 }
 
