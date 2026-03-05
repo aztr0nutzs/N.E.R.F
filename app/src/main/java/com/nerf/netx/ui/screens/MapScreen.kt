@@ -333,7 +333,8 @@ fun MapScreen(
         Text("MAC ${details.device.mac}")
         Text("Vendor ${details.device.vendor}")
         Text("Type ${details.device.deviceType}")
-        Text("RSSI ${details.device.rssiDbm} dBm")
+        Text("RSSI ${details.device.rssiDbm?.let { "$it dBm" } ?: "N/A"}")
+        Text("Latency ${details.device.latencyMs?.let { "$it ms" } ?: "N/A"}")
         Text("Risk ${details.device.riskScore}")
         Text("Ping ${details.pingMs ?: "-"} ms")
       }

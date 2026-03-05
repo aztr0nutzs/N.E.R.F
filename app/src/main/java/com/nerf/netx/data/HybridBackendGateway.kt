@@ -1,7 +1,6 @@
 package com.nerf.netx.data
 
 import android.content.Context
-import android.net.wifi.WifiManager
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.nerf.netx.domain.*
@@ -11,19 +10,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.Inet4Address
-import java.net.InetAddress
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import kotlin.math.absoluteValue
 import kotlin.random.Random
 
 class HybridBackendGateway(
@@ -32,14 +25,14 @@ class HybridBackendGateway(
 ) : AppServices {
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-  private val lanScanner = LanScanner(context)
+  private val lanScanner = RealLanScanner(context)
   private val sharedDevices = MutableStateFlow<List<Device>>(emptyList())
   private val selectedNodeId = MutableStateFlow<String?>(null)
 
   override val speedtest: SpeedtestService = HybridSpeedtest(scope)
   override val scan: ScanService = HybridScanService(scope, lanScanner, sharedDevices)
-  override val devices: DevicesService = HybridDevicesService(scope, sharedDevices, scan)
-  override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices)
+  override val devices: DevicesService = HybridDevicesService(sharedDevices, scan)
+  override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner)
   override val map: MapService = HybridMapService(sharedDevices, selectedNodeId)
   override val topology: MapTopologyService = HybridTopologyService(sharedDevices, selectedNodeId)
   override val analytics: AnalyticsService = HybridAnalytics(speedtest, sharedDevices)
@@ -132,31 +125,82 @@ private class HybridSpeedtest(private val scope: CoroutineScope) : SpeedtestServ
 
 private class HybridScanService(
   private val scope: CoroutineScope,
-  private val lanScanner: LanScanner,
+  private val lanScanner: RealLanScanner,
   private val sharedDevices: MutableStateFlow<List<Device>>
 ) : ScanService {
   private val _scanState = MutableStateFlow(ScanState(ScanPhase.IDLE, 0, 0))
   override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
   private val _results = MutableStateFlow<List<Device>>(emptyList())
   override val results: StateFlow<List<Device>> = _results.asStateFlow()
+  private val _events = MutableSharedFlow<ScanEvent>(extraBufferCapacity = 128)
+  override val events: SharedFlow<ScanEvent> = _events.asSharedFlow()
   private var scanJob: Job? = null
 
   override suspend fun startDeepScan() {
     if (scanJob?.isActive == true) return
     scanJob = scope.launch {
-      _scanState.value = ScanState(ScanPhase.RUNNING, 0, 0, "Deep scan started")
+      val byIp = linkedMapOf<String, Device>()
+      var targetsPlanned = 0
       try {
-        val res = lanScanner.scanHosts(onProgress = { scanned, found ->
-          _scanState.value = ScanState(ScanPhase.RUNNING, scanned, found, "Scanning LAN")
-        })
-        _results.value = res
-        sharedDevices.value = res
-        _scanState.value = ScanState(ScanPhase.COMPLETE, res.size, res.size, "Scan complete")
+        lanScanner.scanHosts(
+          onStarted = { planned, warning ->
+            targetsPlanned = planned
+            _scanState.value = ScanState(
+              phase = ScanPhase.RUNNING,
+              scannedHosts = 0,
+              discoveredHosts = 0,
+              message = warning ?: "Deep scan started"
+            )
+            _events.tryEmit(ScanEvent.ScanStarted(targetsPlanned = planned))
+          },
+          onProgress = { probesSent, devicesFound, planned ->
+            _scanState.value = ScanState(
+              phase = ScanPhase.RUNNING,
+              scannedHosts = probesSent,
+              discoveredHosts = devicesFound,
+              message = "Scanning LAN"
+            )
+            _events.tryEmit(
+              ScanEvent.ScanProgress(
+                targetsPlanned = planned,
+                probesSent = probesSent,
+                devicesFound = devicesFound
+              )
+            )
+          },
+          onDevice = { device, updated ->
+            synchronized(byIp) {
+              byIp[device.ip] = device
+              val snapshot = byIp.values.sortedBy { it.ip }
+              _results.value = snapshot
+              sharedDevices.value = snapshot
+            }
+            _events.tryEmit(ScanEvent.ScanDevice(device = device, updated = updated))
+          }
+        ).also { complete ->
+          val finalRows = complete.sortedBy { it.ip }
+          _results.value = finalRows
+          sharedDevices.value = finalRows
+          _scanState.value = ScanState(
+            phase = ScanPhase.COMPLETE,
+            scannedHosts = targetsPlanned,
+            discoveredHosts = finalRows.size,
+            message = "Scan complete"
+          )
+          _events.tryEmit(
+            ScanEvent.ScanDone(
+              targetsPlanned = targetsPlanned,
+              probesSent = targetsPlanned,
+              devicesFound = finalRows.size
+            )
+          )
+        }
       } catch (ce: CancellationException) {
         _scanState.value = ScanState(ScanPhase.IDLE, 0, 0, "Scan stopped")
         throw ce
       } catch (t: Throwable) {
         _scanState.value = ScanState(ScanPhase.ERROR, 0, 0, t.message ?: "Scan error")
+        _events.tryEmit(ScanEvent.ScanError(t.message ?: "Scan error"))
       }
     }
   }
@@ -169,7 +213,6 @@ private class HybridScanService(
 }
 
 private class HybridDevicesService(
-  private val scope: CoroutineScope,
   private val sharedDevices: MutableStateFlow<List<Device>>,
   private val scanService: ScanService
 ) : DevicesService {
@@ -177,25 +220,30 @@ private class HybridDevicesService(
 
   override suspend fun refresh() {
     scanService.startDeepScan()
-    scope.launch {
-      delay(1200)
-      if (sharedDevices.value.isEmpty()) {
-        sharedDevices.value = listOf(
-          Device("gw", "GATEWAY", "192.168.1.1", true, -40, deviceType = "router", transport = "LAN")
-        )
-      }
-    }
   }
 }
 
 private class HybridDeviceControl(
-  private val sharedDevices: MutableStateFlow<List<Device>>
+  private val sharedDevices: MutableStateFlow<List<Device>>,
+  private val lanScanner: RealLanScanner
 ) : DeviceControlService {
   override suspend fun ping(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, "Device not found")
-    val pingMs = (8 + d.ip.hashCode().absoluteValue % 85)
-    return ActionResult(true, "Ping OK", mapOf("ip" to d.ip, "pingMs" to pingMs.toString()))
+    val probe = lanScanner.probeReachability(d.ip)
+    return if (probe.reachable) {
+      ActionResult(
+        ok = true,
+        message = "Ping OK",
+        details = mapOf(
+          "ip" to d.ip,
+          "pingMs" to (probe.latencyMs?.toString() ?: "N/A"),
+          "method" to probe.methodUsed
+        )
+      )
+    } else {
+      ActionResult(false, "Device unreachable", mapOf("ip" to d.ip, "method" to probe.methodUsed))
+    }
   }
 
   override suspend fun block(deviceId: String): ActionResult {
@@ -212,7 +260,12 @@ private class HybridDeviceControl(
 
   override suspend fun deviceDetails(deviceId: String): DeviceDetails? {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId } ?: return null
-    return DeviceDetails(d, pingMs = 8 + d.ip.hashCode().absoluteValue % 60, notes = "Deep scan enriched")
+    val probe = lanScanner.probeReachability(d.ip)
+    return DeviceDetails(
+      device = d,
+      pingMs = probe.latencyMs,
+      notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Unreachable"
+    )
   }
 }
 
@@ -228,7 +281,7 @@ private class HybridMapService(
       MapNode(
         id = d.id,
         label = d.name,
-        strength = ((d.rssiDbm + 100).coerceIn(5, 95)),
+        strength = toStrength(d),
         ip = d.ip,
         selected = selectedNodeId.value == d.id
       )
@@ -253,16 +306,17 @@ private class HybridTopologyService(
       MapNode(
         id = it.id,
         label = it.name,
-        strength = (it.rssiDbm + 100).coerceIn(5, 99),
+        strength = toStrength(it),
         ip = it.ip,
         selected = selectedNodeId.value == it.id
       )
     }
-    val gateway = devices.firstOrNull { it.deviceType.equals("router", true) } ?: devices.firstOrNull()
+    val gateway = devices.firstOrNull { it.isGateway || it.deviceType.equals("router", true) || it.name.equals("GATEWAY", true) }
+      ?: devices.firstOrNull()
     _links.value = if (gateway == null) emptyList() else {
-      devices.filter { it.id != gateway.id }.map {
-        MapLink(gateway.id, it.id, (it.rssiDbm + 100).coerceIn(5, 99))
-      }
+      devices
+        .filter { it.id != gateway.id }
+        .map { MapLink(gateway.id, it.id, toStrength(it)) }
     }
   }
 
@@ -334,137 +388,11 @@ private class HybridRouterControl(
   override suspend fun toggleVpn(): ActionResult = capabilityMessage()
 }
 
-private class LanScanner(private val context: Context) {
-  suspend fun scanHosts(onProgress: (scanned: Int, found: Int) -> Unit): List<Device> {
-    val range = subnetCandidates()
-    val semaphore = Semaphore(24)
-    val found = mutableListOf<Device>()
-    var scanned = 0
-    val jobs = range.map { ip ->
-      kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-        semaphore.withPermit {
-          val host = ipToHost(ip)
-          val reachable = isReachable(host)
-          synchronized(found) {
-            scanned += 1
-            if (reachable) {
-              val hostname = try {
-                InetAddress.getByName(host).canonicalHostName
-              } catch (_: Throwable) {
-                host
-              }
-              val mac = arpMac(host) ?: "unknown"
-              found += Device(
-                id = host,
-                name = if (hostname == host) "DEVICE-$host" else hostname.uppercase(),
-                ip = host,
-                online = true,
-                rssiDbm = Random.nextInt(-82, -36),
-                mac = mac,
-                vendor = vendorFromMac(mac),
-                hostname = hostname,
-                deviceType = inferType(hostname),
-                transport = "LAN",
-                openPortsSummary = "icmp",
-                riskScore = Random.nextInt(0, 35)
-              )
-            }
-            onProgress(scanned, found.size)
-          }
-        }
-      }
-    }
-    jobs.forEach { it.join() }
-    val gw = gatewayIp()?.let {
-      Device(
-        id = "gw-$it",
-        name = "GATEWAY",
-        ip = it,
-        online = true,
-        rssiDbm = -35,
-        deviceType = "router",
-        vendor = "gateway",
-        hostname = "gateway",
-        transport = "LAN",
-        openPortsSummary = "53,80,443",
-        riskScore = 2
-      )
-    }
-    return (listOfNotNull(gw) + found).distinctBy { it.ip }
+private fun toStrength(device: Device): Int {
+  device.rssiDbm?.let { return (it + 100).coerceIn(5, 99) }
+  device.latencyMs?.let {
+    val score = 100 - it
+    return score.coerceIn(8, 95)
   }
-
-  private fun subnetCandidates(): List<Int> {
-    val gw = gatewayIp() ?: "192.168.1.1"
-    val parts = gw.split(".")
-    val base = if (parts.size == 4) "${parts[0]}.${parts[1]}.${parts[2]}." else "192.168.1."
-    return (1..254).mapNotNull { idx -> hostToInt("$base$idx") }
-  }
-
-  private fun gatewayIp(): String? {
-    return runCatching {
-      val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-      val gw = wifi.dhcpInfo?.gateway ?: return null
-      intToIp(gw)
-    }.getOrNull()
-  }
-
-  private fun intToIp(ip: Int): String {
-    val bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(ip)
-    return InetAddress.getByAddress(bb.array()).hostAddress ?: "0.0.0.0"
-  }
-
-  private fun hostToInt(host: String): Int? {
-    return runCatching {
-      val addr = InetAddress.getByName(host) as Inet4Address
-      ByteBuffer.wrap(addr.address).order(ByteOrder.BIG_ENDIAN).int
-    }.getOrNull()
-  }
-
-  private fun ipToHost(ip: Int): String {
-    return runCatching {
-      val bytes = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(ip).array()
-      InetAddress.getByAddress(bytes).hostAddress
-    }.getOrElse { "0.0.0.0" }
-  }
-
-  private fun isReachable(host: String): Boolean {
-    return runCatching { InetAddress.getByName(host).isReachable(200) }.getOrDefault(false)
-  }
-
-  private fun arpMac(host: String): String? {
-    return runCatching {
-      val br = BufferedReader(InputStreamReader(ProcessBuilder("arp", "-a", host).start().inputStream))
-      br.useLines { seq ->
-        seq.firstNotNullOfOrNull { line ->
-          val match = Regex("([0-9A-Fa-f]{2}[-:]){5}[0-9A-Fa-f]{2}").find(line)?.value
-          match?.replace('-', ':')?.uppercase()
-        }
-      }
-    }.getOrNull()
-  }
-
-  private fun vendorFromMac(mac: String): String {
-    if (mac == "unknown") return "unknown"
-    val oui = mac.take(8)
-    return when (oui) {
-      "00:1A:79", "AC:DE:48" -> "Nerf Router"
-      "F4:F5:D8" -> "Google"
-      "3C:5A:B4" -> "Google"
-      "BC:92:6B" -> "Apple"
-      "10:9A:DD" -> "Samsung"
-      else -> "unmapped"
-    }
-  }
-
-  private fun inferType(hostname: String): String {
-    val h = hostname.lowercase()
-    return when {
-      h.contains("router") || h.contains("gateway") -> "router"
-      h.contains("tv") -> "tv"
-      h.contains("cam") -> "camera"
-      h.contains("phone") || h.contains("iphone") -> "phone"
-      h.contains("laptop") || h.contains("pc") -> "pc"
-      else -> "device"
-    }
-  }
+  return if (device.online) 55 else 8
 }

@@ -31,7 +31,9 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
           Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(d.name, style = MaterialTheme.typography.titleMedium)
             Text("${d.ip}  |  ${d.vendor}  |  MAC ${d.mac}")
-            Text("RSSI ${d.rssiDbm} dBm  |  Risk ${d.riskScore}  |  ${if (d.online) "ONLINE" else "OFFLINE"}")
+            val rssiText = d.rssiDbm?.let { "$it dBm" } ?: "N/A"
+            val latText = d.latencyMs?.let { "$it ms" } ?: "N/A"
+            Text("RSSI $rssiText  |  Latency $latText  |  Risk ${d.riskScore}  |  ${if (d.online) "ONLINE" else "OFFLINE"}")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
               OutlinedButton(onClick = {
                 scope.launch {

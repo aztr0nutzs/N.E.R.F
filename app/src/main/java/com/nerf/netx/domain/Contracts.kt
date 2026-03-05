@@ -1,6 +1,7 @@
 package com.nerf.netx.domain
 
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 interface SpeedtestService {
   val ui: StateFlow<SpeedtestUiState>
@@ -30,6 +31,7 @@ data class ScanState(
 interface ScanService {
   val scanState: StateFlow<ScanState>
   val results: StateFlow<List<Device>>
+  val events: SharedFlow<ScanEvent>
   suspend fun startDeepScan()
   suspend fun stopScan()
 }
@@ -51,11 +53,14 @@ data class Device(
   val name: String,
   val ip: String,
   val online: Boolean,
-  val rssiDbm: Int,
+  val rssiDbm: Int? = null,
+  val latencyMs: Int? = null,
+  val reachabilityMethod: String = "N/A",
   val mac: String = "unknown",
   val vendor: String = "unknown",
   val hostname: String = "unknown",
   val deviceType: String = "unknown",
+  val isGateway: Boolean = false,
   val lastSeenEpochMs: Long = System.currentTimeMillis(),
   val transport: String = "LAN",
   val openPortsSummary: String = "",
@@ -67,6 +72,35 @@ data class DeviceDetails(
   val pingMs: Int? = null,
   val notes: String = ""
 )
+
+sealed class ScanEvent {
+  data class ScanStarted(
+    val targetsPlanned: Int,
+    val startedAtEpochMs: Long = System.currentTimeMillis()
+  ) : ScanEvent()
+
+  data class ScanProgress(
+    val targetsPlanned: Int,
+    val probesSent: Int,
+    val devicesFound: Int
+  ) : ScanEvent()
+
+  data class ScanDevice(
+    val device: Device,
+    val updated: Boolean
+  ) : ScanEvent()
+
+  data class ScanDone(
+    val targetsPlanned: Int,
+    val probesSent: Int,
+    val devicesFound: Int,
+    val completedAtEpochMs: Long = System.currentTimeMillis()
+  ) : ScanEvent()
+
+  data class ScanError(
+    val message: String
+  ) : ScanEvent()
+}
 
 enum class MapLayoutMode { RADIAL, TOPOLOGY, SIGNAL }
 

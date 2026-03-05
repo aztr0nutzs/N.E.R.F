@@ -16,10 +16,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.nerf.netx.data.ThemeRepository
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.QosMode
+import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.ui.theme.ThemeId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -87,9 +90,47 @@ fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: 
 private class NerfWebBridge(private val services: AppServices) {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var webView: WebView? = null
+  private var scanEventsJob: Job? = null
 
   fun attach(wv: WebView): NerfWebBridge {
     this.webView = wv
+    if (scanEventsJob == null) {
+      scanEventsJob = scope.launch {
+        services.scan.events.collect { event ->
+          when (event) {
+            is ScanEvent.ScanStarted -> {
+              emit(
+                "scan_started",
+                """{"targetsPlanned":${event.targetsPlanned},"startedAt":${event.startedAtEpochMs}}"""
+              )
+            }
+            is ScanEvent.ScanProgress -> {
+              emit(
+                "scan_progress",
+                """{"targetsPlanned":${event.targetsPlanned},"probesSent":${event.probesSent},"devicesFound":${event.devicesFound}}"""
+              )
+            }
+            is ScanEvent.ScanDevice -> {
+              val d = event.device
+              val quality = d.rssiDbm?.let { (it + 100).coerceIn(5, 99) } ?: latencyToQuality(d.latencyMs)
+              emit(
+                "scan_device",
+                """{"updated":${event.updated},"device":{"id":"${escape(d.id)}","name":"${escape(d.name)}","hostname":"${escape(d.hostname)}","ip":"${escape(d.ip)}","vendor":"${escape(d.vendor)}","mac":"${escape(d.mac)}","deviceType":"${escape(d.deviceType)}","riskScore":${d.riskScore},"quality":$quality,"latencyMs":${d.latencyMs ?: "null"},"signalStrength":${d.rssiDbm ?: "null"},"reachability":"${escape(d.reachabilityMethod)}","lastSeen":${d.lastSeenEpochMs},"isGateway":${d.isGateway}}}"""
+              )
+            }
+            is ScanEvent.ScanDone -> {
+              emit(
+                "scan_done",
+                """{"targetsPlanned":${event.targetsPlanned},"probesSent":${event.probesSent},"devicesFound":${event.devicesFound},"completedAt":${event.completedAtEpochMs}}"""
+              )
+            }
+            is ScanEvent.ScanError -> {
+              emit("scan_error", """{"message":"${escape(event.message)}"}""")
+            }
+          }
+        }
+      }
+    }
     return this
   }
 
@@ -107,9 +148,8 @@ private class NerfWebBridge(private val services: AppServices) {
         }
         "devices.list" -> {
           val items = services.devices.devices.value.joinToString(",") {
-            val quality = (it.rssiDbm + 100).coerceIn(5, 99)
-            val isGateway = it.deviceType.equals("router", true) || it.name.equals("GATEWAY", true)
-            """{"id":"${it.id}","name":"${it.name}","hostname":"${it.hostname}","ip":"${it.ip}","vendor":"${it.vendor}","mac":"${it.mac}","deviceType":"${it.deviceType}","riskScore":${it.riskScore},"quality":$quality,"lastSeen":${it.lastSeenEpochMs},"isGateway":$isGateway}"""
+            val quality = it.rssiDbm?.let { rssi -> (rssi + 100).coerceIn(5, 99) } ?: latencyToQuality(it.latencyMs)
+            """{"id":"${escape(it.id)}","name":"${escape(it.name)}","hostname":"${escape(it.hostname)}","ip":"${escape(it.ip)}","vendor":"${escape(it.vendor)}","mac":"${escape(it.mac)}","deviceType":"${escape(it.deviceType)}","riskScore":${it.riskScore},"quality":$quality,"latencyMs":${it.latencyMs ?: "null"},"signalStrength":${it.rssiDbm ?: "null"},"reachability":"${escape(it.reachabilityMethod)}","lastSeen":${it.lastSeenEpochMs},"isGateway":${it.isGateway}}"""
           }
           """{"ok":true,"devices":[$items]}"""
         }
@@ -192,6 +232,11 @@ private class NerfWebBridge(private val services: AppServices) {
     if (payloadJson.isNullOrBlank()) return ""
     val regex = Regex("\"" + field + "\"\\s*:\\s*\"([^\"]*)\"")
     return regex.find(payloadJson)?.groupValues?.get(1) ?: ""
+  }
+
+  private fun latencyToQuality(latencyMs: Int?): Int {
+    if (latencyMs == null) return 0
+    return (100 - latencyMs).coerceIn(8, 95)
   }
 
   private fun escape(v: String): String = v.replace("\\", "\\\\").replace("\"", "\\\"")
