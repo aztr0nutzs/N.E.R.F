@@ -2,6 +2,8 @@ package com.nerf.netx.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,7 +25,7 @@ fun MapScreen(service: MapService) {
       Button(onClick = { scope.launch { service.refresh() } }) { Text("Refresh") }
     }
 
-    ElevatedCard(Modifier.fillMaxWidth().weight(1f)) {
+    ElevatedCard(Modifier.fillMaxWidth().weight(0.62f)) {
       Box(Modifier.fillMaxSize().padding(12.dp)) {
         Canvas(Modifier.fillMaxSize()) {
           val cx = size.width / 2f
@@ -36,6 +38,23 @@ fun MapScreen(service: MapService) {
             val s = nodes[i].strength.toFloat()
             val rad = 10f + (s / 9f)
             drawCircle(MaterialTheme.colorScheme.primary, radius = rad, center = p, alpha = 0.9f)
+          }
+        }
+      }
+    }
+
+    ElevatedCard(Modifier.fillMaxWidth().weight(0.38f)) {
+      LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        items(nodes, key = { it.id }) { n ->
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column {
+              Text(n.label, style = MaterialTheme.typography.bodyMedium)
+              Text(n.ip, style = MaterialTheme.typography.bodySmall)
+            }
+            Text("Signal ${n.strength}", style = MaterialTheme.typography.bodySmall)
           }
         }
       }

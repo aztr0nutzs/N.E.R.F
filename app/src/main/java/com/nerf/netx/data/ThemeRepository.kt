@@ -15,6 +15,7 @@ interface ThemeRepository {
 class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   private val prefs: SharedPreferences = context.getSharedPreferences("nerf_prefs", Context.MODE_PRIVATE)
   private val key = "theme_id"
+  private val defaultTheme = ThemeId.NERF_MAIN_DASH_HTML
   private val _selected = MutableStateFlow(readTheme())
   override val selected: StateFlow<ThemeId> = _selected
 
@@ -24,13 +25,18 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   }
 
   override fun htmlAssetUrl(themeId: ThemeId): String? = when (themeId) {
-    ThemeId.NEON_NERF -> null
+    ThemeId.NERF_MAIN_DASH_HTML -> "file:///android_asset/themes/nerf_main_dash/index.html"
+    ThemeId.NERF_HUD_ALT_HTML -> "file:///android_asset/themes/nerf_hud_alt/index.html"
     ThemeId.SPEEDTEST6_HTML -> "file:///android_asset/themes/speedtest6/index.html"
     ThemeId.NERF_SPEED2_HTML -> "file:///android_asset/themes/nerf_speed2/index.html"
   }
 
   private fun readTheme(): ThemeId {
     val saved = prefs.getString(key, null)
-    return ThemeId.fromId(saved) ?: ThemeId.NEON_NERF
+    if (saved == "NEON_NERF" || saved == "neon_nerf") {
+      prefs.edit().putString(key, defaultTheme.id).apply()
+      return defaultTheme
+    }
+    return ThemeId.fromId(saved) ?: defaultTheme
   }
 }

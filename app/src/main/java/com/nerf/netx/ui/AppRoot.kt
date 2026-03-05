@@ -3,6 +3,7 @@ package com.nerf.netx.ui
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.nerf.netx.data.RouterCredentialsStore
 import androidx.navigation.compose.*
 import com.nerf.netx.data.ThemeRepository
 import com.nerf.netx.domain.AppServices
@@ -12,7 +13,11 @@ import com.nerf.netx.ui.screens.*
 import com.nerf.netx.ui.theme.NerfTheme
 
 @Composable
-fun AppRoot(services: AppServices, themeRepository: ThemeRepository) {
+fun AppRoot(
+  services: AppServices,
+  themeRepository: ThemeRepository,
+  credentialsStore: RouterCredentialsStore
+) {
   val themeId by themeRepository.selected.collectAsState()
 
   NerfTheme(themeId) {
@@ -32,10 +37,16 @@ fun AppRoot(services: AppServices, themeRepository: ThemeRepository) {
       NavHost(navController = nav, startDestination = Routes.SPEED, modifier = Modifier.padding(padding)) {
         composable(Routes.SPEED) { SpeedtestScreen(services.speedtest) }
         composable(Routes.MAP) { MapScreen(services.map) }
-        composable(Routes.DEVICES) { DevicesScreen(services.devices) }
+        composable(Routes.DEVICES) { DevicesScreen(services.devices, services.deviceControl) }
         composable(Routes.ANALYTICS) { AnalyticsScreen(services.analytics) }
-        composable(Routes.SETTINGS) { SettingsScreen(themeId, onThemeSelected = themeRepository::set) }
-        composable(Routes.PREVIEW) { PreviewScreen(themeId, themeRepository) }
+        composable(Routes.SETTINGS) {
+          SettingsScreen(
+            themeId = themeId,
+            onThemeSelected = themeRepository::set,
+            credentialsStore = credentialsStore
+          )
+        }
+        composable(Routes.PREVIEW) { PreviewScreen(themeId, themeRepository, services) }
       }
     }
   }
