@@ -1,7 +1,7 @@
 package com.nerf.netx.domain
 
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 
 interface SpeedtestService {
   val ui: StateFlow<SpeedtestUiState>
@@ -34,6 +34,17 @@ data class ScanState(
   val message: String? = null
 )
 
+data class ScanMetadata(
+  val localIp: String?,
+  val prefixLength: Int?,
+  val gatewayIp: String?,
+  val wifiRssi: Int?,
+  val startTime: Long,
+  val endTime: Long? = null,
+  val durationMs: Long? = null,
+  val warning: String? = null
+)
+
 interface ScanService {
   val scanState: StateFlow<ScanState>
   val results: StateFlow<List<Device>>
@@ -59,15 +70,24 @@ data class Device(
   val name: String,
   val ip: String,
   val online: Boolean,
+  val reachable: Boolean = online,
   val rssiDbm: Int? = null,
+  val rssi: Int? = rssiDbm,
   val latencyMs: Int? = null,
+  val latencyReason: String? = null,
   val reachabilityMethod: String = "N/A",
-  val mac: String = "unknown",
-  val vendor: String = "unknown",
-  val hostname: String = "unknown",
-  val deviceType: String = "unknown",
+  val methodUsed: String? = if (reachabilityMethod == "N/A") null else reachabilityMethod,
+  val mac: String = "",
+  val macAddress: String? = if (mac.isBlank()) null else mac,
+  val vendor: String = "",
+  val vendorName: String? = if (vendor.isBlank()) null else vendor,
+  val hostname: String = "",
+  val hostName: String? = if (hostname.isBlank()) null else hostname,
+  val deviceType: String = "UNKNOWN",
   val isGateway: Boolean = false,
   val lastSeenEpochMs: Long = System.currentTimeMillis(),
+  val lastSeen: Long = lastSeenEpochMs,
+  val unresolvedReasons: Map<String, String> = emptyMap(),
   val transport: String = "LAN",
   val openPortsSummary: String = "",
   val riskScore: Int = 0
@@ -82,6 +102,7 @@ data class DeviceDetails(
 sealed class ScanEvent {
   data class ScanStarted(
     val targetsPlanned: Int,
+    val metadata: ScanMetadata? = null,
     val startedAtEpochMs: Long = System.currentTimeMillis()
   ) : ScanEvent()
 
@@ -100,6 +121,7 @@ sealed class ScanEvent {
     val targetsPlanned: Int,
     val probesSent: Int,
     val devicesFound: Int,
+    val metadata: ScanMetadata? = null,
     val completedAtEpochMs: Long = System.currentTimeMillis()
   ) : ScanEvent()
 

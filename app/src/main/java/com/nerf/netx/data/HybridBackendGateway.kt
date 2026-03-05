@@ -209,15 +209,16 @@ private class HybridScanService(
   private val _events = MutableSharedFlow<ScanEvent>(extraBufferCapacity = 128)
   override val events: SharedFlow<ScanEvent> = _events.asSharedFlow()
   private var scanJob: Job? = null
+  private val knownDevicesByIp = linkedMapOf<String, Device>()
 
   override suspend fun startDeepScan() {
     if (scanJob?.isActive == true) return
     scanJob = scope.launch {
-      val byIp = linkedMapOf<String, Device>()
+      val foundIps = linkedSetOf<String>()
       var targetsPlanned = 0
       try {
         lanScanner.scanHosts(
-          onStarted = { planned, warning ->
+          onStarted = { planned, warning, metadata ->
             targetsPlanned = planned
             _scanState.value = ScanState(
               phase = ScanPhase.RUNNING,
@@ -225,7 +226,7 @@ private class HybridScanService(
               discoveredHosts = 0,
               message = warning ?: "Deep scan started"
             )
-            _events.tryEmit(ScanEvent.ScanStarted(targetsPlanned = planned))
+            _events.tryEmit(ScanEvent.ScanStarted(targetsPlanned = planned, metadata = metadata))
           },
           onProgress = { probesSent, devicesFound, planned ->
             _scanState.value = ScanState(
@@ -243,16 +244,55 @@ private class HybridScanService(
             )
           },
           onDevice = { device, updated ->
-            synchronized(byIp) {
-              byIp[device.ip] = device
-              val snapshot = byIp.values.sortedBy { it.ip }
+            val now = System.currentTimeMillis()
+            val enriched = device.copy(
+              online = true,
+              reachable = true,
+              deviceType = inferDeviceType(device.hostName),
+              lastSeenEpochMs = now,
+              lastSeen = now
+            )
+            synchronized(knownDevicesByIp) {
+              foundIps += enriched.ip
+              knownDevicesByIp[enriched.ip] = enriched
+              val snapshot = knownDevicesByIp.values.sortedBy { it.ip }
               _results.value = snapshot
               sharedDevices.value = snapshot
             }
-            _events.tryEmit(ScanEvent.ScanDevice(device = device, updated = updated))
+            _events.tryEmit(ScanEvent.ScanDevice(device = enriched, updated = updated))
           }
-        ).also { complete ->
-          val finalRows = complete.sortedBy { it.ip }
+        ).also { outcome ->
+          val postScanUpdates = mutableListOf<Device>()
+          val finalRows = synchronized(knownDevicesByIp) {
+            knownDevicesByIp.values.toList().forEach { previous ->
+              if (!foundIps.contains(previous.ip)) {
+                val offline = previous.copy(
+                  online = false,
+                  reachable = false,
+                  latencyMs = null,
+                  latencyReason = "Not observed in latest scan",
+                  methodUsed = null,
+                  reachabilityMethod = "N/A",
+                  rssi = if (previous.isGateway) outcome.metadata.wifiRssi else null,
+                  rssiDbm = if (previous.isGateway) outcome.metadata.wifiRssi else null,
+                  unresolvedReasons = previous.unresolvedReasons + ("online" to "Host not discovered in current scan"),
+                  lastSeen = previous.lastSeen,
+                  lastSeenEpochMs = previous.lastSeenEpochMs
+                )
+                knownDevicesByIp[previous.ip] = offline
+                postScanUpdates += offline
+              } else if (previous.isGateway) {
+                val gatewayUpdated = previous.copy(
+                  rssi = outcome.metadata.wifiRssi,
+                  rssiDbm = outcome.metadata.wifiRssi
+                )
+                knownDevicesByIp[previous.ip] = gatewayUpdated
+                postScanUpdates += gatewayUpdated
+              }
+            }
+            knownDevicesByIp.values.sortedBy { it.ip }
+          }
+          postScanUpdates.forEach { _events.tryEmit(ScanEvent.ScanDevice(device = it, updated = true)) }
           _results.value = finalRows
           sharedDevices.value = finalRows
           _scanState.value = ScanState(
@@ -265,7 +305,8 @@ private class HybridScanService(
             ScanEvent.ScanDone(
               targetsPlanned = targetsPlanned,
               probesSent = targetsPlanned,
-              devicesFound = finalRows.size
+              devicesFound = finalRows.size,
+              metadata = outcome.metadata
             )
           )
         }
@@ -283,6 +324,21 @@ private class HybridScanService(
     scanJob?.cancel()
     scanJob = null
     _scanState.value = ScanState(ScanPhase.IDLE, 0, 0, "Stopped")
+  }
+
+  private fun inferDeviceType(hostname: String?): String {
+    if (hostname.isNullOrBlank()) return "UNKNOWN"
+    val h = hostname.lowercase()
+    return when {
+      h.contains("iphone") || h.contains("ipad") -> "PHONE"
+      h.contains("android") || h.contains("pixel") || h.contains("samsung") -> "PHONE"
+      h.contains("macbook") || h.contains("imac") -> "COMPUTER"
+      h.contains("windows") || h.contains("desktop") || h.contains("laptop") -> "COMPUTER"
+      h.contains("tv") || h.contains("roku") || h.contains("chromecast") -> "MEDIA"
+      h.contains("printer") -> "PRINTER"
+      h.contains("cam") || h.contains("camera") -> "CAMERA"
+      else -> "UNKNOWN"
+    }
   }
 }
 
@@ -321,7 +377,7 @@ private class HybridDeviceControl(
         details = mapOf(
           "ip" to d.ip,
           "latencyMs" to (probe.latencyMs?.toString() ?: "N/A"),
-          "methodUsed" to probe.methodUsed,
+          "methodUsed" to (probe.methodUsed ?: "N/A"),
           "reachable" to "true"
         )
       )
