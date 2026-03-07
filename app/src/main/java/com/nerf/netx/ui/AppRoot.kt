@@ -11,6 +11,8 @@ import com.nerf.netx.data.RouterCredentialsStore
 import androidx.navigation.compose.*
 import com.nerf.netx.data.ThemeRepository
 import com.nerf.netx.domain.AppServices
+import com.nerf.netx.networkdoctor.ui.NetworkDoctorActions
+import com.nerf.netx.networkdoctor.ui.NetworkDoctorHost
 import com.nerf.netx.ui.nav.BottomNav
 import com.nerf.netx.ui.nav.Routes
 import com.nerf.netx.ui.screens.*
@@ -53,6 +55,26 @@ fun AppRoot(
                   restoreState = true
                 }
               }
+
+              override fun onOpenDoctor() {
+                nav.navigate(Routes.DOCTOR) {
+                  launchSingleTop = true
+                  restoreState = true
+                }
+              }
+            }
+          )
+        }
+        composable(Routes.DOCTOR) {
+          NetworkDoctorHost(
+            services = services,
+            actions = object : NetworkDoctorActions {
+              override fun onNavigate(route: String) {
+                nav.navigate(route) {
+                  launchSingleTop = true
+                  restoreState = true
+                }
+              }
             }
           )
         }
@@ -64,6 +86,12 @@ fun AppRoot(
             credentialsStore = credentialsStore,
             onOpenAssistant = {
               nav.navigate(Routes.ASSISTANT) {
+                launchSingleTop = true
+                restoreState = true
+              }
+            },
+            onOpenDoctor = {
+              nav.navigate(Routes.DOCTOR) {
                 launchSingleTop = true
                 restoreState = true
               }

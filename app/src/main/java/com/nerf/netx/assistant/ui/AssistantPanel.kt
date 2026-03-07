@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -62,6 +63,7 @@ import kotlinx.coroutines.flow.collect
 
 interface AssistantPanelActions {
   fun onNavigate(destination: AssistantDestination)
+  fun onOpenDoctor()
 }
 
 @Composable
@@ -117,7 +119,10 @@ fun AssistantPanelHost(
       .padding(12.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp)
   ) {
-    Text("NERF ASSISTANT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+      Text("NERF ASSISTANT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+      OutlinedButton(onClick = actions::onOpenDoctor) { Text("Doctor") }
+    }
 
     Row(
       modifier = Modifier

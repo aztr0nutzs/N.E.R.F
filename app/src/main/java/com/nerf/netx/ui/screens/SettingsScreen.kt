@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -62,7 +63,8 @@ fun SettingsScreen(
   onThemeSelected: (ThemeId) -> Unit,
   htmlAssetUrlProvider: (ThemeId) -> String?,
   credentialsStore: RouterCredentialsStore,
-  onOpenAssistant: () -> Unit
+  onOpenAssistant: () -> Unit,
+  onOpenDoctor: () -> Unit
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -120,9 +122,17 @@ fun SettingsScreen(
       .verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(12.dp)
   ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      Text("SETTINGS", style = MaterialTheme.typography.titleLarge)
-      OutlinedButton(onClick = onOpenAssistant) { Text("Assistant") }
+    Text("SETTINGS", style = MaterialTheme.typography.titleLarge)
+
+    ElevatedCard {
+      Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Expert Surfaces", style = MaterialTheme.typography.titleMedium)
+        Text("Use Assistant for conversational guidance, or Network Doctor for a direct expert readout.", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(modifier = Modifier.weight(1f), onClick = onOpenAssistant) { Text("Assistant") }
+          OutlinedButton(modifier = Modifier.weight(1f), onClick = onOpenDoctor) { Text("Network Doctor") }
+        }
+      }
     }
 
     ElevatedCard {
