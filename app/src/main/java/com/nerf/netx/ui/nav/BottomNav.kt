@@ -18,9 +18,5 @@ fun BottomNav(currentRoute: String?, onNavigate: (String) -> Unit) {
       icon = { Icon(Icons.Filled.QueryStats, null) }, label = { Text("Analytics") })
     NavigationBarItem(selected = currentRoute == Routes.SETTINGS, onClick = { onNavigate(Routes.SETTINGS) },
       icon = { Icon(Icons.Filled.Settings, null) }, label = { Text("Settings") })
-    NavigationBarItem(selected = currentRoute == Routes.PREVIEW, onClick = { onNavigate(Routes.PREVIEW) },
-      icon = { Icon(Icons.Filled.Web, null) }, label = { Text("Preview") })
-    NavigationBarItem(selected = currentRoute == Routes.HTML_DASHBOARD, onClick = { onNavigate(Routes.HTML_DASHBOARD) },
-      icon = { Icon(Icons.Filled.Dashboard, null) }, label = { Text("Dashboard") })
   }
 }

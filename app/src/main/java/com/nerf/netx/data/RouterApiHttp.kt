@@ -148,6 +148,10 @@ class RouterApiHttp(
     return notSupported(readOnlyReason())
   }
 
+  override suspend fun setDnsShieldEnabled(enabled: Boolean): RouterActionResult {
+    return notSupported(readOnlyReason())
+  }
+
   override suspend fun setFirewallEnabled(enabled: Boolean): RouterActionResult {
     return notSupported(readOnlyReason())
   }

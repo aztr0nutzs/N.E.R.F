@@ -350,13 +350,12 @@ private suspend fun readPayloadJson(service: AnalyticsService, events: List<Stri
 }
 
 private suspend fun exportPayload(service: AnalyticsService): String {
-  return withContext(Dispatchers.IO) {
-    runCatching {
-      val method = service.javaClass.methods.firstOrNull { it.name == "exportAnalyticsJsonToFile" }
-        ?: error("Export hook unavailable")
-      val path = method.invoke(service) as? String ?: error("Export path missing")
-      "Saved: $path"
-    }.getOrElse { "Export failed: ${it.message ?: "unknown error"}" }
+  val result = service.exportJson()
+  return if (result.ok) {
+    val path = result.details["path"]
+    if (path.isNullOrBlank()) result.message else "Saved: $path"
+  } else {
+    "Export failed: ${result.errorReason ?: result.message}"
   }
 }
 

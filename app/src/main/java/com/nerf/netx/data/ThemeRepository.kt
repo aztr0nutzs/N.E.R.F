@@ -3,49 +3,69 @@ package com.nerf.netx.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.nerf.netx.ui.theme.ThemeId
+import com.nerf.netx.ui.theme.ThemeType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface ThemeRepository {
+  val availableThemes: List<ThemeId>
   val selected: StateFlow<ThemeId>
   fun set(themeId: ThemeId)
   fun htmlAssetUrl(themeId: ThemeId): String?
 }
 
 class ThemeRepositoryImpl(context: Context) : ThemeRepository {
+  private val appContext = context.applicationContext
   private val prefs: SharedPreferences = context.getSharedPreferences("nerf_prefs", Context.MODE_PRIVATE)
   private val key = "theme_id"
-  private val defaultTheme = ThemeId.NERF_MAIN_DASH_HTML
+  private val defaultTheme = ThemeId.NERF_DASH_NEW_HTML
+  override val availableThemes: List<ThemeId> = ThemeId.entries.filter(::isThemeAvailable)
+  private val selectionPolicy = ThemeSelectionPolicy(defaultTheme, availableThemes)
   private val _selected = MutableStateFlow(readTheme())
   override val selected: StateFlow<ThemeId> = _selected
 
   override fun set(themeId: ThemeId) {
-    val safeTheme = if (themeId == ThemeId.NERF_MAIN_DASH_HTML || themeId == ThemeId.NERF_HUD_ALT_HTML || themeId == ThemeId.NERF_DASH_NEW_HTML) {
-      themeId
-    } else {
-      defaultTheme
-    }
+    val safeTheme = selectionPolicy.sanitizeSelection(themeId)
     prefs.edit().putString(key, safeTheme.id).apply()
     _selected.value = safeTheme
   }
 
   override fun htmlAssetUrl(themeId: ThemeId): String? = when (themeId) {
-    ThemeId.NERF_MAIN_DASH_HTML -> "file:///android_asset/themes/nerf_main_dash/index.html"
-    ThemeId.NERF_HUD_ALT_HTML -> "file:///android_asset/themes/nerf_hud_alt/index.html"
-    ThemeId.NERF_DASH_NEW_HTML -> "file:///android_asset/themes/nerf_dash_new/index.html"
+    ThemeId.NERF_DASH_NEW_HTML -> assetUrl("nerf_dash_new")
+    ThemeId.NERF_MAIN_DASH_HTML -> assetUrl("nerf_main_dash")
+    ThemeId.NERF_HUD_ALT_HTML -> assetUrl("nerf_hud_alt")
+    ThemeId.NERF_SPEED2_HTML -> assetUrl("nerf_speed2")
+    ThemeId.SPEEDTEST6_HTML -> assetUrl("speedtest6")
   }
 
   private fun readTheme(): ThemeId {
     val saved = prefs.getString(key, null)
-    if (
-      saved == "NEON_NERF" ||
-      saved == "neon_nerf" ||
-      saved == "speedtest6" ||
-      saved == "nerf_speed2"
-    ) {
+    if (saved == "NEON_NERF" || saved == "neon_nerf") {
       prefs.edit().putString(key, defaultTheme.id).apply()
       return defaultTheme
     }
-    return ThemeId.fromId(saved) ?: defaultTheme
+    return selectionPolicy.resolveSavedTheme(saved)
+  }
+
+  private fun assetUrl(folder: String): String? {
+    return if (assetExists("themes/$folder/index.html")) {
+      "file:///android_asset/themes/$folder/index.html"
+    } else {
+      null
+    }
+  }
+
+  private fun isThemeAvailable(themeId: ThemeId): Boolean {
+    return when (themeId.type) {
+      ThemeType.NATIVE -> true
+      ThemeType.HTML -> assetExists("themes/${themeId.id}/index.html")
+    }
+  }
+
+  private fun assetExists(path: String): Boolean {
+    return runCatching {
+      appContext.assets.open(path).use { }
+      true
+    }.getOrDefault(false)
   }
 }

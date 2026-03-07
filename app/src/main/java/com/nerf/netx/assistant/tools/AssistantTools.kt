@@ -74,10 +74,10 @@ class DeviceTool(
 
     return when (intent.type) {
       AssistantIntentType.PING_DEVICE -> mapActionResult(services.deviceControl.ping(deviceId), "Ping device")
-      AssistantIntentType.BLOCK_DEVICE -> mapActionResult(services.deviceControl.block(deviceId), "Block device")
-      AssistantIntentType.UNBLOCK_DEVICE -> unsupported("Unblock device", "Unblock is not implemented by current backend services.")
-      AssistantIntentType.PAUSE_DEVICE -> unsupported("Pause device", "Pause is not implemented by current backend services.")
-      AssistantIntentType.RESUME_DEVICE -> unsupported("Resume device", "Resume is not implemented by current backend services.")
+      AssistantIntentType.BLOCK_DEVICE -> mapActionResult(services.deviceControl.setBlocked(deviceId, true), "Block device")
+      AssistantIntentType.UNBLOCK_DEVICE -> mapActionResult(services.deviceControl.setBlocked(deviceId, false), "Unblock device")
+      AssistantIntentType.PAUSE_DEVICE -> mapActionResult(services.deviceControl.setPaused(deviceId, true), "Pause device")
+      AssistantIntentType.RESUME_DEVICE -> mapActionResult(services.deviceControl.setPaused(deviceId, false), "Resume device")
       else -> AssistantToolResult(false, false, false, AssistantSeverity.WARNING, "Unsupported", "Intent not handled by DeviceTool")
     }
   }
@@ -139,16 +139,16 @@ class RouterTool(
 
   private suspend fun setGuestWifi(enabled: Boolean?): AssistantToolResult {
     return when (enabled) {
-      true -> mapActionResult(services.routerControl.toggleGuest(), "Guest Wi-Fi")
-      false -> unsupported("Guest Wi-Fi", "Setting guest Wi-Fi OFF is not yet supported by the current router wrapper.")
+      true -> mapActionResult(services.routerControl.setGuestWifiEnabled(true), "Guest Wi-Fi")
+      false -> mapActionResult(services.routerControl.setGuestWifiEnabled(false), "Guest Wi-Fi")
       null -> unsupported("Guest Wi-Fi", "Specify ON or OFF for guest Wi-Fi.")
     }
   }
 
   private suspend fun setDnsShield(enabled: Boolean?): AssistantToolResult {
     return when (enabled) {
-      true -> mapActionResult(services.routerControl.toggleFirewall(), "DNS Shield")
-      false -> unsupported("DNS Shield", "Setting DNS Shield OFF is not yet supported by the current router wrapper.")
+      true -> mapActionResult(services.routerControl.setDnsShieldEnabled(true), "DNS Shield")
+      false -> mapActionResult(services.routerControl.setDnsShieldEnabled(false), "DNS Shield")
       null -> unsupported("DNS Shield", "Specify ON or OFF for DNS Shield.")
     }
   }

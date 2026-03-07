@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,maximum-scale=1.0">
 <meta name="theme-color" content="#000000">
-<title>J.A.R.V.I.S. — NETWORK INTELLIGENCE v4.2</title>
+<title>J.A.R.V.I.S. â€” NETWORK INTELLIGENCE v4.2</title>
 <style>
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ROOT VARIABLES
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 :root {
   --c:  #02feff;
   --c2: #00d4e8;
@@ -32,12 +32,12 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;color:var(--c);font-family:var(--font);font-style:italic;font-weight:700;letter-spacing:.04em;}
 
-/* ═══ SCANLINE OVERLAY ═══ */
+/* â•â•â• SCANLINE OVERLAY â•â•â• */
 body::after {display:none;}
 
-/* ═══════════════════════════════════════════════════════
-   KEYFRAMES — from asset files + extended
-═══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   KEYFRAMES â€” from asset files + extended
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 @keyframes rot       {0%{transform:rotateZ(0)}   100%{transform:rotateZ(360deg)}}
 @keyframes rot-r     {0%{transform:rotateZ(360deg)} 100%{transform:rotateZ(0)}}
 @keyframes col-ease  {0%,100%{border-color:var(--c)} 50%{border-color:rgba(2,254,255,.3)}}
@@ -59,12 +59,12 @@ body::after {display:none;}
 @keyframes scan-h    {0%{top:-2px} 100%{top:100%}}
 @keyframes glitch    {0%,92%,100%{transform:translate(0)} 93%{transform:translate(-2px,1px)} 95%{transform:translate(2px,-1px)} 97%{transform:translate(-1px,0)}}
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    APP SHELL
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #app {display:flex;flex-direction:column;width:100%;height:100%;position:relative;}
 
-/* ─── TOP STATUS BAR ───────────────────────────────── */
+/* â”€â”€â”€ TOP STATUS BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #topbar {
   height:46px;min-height:46px;
   background:rgba(0,6,12,.98);
@@ -95,12 +95,12 @@ body::after {display:none;}
   border:1px solid rgba(255,107,0,.35);display:none;
 }
 
-/* ─── SCREENS ──────────────────────────────────────── */
+/* â”€â”€â”€ SCREENS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #screens{flex:1;overflow:hidden;position:relative;min-height:0;}
 .screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;}
 .screen.active{display:block;animation:fdi .22s ease;}
 
-/* ─── BOTTOM NAV ───────────────────────────────────── */
+/* â”€â”€â”€ BOTTOM NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #botnav {
   height:68px;min-height:68px;
   background:rgba(0,6,12,.98);
@@ -127,9 +127,9 @@ body::after {display:none;}
 .nbtn .ni{font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;height:26px;}
 .nbtn .nl{font-size:8px;letter-spacing:1.7px;text-transform:uppercase;font-family:var(--font);}
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SHARED HUD COMPONENTS
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .hpnl {
   background:var(--gls);border:1px solid var(--br);
   border-radius:1px;position:relative;overflow:hidden;
@@ -191,7 +191,7 @@ body::after {display:none;}
 .hbtn.dng::after{background:rgba(255,34,0,.1);}
 .hbtn.dis{opacity:.3;pointer-events:none;}
 
-/* ─── ARC REACTOR CSS COMPONENTS (from asset) ────── */
+/* â”€â”€â”€ ARC REACTOR CSS COMPONENTS (from asset) â”€â”€â”€â”€â”€â”€ */
 .arc-ring {
   border-radius:50%;border:2px solid var(--c);
   background:rgba(2,254,255,.03);
@@ -226,24 +226,24 @@ body::after {display:none;}
   animation:mrk 3s ease-in-out infinite;
 }
 
-/* ─── SCROLLBAR ─────────────────────────────────── */
+/* â”€â”€â”€ SCROLLBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:rgba(2,254,255,.2);}
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 1: OVERVIEW
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #s-ov { padding:8px; display:flex; flex-direction:column; gap:6px; min-height:100%; }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 2: SPEEDTEST
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #s-st { padding:8px; display:flex; flex-direction:column; align-items:center; gap:8px; min-height:100%; }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 3: DEVICES
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #s-dv { padding:8px; display:flex; flex-direction:column; gap:6px; min-height:100%; }
 .dsrch {
   flex:1;background:var(--gls);border:1px solid var(--br);
@@ -286,7 +286,7 @@ body::after {display:none;}
 .dc-qb{height:3px;background:rgba(2,254,255,.07);margin-top:5px;overflow:hidden;}
 .dc-qf{height:100%;transition:width .5s;}
 
-/* ─── DEVICE DRAWER ─────────────────────────────── */
+/* â”€â”€â”€ DEVICE DRAWER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #dvd {
   position:fixed;bottom:54px;left:0;right:0;
   background:rgba(0,5,14,.99);border-top:1px solid var(--c);
@@ -313,9 +313,9 @@ body::after {display:none;}
 .tgl-sw::after{content:'';position:absolute;width:13px;height:13px;border-radius:50%;background:rgba(2,254,255,.4);top:1px;left:1px;transition:left .25s,background .25s;}
 .tgl-sw.on::after{left:18px;background:var(--c);box-shadow:0 0 6px var(--c);}
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 4: NETWORK MAP
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #s-mp{position:relative;width:100%;height:100%;overflow:hidden;}
 #map-canvas{width:100%;height:100%;display:block;touch-action:none;}
 .m-ov{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;pointer-events:all;}
@@ -338,9 +338,9 @@ body::after {display:none;}
 .li{display:flex;align-items:center;gap:5px;margin-bottom:2px;}
 .ldot{width:7px;height:7px;border-radius:50%;}
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 5: CONSOLE + ANALYTICS
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #s-co{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 .ca-tabs{display:flex;background:rgba(0,5,12,.98);border-bottom:1px solid var(--br2);flex-shrink:0;}
 .catab{
@@ -391,9 +391,9 @@ canvas.chtc{width:100%;height:68px;display:block;}
   font-family:var(--font);font-size:8px;padding:4px 9px;cursor:pointer;letter-spacing:1px;
 }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    JARVIS ORB + PANEL
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #jorb {
   position:fixed;bottom:76px;right:14px;width:74px;height:74px;
   border-radius:50%;
@@ -459,7 +459,7 @@ canvas.chtc{width:100%;height:68px;display:block;}
   padding:5px 10px;cursor:pointer;letter-spacing:1px;
 }
 
-/* ═══ AGGRESSIVE TYPOGRAPHY + GOLD STATUS TONE ═══ */
+/* â•â•â• AGGRESSIVE TYPOGRAPHY + GOLD STATUS TONE â•â•â• */
 button,input,select,textarea,.ph,.k,.tb-lbl,.tb-clk,.nbtn .nl,.nbtn .ni,.dr .v,.cht-title,.cv,.dw-title,.jp-tle,.jp-sub,.jm,.ll,.qc,.jqa,.m-info,.m-leg,.mbtn,.catab,.tb-spd .v,.tb-spd .l,.tb-alrt,.dc-nm,.dc-ip,.dc-mac,.dc-st,.dw-dat .dk,.dw-dat .dv,.tgl-lbl,.cpmt,.cin,.jp-in,.jp-snd,.ph .ser{
   font-family:var(--font);
   font-style:italic;
@@ -470,7 +470,7 @@ button,input,select,textarea,.ph,.k,.tb-lbl,.tb-clk,.nbtn .nl,.nbtn .ni,.dr .v,.
 .bwf.gn{background:linear-gradient(90deg,var(--gold2),var(--gold));box-shadow:0 0 8px rgba(242,193,78,.45);}
 #topbar,#botnav,#jpnl,#dvd,.con-log,.cin-row,.ca-tabs{backdrop-filter:none;}
 
-/* ═══ AMBIENT HUD OVERLAYS FROM ATTACHED ELEMENT STYLE ═══ */
+/* â•â•â• AMBIENT HUD OVERLAYS FROM ATTACHED ELEMENT STYLE â•â•â• */
 #bg-hud{display:none;}
 
 #app{z-index:1;}
@@ -597,13 +597,13 @@ button,input,select,textarea,.ph,.k,.tb-lbl,.tb-clk,.nbtn .nl,.nbtn .ni,.dr .v,.
 /* ===== FINAL VISUAL OVERRIDES ===== */
 :root{
   /* Updated neon palette: primary accents */
-  --c:#39ff14;        /* neon yellowish‑green */
+  --c:#39ff14;        /* neon yellowishâ€‘green */
   --c2:#00ffff;       /* neon blue */
   --tl:#ff48c9;       /* neon pink */
   --bl:#ff8c1a;       /* neon orange */
   --or:#ff8c1a;       /* neon orange */
   --rd:#ff48c9;       /* neon pink for danger */
-  --gn:#39ff14;       /* neon yellowish‑green */
+  --gn:#39ff14;       /* neon yellowishâ€‘green */
   --pink:#ff48c9;     /* explicit neon pink */
   --ny:#c0ff00;       /* bright neon lime for key stats */
   --bg:#000000;
@@ -1093,7 +1093,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 
 
 
-/* ─── VIDEO HEADERS + EXTRA HUD DECOR ───────────────── */
+/* â”€â”€â”€ VIDEO HEADERS + EXTRA HUD DECOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .screen-video-header{
   position:relative;overflow:hidden;min-height:102px;border:1px solid rgba(39,232,255,.18);
   background:linear-gradient(180deg,rgba(0,10,18,.96),rgba(0,4,10,.88));
@@ -1167,7 +1167,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 /* ===== NETWORK HEARTBEAT DASHBOARD REFACTOR ===== */
 :root{
   /* Override status colors to neon palette */
-  --ok:#39ff14;        /* neon yellowish‑green */
+  --ok:#39ff14;        /* neon yellowishâ€‘green */
   --amber:#ff8c1a;     /* neon orange */
   --danger:#ff48c9;    /* neon pink */
 }
@@ -1453,7 +1453,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 <div id="app">
 
 
-<!-- ══════════════ TOP BAR ══════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• TOP BAR â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="topbar">
   <span class="tb-clk" id="tbclk">--:--:--</span>
   <div class="tb-sec"></div>
@@ -1461,13 +1461,13 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   <div class="tb-sec"></div>
   <div class="tb-stat"><div class="tb-dot ok" id="tbd2"></div><span class="tb-lbl" id="tbl2">SECURE</span></div>
   <div class="tb-spds">
-    <div class="tb-spd"><span class="v" id="tbdl">↓ 0.0</span><span class="l">Mbps</span></div>
-    <div class="tb-spd"><span class="v" id="tbul">↑ 0.0</span><span class="l">Mbps</span></div>
+    <div class="tb-spd"><span class="v" id="tbdl">â†“ 0.0</span><span class="l">Mbps</span></div>
+    <div class="tb-spd"><span class="v" id="tbul">â†‘ 0.0</span><span class="l">Mbps</span></div>
   </div>
-  <span class="tb-alrt" id="tbalrt">⚠ THREAT</span>
+  <span class="tb-alrt" id="tbalrt">âš  THREAT</span>
 </div>
 
-<!-- ══════════════ SCREENS ══════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• SCREENS â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="screens">
   <div id="s-ov" class="screen active"></div>
   <div id="s-st" class="screen">
@@ -1490,11 +1490,11 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     <canvas id="map-canvas"></canvas>
     <div class="hud-deco-corner"><div class="r1"></div><div class="r2"></div><div class="ticks"></div></div>
     <div class="m-ov">
-      <button class="mbtn act" id="mradar" onclick="mapRadarToggle()">◉ RADAR</button>
-      <button class="mbtn" id="mthreat" onclick="mapThreatToggle()">⚠ THREAT</button>
-      <button class="mbtn" onclick="mapReset()">⊙ RESET</button>
+      <button class="mbtn act" id="mradar" onclick="mapRadarToggle()">â—‰ RADAR</button>
+      <button class="mbtn" id="mthreat" onclick="mapThreatToggle()">âš  THREAT</button>
+      <button class="mbtn" onclick="mapReset()">âŠ™ RESET</button>
     </div>
-    <div class="m-info" id="minfo">NODES: 0 | LINKS: 0<br>MODE: PASSIVE SCAN<br>28.5°N / 81.3°W</div>
+    <div class="m-info" id="minfo">NODES: 0 | LINKS: 0<br>MODE: PASSIVE SCAN<br>28.5Â°N / 81.3Â°W</div>
     <div class="m-leg">
       <div class="li"><div class="ldot" style="background:var(--c)"></div>GATEWAY</div>
       <div class="li"><div class="ldot" style="background:var(--gn)"></div>ONLINE</div>
@@ -1515,13 +1515,13 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     </div>
     <div class="intel-stage">
     <div class="ca-tabs">
-      <button class="catab act" id="tab-an" onclick="caSwitch('an')">◈ ANALYTICS</button>
-      <button class="catab" id="tab-co" onclick="caSwitch('co')">▶ CONSOLE</button>
+      <button class="catab act" id="tab-an" onclick="caSwitch('an')">â—ˆ ANALYTICS</button>
+      <button class="catab" id="tab-co" onclick="caSwitch('co')">â–¶ CONSOLE</button>
     </div>
     <div class="ca-pnl act" id="cap-an">
       <div class="an-grid" id="angrid">
-        <div class="cht-wrap"><div class="cht-title">THROUGHPUT — Mbps <span class="cv" id="cv-th">--</span></div><canvas class="chtc" id="ch-th"></canvas></div>
-        <div class="cht-wrap"><div class="cht-title">LATENCY — ms <span class="cv" id="cv-lt">--</span></div><canvas class="chtc" id="ch-lt"></canvas></div>
+        <div class="cht-wrap"><div class="cht-title">THROUGHPUT â€” Mbps <span class="cv" id="cv-th">--</span></div><canvas class="chtc" id="ch-th"></canvas></div>
+        <div class="cht-wrap"><div class="cht-title">LATENCY â€” ms <span class="cv" id="cv-lt">--</span></div><canvas class="chtc" id="ch-lt"></canvas></div>
         <div class="cht-wrap"><div class="cht-title">THREAT INDEX <span class="cv" id="cv-tr" style="color:var(--or)">--</span></div><canvas class="chtc" id="ch-tr"></canvas></div>
         <div class="cht-wrap"><div class="cht-title">DEVICE UPTIME % <span class="cv" id="cv-up" style="color:var(--gn)">--</span></div><canvas class="chtc" id="ch-up"></canvas></div>
       </div>
@@ -1529,12 +1529,12 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     <div class="ca-pnl" id="cap-co">
       <div class="con-log" id="conlog"></div>
       <div class="qcmds">
-        <button class="qc" onclick="rc('scan')">◉ SCAN</button>
-        <button class="qc" onclick="rc('diag')">⚙ DIAG</button>
-        <button class="qc" onclick="rc('export')">↗ EXPORT</button>
-        <button class="qc" onclick="rc('speed')">⚡ SPEED</button>
-        <button class="qc" onclick="rc('flush')">↺ FLUSH DNS</button>
-        <button class="qc" onclick="rc('clear')">✕ CLEAR</button>
+        <button class="qc" onclick="rc('scan')">â—‰ SCAN</button>
+        <button class="qc" onclick="rc('diag')">âš™ DIAG</button>
+        <button class="qc" onclick="rc('export')">â†— EXPORT</button>
+        <button class="qc" onclick="rc('speed')">âš¡ SPEED</button>
+        <button class="qc" onclick="rc('flush')">â†º FLUSH DNS</button>
+        <button class="qc" onclick="rc('clear')">âœ• CLEAR</button>
       </div>
       <div class="cin-row">
         <span class="cpmt">JARVIS://&gt;</span>
@@ -1546,7 +1546,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   </div>
 </div>
 
-<!-- ══════════════ BOTTOM NAV ══════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• BOTTOM NAV â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <nav id="botnav">
   <button class="nbtn active" id="nb0" onclick="sw('ov',0)"><span class="ni"><svg class="nav-ic" viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 8v8M8 10.5h8"/></svg></span><span class="nl">HUB</span></button>
   <button class="nbtn" id="nb1" onclick="sw('st',1)"><span class="ni"><svg class="nav-ic" viewBox="0 0 24 24"><path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 12l4-3"/><circle cx="12" cy="15" r="1.8"/></svg></span><span class="nl">SPEED</span></button>
@@ -1556,11 +1556,11 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 </nav>
 </div>
 
-<!-- ══════════════ DEVICE DRAWER ══════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• DEVICE DRAWER â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="dvd">
   <div class="dw-hd">
-    <span class="dw-title" id="dwtitle">— DEVICE —</span>
-    <button class="dw-cls" onclick="dvClose()">✕</button>
+    <span class="dw-title" id="dwtitle">â€” DEVICE â€”</span>
+    <button class="dw-cls" onclick="dvClose()">âœ•</button>
   </div>
   <div class="dw-grid" id="dwgrid"></div>
   <div style="height:55px;border:1px solid var(--br);margin-bottom:8px;overflow:hidden;position:relative;background:rgba(0,2,6,.9);">
@@ -1569,28 +1569,28 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   </div>
   <div class="dw-tgls" id="dwact"></div>
   <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
-    <button class="hbtn" onclick="dvPing()" style="font-size:8px;padding:7px 12px;">◉ PING TEST</button>
-    <button class="hbtn dng" onclick="dvBlock()" id="dvblkbtn" style="font-size:8px;padding:7px 12px;">⊗ BLOCK</button>
+    <button class="hbtn" onclick="dvPing()" style="font-size:8px;padding:7px 12px;">â—‰ PING TEST</button>
+    <button class="hbtn dng" onclick="dvBlock()" id="dvblkbtn" style="font-size:8px;padding:7px 12px;">âŠ— BLOCK</button>
   </div>
 </div>
 
-<!-- ══════════════ JARVIS ORB ══════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• JARVIS ORB â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="jorb" onclick="jToggle()" aria-label="Open JARVIS assistant">
   <video autoplay muted loop playsinline preload="auto" src="jarvis.mp4"></video>
 </div>
 
-<!-- ══════════════ JARVIS PANEL ══════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• JARVIS PANEL â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="jpnl">
   <div class="jp-hd">
     <div><div class="jp-tle">J.A.R.V.I.S.</div><div class="jp-sub">NETWORK INTELLIGENCE SYSTEM v4.2</div></div>
-    <button class="jp-cls" onclick="jToggle()">✕</button>
+    <button class="jp-cls" onclick="jToggle()">âœ•</button>
   </div>
   <div class="jp-chat" id="jchat"></div>
   <div class="jp-qa">
-    <button class="jqa" onclick="ja('speedtest')">⚡ RUN SPEEDTEST</button>
-    <button class="jqa" onclick="ja('scan')">🔍 SCAN DEVICES</button>
-    <button class="jqa" onclick="ja('alerts')">⚠ SHOW ALERTS</button>
-    <button class="jqa" onclick="ja('optimize')">◎ OPTIMIZE</button>
+    <button class="jqa" onclick="ja('speedtest')">âš¡ RUN SPEEDTEST</button>
+    <button class="jqa" onclick="ja('scan')">ðŸ” SCAN DEVICES</button>
+    <button class="jqa" onclick="ja('alerts')">âš  SHOW ALERTS</button>
+    <button class="jqa" onclick="ja('optimize')">â—Ž OPTIMIZE</button>
   </div>
   <div class="jp-ir">
     <input class="jp-in" id="jpin" placeholder="Ask JARVIS anything...">
@@ -1599,9 +1599,9 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    GLOBAL STATE
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const S = {
   screen:'ov', caTab:'an',
   dl:52.4, ul:14.2, lat:18, loss:.08, thr:.12,
@@ -1625,7 +1625,7 @@ function hudIcon(kind){
   return icons[kind] || icons.router;
 }
 
-/* ─── AD = Analytics Data ─────────────────────── */
+/* â”€â”€â”€ AD = Analytics Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const AD = {th:[], lt:[], tr:[], up:[], max:60};
 function adPush(){
   const push=(arr,v)=>{arr.push(v);if(arr.length>AD.max)arr.shift();};
@@ -1635,7 +1635,7 @@ function adPush(){
   push(AD.up, 92 + Math.random()*8);
 }
 
-/* ─── DEVICES DATASET ─────────────────────────── */
+/* â”€â”€â”€ DEVICES DATASET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const DEVS = [
   {id:0,name:'Tony-MacBook-Pro',kind:'laptop',ip:'192.168.1.2',mac:'A4:C3:F0:3B:9E:11',vendor:'Apple Inc.',status:'online',last:'now',q:94,lat:4,blk:false,up:99.8},
   {id:1,name:'Pepper-iPhone-14',kind:'phone',ip:'192.168.1.3',mac:'F8:27:93:C1:4A:22',vendor:'Apple Inc.',status:'online',last:'now',q:88,lat:11,blk:false,up:96.1},
@@ -1649,9 +1649,9 @@ const DEVS = [
   {id:9,name:'UNKNOWN_DEVICE',kind:'threat',ip:'192.168.1.99',mac:'00:00:00:??:??:??',vendor:'UNVERIFIED',status:'threat',last:'now',q:78,lat:22,blk:false,up:72.1},
 ];
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    NAVIGATION
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function sw(id, n){
   // stop active animations
   if(S.screen==='ov' && S.ovRAF){cancelAnimationFrame(S.ovRAF);S.ovRAF=null;}
@@ -1676,9 +1676,9 @@ function sw(id, n){
   if(id==='co')  setTimeout(initAnalytics,30);
 }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    TOP BAR CLOCK + LIVE DATA
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function tickData(){
   // simulate fluctuation
   S.dl = Math.max(1, Math.min(980, S.dl + (Math.random()-0.45)*(S.scanBusy ? 18 : 32)));
@@ -1696,8 +1696,8 @@ function updateTopBar(){
   const n=new Date();
   const pad=v=>String(v).padStart(2,'0');
   document.getElementById('tbclk').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
-  document.getElementById('tbdl').textContent='↓ '+S.dl.toFixed(1);
-  document.getElementById('tbul').textContent='↑ '+S.ul.toFixed(1);
+  document.getElementById('tbdl').textContent='â†“ '+S.dl.toFixed(1);
+  document.getElementById('tbul').textContent='â†‘ '+S.ul.toFixed(1);
   const alrt=document.getElementById('tbalrt');
   const d2=document.getElementById('tbd2'), l2=document.getElementById('tbl2');
   if(S.thr>.55){
@@ -1713,9 +1713,9 @@ function updateTopBar(){
   if(S.screen==='ov') ovRefreshData();
 }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 1: OVERVIEW BUILD + CANVAS
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 
 function ensureOverviewTelemetry(){
@@ -1873,9 +1873,9 @@ function buildOv(){
       <div class="nd-head">
         <div>
           <div class="nd-title">Network Heartbeat</div>
-          <div class="nd-sub">real-time uplink posture · current public edge</div>
+          <div class="nd-sub">real-time uplink posture Â· current public edge</div>
         </div>
-        <div class="nd-stat-pill" id="ov-heart-pill">${status.label} · ${activeClients} active clients</div>
+        <div class="nd-stat-pill" id="ov-heart-pill">${status.label} Â· ${activeClients} active clients</div>
       </div>
       <div class="nd-body">
         <div class="nd-heartbeat-wrap">
@@ -1883,7 +1883,7 @@ function buildOv(){
             ${ovHeartbeatSvg(status.key)}
             <div class="nd-heart-state" style="color:${status.color}">
               <div class="state" id="ov-heart-state">${status.label}</div>
-              <div class="meta" id="ov-heart-meta">traffic posture · ${(S.thr*100).toFixed(0)}% anomaly pressure</div>
+              <div class="meta" id="ov-heart-meta">traffic posture Â· ${(S.thr*100).toFixed(0)}% anomaly pressure</div>
             </div>
           </div>
           <div>
@@ -1891,22 +1891,22 @@ function buildOv(){
               <div class="nd-metric">
                 <div class="k">ISP Connection Type</div>
                 <div class="v" id="ov-isp">${S.ispType}</div>
-                <div class="mini">wan path · ${S.channel===6?'2.4ghz coexistence':'5ghz preferred'}</div>
+                <div class="mini">wan path Â· ${S.channel===6?'2.4ghz coexistence':'5ghz preferred'}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Current Public IP</div>
                 <div class="v" id="ov-ip">${S.publicIp}</div>
-                <div class="mini">lease quality · ${S.guestWifi ? 'guest vlan armed' : 'guest vlan dormant'}</div>
+                <div class="mini">lease quality Â· ${S.guestWifi ? 'guest vlan armed' : 'guest vlan dormant'}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Latency</div>
                 <div class="v" id="ov-lat" style="color:${latencyColor}">${S.lat} ms</div>
-                <div class="mini" id="ov-jit">jitter ${(S.lat*.12).toFixed(1)} ms · packet loss ${lossText}</div>
+                <div class="mini" id="ov-jit">jitter ${(S.lat*.12).toFixed(1)} ms Â· packet loss ${lossText}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Current Throughput</div>
                 <div class="v" id="ov-live-rate">${ovFmtRate(S.dl)} down</div>
-                <div class="mini" id="ov-live-up">${ovFmtRate(S.ul)} up · ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps</div>
+                <div class="mini" id="ov-live-up">${ovFmtRate(S.ul)} up Â· ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps</div>
               </div>
             </div>
             <div class="nd-heart-actions">
@@ -1914,7 +1914,7 @@ function buildOv(){
                 <span class="spinner"></span>
                 <span class="label">${scanButtonLabel}</span>
               </button>
-              <div class="nd-scan-meta" id="ov-last-scan">Last scanned · ${ovFmtAgo(S.lastScanAt)}</div>
+              <div class="nd-scan-meta" id="ov-last-scan">Last scanned Â· ${ovFmtAgo(S.lastScanAt)}</div>
               <div class="nd-tag">known ${S.knownClients}</div>
               <div class="nd-tag">unknown ${S.unknownClients}</div>
               <div class="nd-tag">dns shield ${S.dnsShield ? 'on' : 'off'}</div>
@@ -1928,7 +1928,7 @@ function buildOv(){
       <div class="nd-head">
         <div>
           <div class="nd-title">Live Bandwidth Widget</div>
-          <div class="nd-sub">last 60 seconds · auto scales from 10 Mbps to 1 Gbps</div>
+          <div class="nd-sub">last 60 seconds Â· auto scales from 10 Mbps to 1 Gbps</div>
         </div>
         <div class="nd-stat-pill" id="ov-scale-pill">dynamic range</div>
       </div>
@@ -1974,7 +1974,7 @@ function buildOv(){
       <div class="nd-head">
         <div>
           <div class="nd-title">The Shame List</div>
-          <div class="nd-sub">top bandwidth hogs · because somebody is always streaming nonsense</div>
+          <div class="nd-sub">top bandwidth hogs Â· because somebody is always streaming nonsense</div>
         </div>
         <div class="nd-stat-pill" id="ov-hogs-pill">${empty ? '0 devices' : hogs.length+' ranked'}</div>
       </div>
@@ -1997,7 +1997,7 @@ function buildOv(){
                 <div class="nd-kind">${ovConnIcon(d.connType)}</div>
                 <div>
                   <div class="nd-hog-name">${d.name}</div>
-                  <div class="nd-hog-meta">${d.connType.toUpperCase()} · ${d.ip}</div>
+                  <div class="nd-hog-meta">${d.connType.toUpperCase()} Â· ${d.ip}</div>
                   <div class="nd-hog-rate">${ovFmtRate(d.rate)} current throughput</div>
                 </div>
                 <div>
@@ -2022,14 +2022,14 @@ function buildOv(){
           <div class="nd-action ${S.guestWifi ? 'glow' : ''}">
             <div class="nd-action-copy">
               <div class="title">Guest Wi-Fi</div>
-              <div class="sub">isolated network lane · glow means visitors are leeching politely</div>
+              <div class="sub">isolated network lane Â· glow means visitors are leeching politely</div>
             </div>
             <div class="nd-switch ${S.guestWifi ? 'on' : 'off'}" onclick="ovToggleAction('guestWifi')"><div class="knob"></div></div>
           </div>
           <div class="nd-action ${S.dnsShield ? 'glow' : ''}">
             <div class="nd-action-copy">
               <div class="title">DNS Shield</div>
-              <div class="sub">ad-blocking and security filtering · keeps nonsense in its lane</div>
+              <div class="sub">ad-blocking and security filtering Â· keeps nonsense in its lane</div>
             </div>
             <div class="nd-switch ${S.dnsShield ? 'on' : 'off'}" onclick="ovToggleAction('dnsShield')"><div class="knob"></div></div>
           </div>
@@ -2086,7 +2086,7 @@ function buildOv(){
               <div class="nd-mini-card">
                 <div class="label">Active Clients</div>
                 <div class="value" id="ov-active">${activeClients}</div>
-                <div class="sub" id="ov-client-sub">${S.knownClients} known · ${S.unknownClients} unknown</div>
+                <div class="sub" id="ov-client-sub">${S.knownClients} known Â· ${S.unknownClients} unknown</div>
               </div>
             </div>
 
@@ -2100,7 +2100,7 @@ function buildOv(){
               <div class="nd-mini-card">
                 <div class="label">Runtime Notes</div>
                 <div class="sub" style="margin-top:6px;line-height:1.8;">
-                  Last scan ${ovFmtAgo(S.lastScanAt)} · public edge stable · anomaly pressure ${(S.thr*100).toFixed(0)}%
+                  Last scan ${ovFmtAgo(S.lastScanAt)} Â· public edge stable Â· anomaly pressure ${(S.thr*100).toFixed(0)}%
                 </div>
                 <div class="nd-pills" style="margin-top:8px;">
                   <div class="nd-pill">wan ${status.label}</div>
@@ -2146,17 +2146,17 @@ function ovRefreshData(){
   const activeClients = S.knownClients + S.unknownClients;
   const qs = (id)=>document.getElementById(id);
   if(qs('ov-heart-state')) qs('ov-heart-state').textContent = status.label;
-  if(qs('ov-heart-meta')) qs('ov-heart-meta').textContent = `traffic posture · ${(S.thr*100).toFixed(0)}% anomaly pressure`;
-  if(qs('ov-heart-pill')) qs('ov-heart-pill').textContent = `${status.label} · ${activeClients} active clients`;
+  if(qs('ov-heart-meta')) qs('ov-heart-meta').textContent = `traffic posture Â· ${(S.thr*100).toFixed(0)}% anomaly pressure`;
+  if(qs('ov-heart-pill')) qs('ov-heart-pill').textContent = `${status.label} Â· ${activeClients} active clients`;
   if(qs('ov-isp')) qs('ov-isp').textContent = S.ispType;
   if(qs('ov-ip')) qs('ov-ip').textContent = S.publicIp;
   if(qs('ov-lat')){
     qs('ov-lat').textContent = `${S.lat} ms`;
     qs('ov-lat').style.color = S.lat>100 ? 'var(--amber)' : 'var(--ok)';
   }
-  if(qs('ov-jit')) qs('ov-jit').textContent = `jitter ${(S.lat*.12).toFixed(1)} ms · packet loss ${lossText}`;
+  if(qs('ov-jit')) qs('ov-jit').textContent = `jitter ${(S.lat*.12).toFixed(1)} ms Â· packet loss ${lossText}`;
   if(qs('ov-live-rate')) qs('ov-live-rate').textContent = `${ovFmtRate(S.dl)} down`;
-  if(qs('ov-live-up')) qs('ov-live-up').textContent = `${ovFmtRate(S.ul)} up · ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps`;
+  if(qs('ov-live-up')) qs('ov-live-up').textContent = `${ovFmtRate(S.ul)} up Â· ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps`;
   if(qs('ov-dl')) qs('ov-dl').textContent = ovFmtRate(S.dl);
   if(qs('ov-ul')) qs('ov-ul').textContent = ovFmtRate(S.ul);
   const maxHist = Math.max(10, ...S.ovHistDl, ...S.ovHistUl);
@@ -2165,7 +2165,7 @@ function ovRefreshData(){
   if(qs('ov-spark-note')) qs('ov-spark-note').textContent = ceil===1000 ? 'burst from 10 Mbps to 1 Gbps' : 'y-axis compresses low-noise periods';
   if(qs('ov-scale-pill')) qs('ov-scale-pill').textContent = ceil===1000 ? '1 Gbps scale' : ceil===100 ? '100 Mbps scale' : '10 Mbps scale';
   if(qs('ov-burst-state')) qs('ov-burst-state').textContent = S.dl>700 ? 'burst watch: hot' : S.dl>150 ? 'burst watch: elevated' : 'burst watch: normal';
-  if(qs('ov-last-scan')) qs('ov-last-scan').textContent = `Last scanned · ${ovFmtAgo(S.lastScanAt)}`;
+  if(qs('ov-last-scan')) qs('ov-last-scan').textContent = `Last scanned Â· ${ovFmtAgo(S.lastScanAt)}`;
   if(qs('mh-health')) qs('mh-health').textContent = Math.round(Math.max(52,Math.min(99,71+(S.thr*18))))+'%';
   if(qs('ov-neighbors')) qs('ov-neighbors').textContent = S.sameChannelNeighbors;
   const congestion = S.sameChannelNeighbors > 5;
@@ -2176,7 +2176,7 @@ function ovRefreshData(){
   }
   if(qs('ov-threats')) qs('ov-threats').textContent = S.threatsBlockedToday;
   if(qs('ov-active')) qs('ov-active').textContent = activeClients;
-  if(qs('ov-client-sub')) qs('ov-client-sub').textContent = `${S.knownClients} known · ${S.unknownClients} unknown`;
+  if(qs('ov-client-sub')) qs('ov-client-sub').textContent = `${S.knownClients} known Â· ${S.unknownClients} unknown`;
   if(qs('ov-hogs-pill')){
     const hc = ovVisibleDevices().length===0 ? '0 devices' : `${ovTopHogs().length} ranked`;
     qs('ov-hogs-pill').textContent = hc;
@@ -2323,7 +2323,7 @@ function ovScan(){
   }, 1800);
 }
 
-/* ─── OV REACTOR CANVAS ─────────────────────── */
+/* â”€â”€â”€ OV REACTOR CANVAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function startOvReactor(){
   if(S.ovRAF){cancelAnimationFrame(S.ovRAF);S.ovRAF=null;}
@@ -2373,7 +2373,7 @@ function startOvReactor(){
     }
     ctx.restore();
 
-    // segmented arc — health status (like the asset's marks)
+    // segmented arc â€” health status (like the asset's marks)
     for(let i=0;i<24;i++){
       const a1=(i/24)*Math.PI*2+t*.35, a2=((i+.78)/24)*Math.PI*2+t*.35;
       const threat=i===11&&S.thr>.3, warn=i===5&&S.thr>.1;
@@ -2414,9 +2414,9 @@ function startOvReactor(){
   loop();
 }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 2: SPEEDTEST
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 let stRAF=null, stIv=null, stCanvas, stCtx;
 
 
@@ -2434,9 +2434,9 @@ function buildSt(){
     <div class="hud-deco-sm"><div class="r1"></div><div class="r2"></div><div class="ticks"></div></div>
   </div>
   <div class="cyber-top">
-    <div class="ct-icon">⚡</div>
+    <div class="ct-icon">âš¡</div>
     <div class="ct-title">NEURAL RIOT</div>
-    <div class="ct-right">◈</div>
+    <div class="ct-right">â—ˆ</div>
   </div>
 
   <div class="cyber-main">
@@ -2486,9 +2486,9 @@ function buildSt(){
   </div>
 
   <div class="cyber-controls">
-    <button class="hbtn pri" id="st-start" onclick="stStart()">▶ START TEST</button>
-    <button class="hbtn dng dis" id="st-abort" onclick="stAbort()">■ STOP TEST</button>
-    <button class="hbtn dis" id="st-reset" onclick="stReset()">↺ RESET</button>
+    <button class="hbtn pri" id="st-start" onclick="stStart()">â–¶ START TEST</button>
+    <button class="hbtn dng dis" id="st-abort" onclick="stAbort()">â–  STOP TEST</button>
+    <button class="hbtn dis" id="st-reset" onclick="stReset()">â†º RESET</button>
   </div>
 </div>`;
   stCanvas=null;stCtx=null;
@@ -2497,7 +2497,7 @@ function buildSt(){
 }
 
 
-/* ─── GAUGE RENDERER ─────────────────────────── */
+/* â”€â”€â”€ GAUGE RENDERER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const MAX_SPD=500;
 function syncStHud(){
@@ -2546,11 +2546,11 @@ function stStart(){
   document.getElementById('st-start').classList.add('dis');
   document.getElementById('st-abort').classList.remove('dis');
   document.getElementById('st-reset').classList.add('dis');
-  stPhaseLbl('◉ INITIALIZING SEQUENCE...');
+  stPhaseLbl('â—‰ INITIALIZING SEQUENCE...');
   addLog('SPEEDTEST initiated by user','inf');
   setTimeout(()=>{
     S.stPing=5+Math.random()*30;S.stJit=.4+Math.random()*5;S.stLoss=Math.random()*.5;
-    stPhaseLbl('◎ MEASURING LATENCY & PING...');
+    stPhaseLbl('â—Ž MEASURING LATENCY & PING...');
     const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
     s('st-pv',S.stPing.toFixed(0)); s('st-jv',S.stJit.toFixed(1)); s('st-lv',S.stLoss.toFixed(2)); syncStHud();
     addLog(`LATENCY: ${S.stPing.toFixed(0)}ms | JITTER: ${S.stJit.toFixed(1)}ms | LOSS: ${S.stLoss.toFixed(2)}%`,'suc');
@@ -2558,7 +2558,7 @@ function stStart(){
   },700);
 }
 function stDlPhase(){
-  stPhaseLbl('↓ TESTING DOWNLOAD BANDWIDTH...');
+  stPhaseLbl('â†“ TESTING DOWNLOAD BANDWIDTH...');
   const tgt=30+Math.random()*120; let tick=0; const steps=70;
   stIv=setInterval(()=>{
     if(!S.stRunning){clearInterval(stIv);return;}
@@ -2572,7 +2572,7 @@ function stDlPhase(){
   },45);
 }
 function stUlPhase(){
-  stPhaseLbl('↑ TESTING UPLOAD BANDWIDTH...');
+  stPhaseLbl('â†‘ TESTING UPLOAD BANDWIDTH...');
   const tgt=6+Math.random()*35; let tick=0; const steps=55;
   stIv=setInterval(()=>{
     if(!S.stRunning){clearInterval(stIv);return;}
@@ -2587,17 +2587,17 @@ function stUlPhase(){
 }
 function stDone(){
   S.stRunning=false;
-  stPhaseLbl('✓ TEST COMPLETE — ALL PHASES DONE');
+  stPhaseLbl('âœ“ TEST COMPLETE â€” ALL PHASES DONE');
   document.getElementById('st-abort').classList.add('dis');
   document.getElementById('st-reset').classList.remove('dis');
   syncStHud();
   S.dl=S.stDl;S.ul=S.stUl;S.lat=Math.round(S.stPing);
-  addLog(`SPEEDTEST COMPLETE — DL:${S.stDl.toFixed(1)} UL:${S.stUl.toFixed(1)} PING:${S.stPing.toFixed(0)}ms`,'suc');
+  addLog(`SPEEDTEST COMPLETE â€” DL:${S.stDl.toFixed(1)} UL:${S.stUl.toFixed(1)} PING:${S.stPing.toFixed(0)}ms`,'suc');
   jMsgJ(`Speedtest complete. Download: ${S.stDl.toFixed(1)} Mbps, Upload: ${S.stUl.toFixed(1)} Mbps, Latency: ${S.stPing.toFixed(0)}ms. Network performance is ${S.stDl>80?'excellent':'satisfactory'}.`);
 }
 function stAbort(){
   S.stRunning=false;if(stIv)clearInterval(stIv);
-  stPhaseLbl('⊗ TEST ABORTED');
+  stPhaseLbl('âŠ— TEST ABORTED');
   document.getElementById('st-abort').classList.add('dis');
   document.getElementById('st-start').classList.remove('dis');
   document.getElementById('st-reset').classList.remove('dis');
@@ -2606,7 +2606,7 @@ function stAbort(){
 }
 function stReset(){
   S.stDl=0;S.stUl=0;
-  stPhaseLbl('IDLE — STANDBY');
+  stPhaseLbl('IDLE â€” STANDBY');
   document.getElementById('st-reset').classList.add('dis');
   document.getElementById('st-start').classList.remove('dis');
   ['st-dlv','st-ulv'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='0.0';});
@@ -2615,9 +2615,9 @@ function stReset(){
   drawGauge(0,0);
 }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 3: DEVICES
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 let dvFilter='all', dvSearch='';
 function buildDv(){
   const el=document.getElementById('s-dv');
@@ -2637,8 +2637,8 @@ function buildDv(){
     <div id="dvct" style="font-size:7px;color:rgba(2,254,255,.28);letter-spacing:1px;"></div>
   </div>
   <div style="display:flex;gap:5px;flex-shrink:0;">
-    <input class="dsrch" id="dsrch" placeholder="⌕  SEARCH IP / NAME..." oninput="dvSrch(this.value)">
-    <button class="hbtn" onclick="dvScan()" style="padding:8px 11px;font-size:8px;">↺ SCAN</button>
+    <input class="dsrch" id="dsrch" placeholder="âŒ•  SEARCH IP / NAME..." oninput="dvSrch(this.value)">
+    <button class="hbtn" onclick="dvScan()" style="padding:8px 11px;font-size:8px;">â†º SCAN</button>
   </div>
   <div style="display:flex;gap:4px;overflow-x:auto;flex-shrink:0;">
     <button class="dfl act" onclick="dvFilt('all',this)">ALL ${DEVS.length}</button>
@@ -2667,11 +2667,11 @@ function dvRenderList(){
         <div class="dc-info">
           <div class="dc-nm">${d.name}</div>
           <div class="dc-ip">${d.ip} &nbsp;|&nbsp; ${d.mac}</div>
-          <div class="dc-mac">${d.vendor} &nbsp;·&nbsp; ${d.lat?d.lat+' ms latency':'—'}</div>
+          <div class="dc-mac">${d.vendor} &nbsp;Â·&nbsp; ${d.lat?d.lat+' ms latency':'â€”'}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
           <div class="dc-st ${d.status}">${d.status.toUpperCase()}</div>
-          <div style="font-size:9px;color:${qcl(d.q)};font-weight:bold;">${d.q||'—'}%</div>
+          <div style="font-size:9px;color:${qcl(d.q)};font-weight:bold;">${d.q||'â€”'}%</div>
           <div style="font-size:6.5px;color:rgba(2,254,255,.28);">${d.last}</div>
         </div>
       </div>
@@ -2734,7 +2734,7 @@ function dvOpen(id){
   ctx.fillStyle=grad;ctx.fill();
 
   document.getElementById('dvd').classList.add('open');
-  document.getElementById('dvblkbtn').textContent=d.blk?'✓ UNBLOCK':'⊗ BLOCK';
+  document.getElementById('dvblkbtn').textContent=d.blk?'âœ“ UNBLOCK':'âŠ— BLOCK';
 }
 function dvClose(){document.getElementById('dvd').classList.remove('open');S.devOpen=-1;}
 function tglSw(row,id){const sw=document.getElementById(id);if(sw)sw.classList.toggle('on');}
@@ -2747,13 +2747,13 @@ function dvPing(){
 function dvBlock(){
   if(S.devOpen<0)return;
   const d=DEVS[S.devOpen];d.blk=!d.blk;
-  document.getElementById('dvblkbtn').textContent=d.blk?'✓ UNBLOCK':'⊗ BLOCK';
+  document.getElementById('dvblkbtn').textContent=d.blk?'âœ“ UNBLOCK':'âŠ— BLOCK';
   addLog(`Device ${d.name} ${d.blk?'BLOCKED':'UNBLOCKED'}`,'wrn');
 }
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 4: NETWORK MAP
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 let mapPan={x:0,y:0}, mapZoom=1, mapDrag={on:false,sx:0,sy:0,ox:0,oy:0};
 let mapScanR=0, mapRadarOn=true, mapThreatOn=false, mapPackets=[];
 let mapNodes=[], mapLinks=[];
@@ -2799,7 +2799,7 @@ function initMap(){
   canvas.onmouseup=canvas.ontouchend=()=>mapDrag.on=false;
   canvas.onwheel=e=>{e.preventDefault();mapZoom=Math.max(.4,Math.min(3,mapZoom-e.deltaY*.002));};
 
-  document.getElementById('minfo').innerHTML=`NODES: ${mapNodes.length} | LINKS: ${mapLinks.length}<br>MODE: PASSIVE SCAN<br>28.5°N / 81.3°W`;
+  document.getElementById('minfo').innerHTML=`NODES: ${mapNodes.length} | LINKS: ${mapLinks.length}<br>MODE: PASSIVE SCAN<br>28.5Â°N / 81.3Â°W`;
 
   if(S.mapRAF){cancelAnimationFrame(S.mapRAF);S.mapRAF=null;}
   mapLoop();
@@ -2820,7 +2820,7 @@ function mapLoop(){
   ctx.clearRect(0,0,W,H);
   ctx.save();ctx.translate(mapPan.x,mapPan.y);ctx.scale(mapZoom,mapZoom);
 
-  // ── hex grid background
+  // â”€â”€ hex grid background
   const hexR=22,hexW=hexR*2,hexH=Math.sqrt(3)*hexR;
   const offX=-mapPan.x/mapZoom, offY=-mapPan.y/mapZoom;
   ctx.globalAlpha=.06;ctx.strokeStyle='#02feff';ctx.lineWidth=.5;
@@ -2831,7 +2831,7 @@ function mapLoop(){
   }
   ctx.globalAlpha=1;
 
-  // ── scan wave (rotating)
+  // â”€â”€ scan wave (rotating)
   if(mapRadarOn){
     mapScanR+=0.025;
     ctx.save();ctx.translate(W/2,H/2);ctx.rotate(mapScanR);
@@ -2859,14 +2859,14 @@ function mapLoop(){
     });
   }
 
-  // ── links
+  // â”€â”€ links
   mapLinks.forEach(lk=>{
     const a=mapNodes[lk.a],b=mapNodes[lk.b];if(!a||!b)return;
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
     ctx.strokeStyle=lk.col;ctx.lineWidth=1;ctx.setLineDash([6,10]);ctx.stroke();ctx.setLineDash([]);
   });
 
-  // ── packets
+  // â”€â”€ packets
   mapPackets.forEach(p=>{
     p.t+=p.spd*(p.rev?-1:1);
     if(p.t>1||p.t<0){p.t=p.rev?1:0;spawnPacket();}
@@ -2877,7 +2877,7 @@ function mapLoop(){
     ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
   });
 
-  // ── nodes
+  // â”€â”€ nodes
   mapNodes.forEach(n=>{
     if(n.vel){n.x+=n.vel.x;n.y+=n.vel.y;}
     // glow
@@ -2927,9 +2927,9 @@ function mapThreatToggle(){
 }
 function mapReset(){mapPan={x:0,y:0};mapZoom=1;}
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCREEN 5: CONSOLE + ANALYTICS
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 let anCharts={}, anData={};
 
 function caSwitch(tab){
@@ -2953,8 +2953,8 @@ function initAnalytics(){
       ['JARVIS v4.2 NETWORK INTELLIGENCE SYSTEM','sys'],
       ['Initializing subsystems...','sys'],
       ['Firewall: ARMED (4,821 rules active)','suc'],
-      ['IDS/IPS: ACTIVE — deep packet inspection enabled','suc'],
-      ['Network adapter: Intel AX210 — 802.11ax connected','suc'],
+      ['IDS/IPS: ACTIVE â€” deep packet inspection enabled','suc'],
+      ['Network adapter: Intel AX210 â€” 802.11ax connected','suc'],
       [`Device scan: ${DEVS.length} nodes detected, 1 unverified`,'wrn'],
       ['All systems nominal. Standing by.','suc'],
     ];
@@ -3010,7 +3010,7 @@ function renderChart(canvasId, data, lineCol, fillCol, maxY, labelId, fmt){
   if(lv&&data.length>0)lv.textContent=fmt(data[data.length-1]);
 }
 
-/* ─── CONSOLE ─────────────────────────────────── */
+/* â”€â”€â”€ CONSOLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 let logLines=[];
 function addLog(msg,type='inf'){
   const n=new Date();
@@ -3032,7 +3032,7 @@ function rc(cmd){
     diag:()=>{addLog('Running system diagnostics...','inf');
       setTimeout(()=>{addLog('CPU: nominal | MEM: 42% | NET: stable | FW: armed','suc');},900);},
     export:()=>{addLog('Exporting network data to STARK_ARCHIVE...','wrn');
-      setTimeout(()=>addLog('Export complete. 4.2MB → /archives/net_2025-03-05.json','suc'),1200);},
+      setTimeout(()=>addLog('Export complete. 4.2MB â†’ /archives/net_2025-03-05.json','suc'),1200);},
     speed:()=>{sw('st',1);addLog('Redirecting to SPEEDTEST module...','inf');},
     flush:()=>{addLog('Flushing DNS cache...','inf');
       setTimeout(()=>addLog('DNS cache flushed. 847 records cleared.','suc'),600);},
@@ -3065,9 +3065,9 @@ function sendCmd(){
 
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement===document.getElementById('cin'))sendCmd();});
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    JARVIS ASSISTANT
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 let jOpen=false;
 
 
@@ -3180,18 +3180,24 @@ function jsend(){
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement===document.getElementById('jpin'))jsend();});
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    BOOT SEQUENCE + MAIN LOOP
-═══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function boot(){
+  if(window.NERF_NATIVE && window.NERF_NATIVE.request){
+    if(typeof buildOv==='function') buildOv();
+    if(typeof makeOrbDraggable==='function') makeOrbDraggable();
+    if(typeof updateTopBar==='function') updateTopBar();
+    return;
+  }
   setInterval(tickData, 1200);
   setInterval(()=>{
     if(S.screen==='co'&&S.caTab==='co') renderAllCharts();
   },1500);
   // auto-log feed
   const autoMsgs=[
-    ()=>`Network throughput: ↓${S.dl.toFixed(1)} ↑${S.ul.toFixed(1)} Mbps`,
-    ()=>`Latency check: ${S.lat}ms avg — ${S.lat<25?'OPTIMAL':'ELEVATED'}`,
+    ()=>`Network throughput: â†“${S.dl.toFixed(1)} â†‘${S.ul.toFixed(1)} Mbps`,
+    ()=>`Latency check: ${S.lat}ms avg â€” ${S.lat<25?'OPTIMAL':'ELEVATED'}`,
     ()=>`IDS scan complete: no anomalies in last 60s`,
     ()=>`Firewall: blocked 0 connections in last 60s`,
     ()=>`DHCP lease renewed: 192.168.1.${3+Math.floor(Math.random()*8)}`,
@@ -3227,6 +3233,7 @@ window.addEventListener('visibilitychange',()=>{
 
 <script>
 (function(){
+  
   const native = {
     ready:false,
     scan:{},
@@ -3238,6 +3245,10 @@ window.addEventListener('visibilitychange',()=>{
     wifi:{status:'NOT_SUPPORTED',message:'Wi-Fi environment is not supported on this backend.'},
     security:{status:'NOT_SUPPORTED',message:'Security summary is not supported on this backend.'}
   };
+  const originalMapReset = window.mapReset;
+  const originalMapRadarToggle = window.mapRadarToggle;
+  const originalMapThreatToggle = window.mapThreatToggle;
+  const originalJToggle = window.jToggle;
 
   function req(action,payload){
     try {
@@ -3296,9 +3307,73 @@ window.addEventListener('visibilitychange',()=>{
     if (typeof syncStHud === 'function') syncStHud();
   }
 
+  function syncOverviewFromNative(){
+    if (!window.S) return;
+    const router = native.router || {};
+    const wifi = native.wifi || {};
+    const security = native.security || {};
+    const analytics = native.analytics || {};
+    const devices = native.devices || [];
+    if (router.guestWifi && typeof router.guestWifi.enabled === 'boolean') S.guestWifi = router.guestWifi.enabled;
+    if (router.dnsShield && typeof router.dnsShield.enabled === 'boolean') S.dnsShield = router.dnsShield.enabled;
+    S.publicIp = router.publicIp || 'UNAVAILABLE';
+    S.scanBusy = String(native.scan.phase || '').toUpperCase() === 'RUNNING';
+    S.scanResultsEmpty = devices.length === 0;
+    S.sameChannelNeighbors = Number(wifi.connectedDeviceCount || 0);
+    S.threatsBlockedToday = Number(security.riskDeviceCount || 0);
+    S.knownClients = devices.filter(d=>!(d.riskScore > 0) && d.online !== false && !d.isPaused).length;
+    S.unknownClients = devices.filter(d=>(d.riskScore > 0 || !d.vendor || d.vendor === 'unknown') && d.online !== false && !d.isPaused).length;
+    if (analytics.downMbps != null) S.dl = Number(analytics.downMbps);
+    if (analytics.upMbps != null) S.ul = Number(analytics.upMbps);
+    if (analytics.latencyMs != null) S.lat = Math.round(Number(analytics.latencyMs));
+    if (analytics.packetLossPct != null) S.loss = Number(analytics.packetLossPct) / 100;
+    if (typeof S.thr !== 'number') S.thr = 0;
+  }
+
+  window.ensureOverviewTelemetry = function(){
+    syncOverviewFromNative();
+    if(!Array.isArray(S.ovHistDl) || !S.ovHistDl.length){
+      S.ovHistDl=Array.from({length:60},()=>Number(S.dl||0));
+      S.ovHistUl=Array.from({length:60},()=>Number(S.ul||0));
+    }
+    if(typeof S.lastScanAt!=='number') S.lastScanAt=Date.now();
+    if(typeof S.lastScanLabel!=='string') S.lastScanLabel='Waiting';
+    if(typeof S.scanBusy!=='boolean') S.scanBusy=false;
+    if(typeof S.scanResultsEmpty!=='boolean') S.scanResultsEmpty=(native.devices||[]).length===0;
+    if(typeof S.guestWifi!=='boolean') S.guestWifi=false;
+    if(typeof S.dnsShield!=='boolean') S.dnsShield=false;
+    if(typeof S.rebooting!=='boolean') S.rebooting=false;
+    if(typeof S.publicIp!=='string') S.publicIp='UNAVAILABLE';
+    if(typeof S.ispType!=='string') S.ispType='Unavailable';
+    if(typeof S.channel!=='number') S.channel=0;
+    if(typeof S.sameChannelNeighbors!=='number') S.sameChannelNeighbors=0;
+    if(typeof S.threatsBlockedToday!=='number') S.threatsBlockedToday=0;
+    if(typeof S.knownClients!=='number') S.knownClients=0;
+    if(typeof S.unknownClients!=='number') S.unknownClients=0;
+    DEVS.forEach(d=>{
+      if(typeof d.rate!=='number') d.rate = 0;
+      if(typeof d.connType!=='string') d.connType = d.kind==='phone' ? 'mobile' : (['camera','display','router'].includes(d.kind) ? 'iot' : 'pc');
+      d.paused = !!d.paused;
+    });
+  };
+
+  window.ovSimulateDevices = function(){
+    syncOverviewFromNative();
+    const devices = native.devices || [];
+    DEVS.forEach((d,idx)=>{
+      const raw = devices[idx] || {};
+      d.rate = Number(raw.downMbps || raw.upMbps || 0);
+      d.blk = !!raw.isBlocked;
+      d.paused = !!raw.isPaused;
+    });
+    S.knownClients = DEVS.filter(d=>d.kind!=='threat' && d.status!=='offline' && !d.paused).length;
+    S.unknownClients = DEVS.filter(d=>d.kind==='threat' && d.status!=='offline' && !d.paused).length;
+  };
+
   const origTickData = window.tickData;
   window.tickData = function(){
     if (!native.ready && typeof origTickData === 'function') return origTickData();
+    syncOverviewFromNative();
     if (typeof updateTopBar === 'function') updateTopBar();
   };
 
@@ -3325,20 +3400,72 @@ window.addEventListener('visibilitychange',()=>{
   window.dvBlock = function(){
     if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) req('device.setBlocked', {deviceId:window.DEVS[S.devOpen].nativeId, blocked:true});
   };
-  window.mapReset = function(){ req('map.state',{}); };
-  window.mapRadarToggle = function(){ req('map.state',{}); };
-  window.mapThreatToggle = function(){ req('map.state',{}); };
+  window.mapReset = function(){
+    if (typeof originalMapReset === 'function') originalMapReset();
+  };
+  window.mapRadarToggle = function(){
+    if (typeof originalMapRadarToggle === 'function') originalMapRadarToggle();
+  };
+  window.mapThreatToggle = function(){
+    if (typeof originalMapThreatToggle === 'function') originalMapThreatToggle();
+  };
 
-  const originalJa = window.ja;
+  window.jToggle = function(){
+    if (typeof originalJToggle === 'function') originalJToggle();
+    const panel = document.getElementById('jpnl');
+    const chat = document.getElementById('jchat');
+    if (panel && panel.classList.contains('open') && chat && !chat.dataset.nativeSeeded) {
+      chat.innerHTML = '';
+      chat.dataset.nativeSeeded = '1';
+      if (window.jMsgJ) jMsgJ('NERF assistant connected. Ask about network status, diagnostics, speedtest, devices, or router actions.');
+    }
+  };
   window.ja = function(action){
     req('assistant.quickAction', {action});
-    if (typeof originalJa === 'function') originalJa(action);
+    if (action === 'speedtest' && typeof sw === 'function') sw('st', 1);
+    if (action === 'scan' && typeof sw === 'function') sw('dv', 2);
   };
   window.jsend = function(){
     const inp=document.getElementById('jpin');if(!inp||!inp.value.trim())return;
     const txt=inp.value.trim();inp.value='';
     if (window.jMsgU) jMsgU(txt);
     req('assistant.command', {command:txt});
+  };
+  window.rc = function(cmd){
+    const action = String(cmd || '').toLowerCase();
+    if (action === 'clear') {
+      const log = document.getElementById('conlog');
+      if (log) log.innerHTML = '';
+      logLines = [];
+      return;
+    }
+    if (action === 'help') {
+      addLog('Available: scan | diag | export | speed | flush | clear | ping <ip>', 'suc');
+      return;
+    }
+    const mapped = {
+      scan: 'scan',
+      diag: 'diagnostics',
+      export: 'export analytics',
+      speed: 'speedtest',
+      flush: 'flush dns'
+    };
+    const command = mapped[action] || String(cmd || '');
+    if (action === 'speed' && typeof sw === 'function') sw('st', 1);
+    addLog('> ' + command, 'wrn');
+    req('console.execute', {command});
+  };
+  window.sendCmd = function(){
+    const inp=document.getElementById('cin');if(!inp||!inp.value.trim())return;
+    const cmd=inp.value.trim();inp.value='';
+    const lower=cmd.toLowerCase();
+    if (lower === 'clear' || lower === 'help') {
+      window.rc(lower);
+    } else {
+      addLog('> ' + cmd, 'wrn');
+      req('console.execute', {command:cmd});
+    }
+    inp.focus();
   };
 
   window.NERF = window.NERF || {};
@@ -3348,11 +3475,16 @@ window.addEventListener('visibilitychange',()=>{
       if (p.code === 'DEVICES_LIST' && Array.isArray(p.devices)) applyDevices(p.devices);
       if (p.code === 'SPEEDTEST_STATE') applySpeedtest(p.state || p);
       if (p.code === 'SPEEDTEST_HISTORY' && Array.isArray(p.history)) native.speedtest.history = p.history;
+      if (p.code === 'ROUTER_STATUS') native.router = p;
+      if (p.code === 'MAP_STATE') native.topology = p;
       if ((p.status === 'NOT_SUPPORTED' || p.code === 'NOT_SUPPORTED') && window.addLog) addLog(p.message || 'Action not supported by backend','wrn');
+      else if (p.message && window.addLog && !['DEVICES_LIST','SPEEDTEST_STATE','SPEEDTEST_HISTORY','ROUTER_STATUS','MAP_STATE'].includes(p.code)) addLog(p.message, p.ok === false ? 'wrn' : 'suc');
+      syncOverviewFromNative();
       return;
     }
     if (name === 'scan.state' || name === 'scan.progress' || name === 'scan.results') {
       native.scan = {...native.scan, ...p};
+      if (String(p.phase || '').toUpperCase() === 'COMPLETE') S.lastScanAt = Date.now();
       req('devices.list', {});
       if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
       return;
@@ -3361,10 +3493,17 @@ window.addEventListener('visibilitychange',()=>{
     if (name === 'speedtest.ui') { applySpeedtest(p); return; }
     if (name === 'speedtest.result') { applySpeedtest(p); return; }
     if (name === 'topology.state') { native.topology = p; }
-    if (name === 'analytics.snapshot') { native.analytics = p; }
-    if (name === 'router.status') { native.router = p; }
-    if (name === 'wifi.environment') { native.wifi = p; }
-    if (name === 'security.summary') { native.security = p; }
+    if (name === 'analytics.snapshot') { native.analytics = p; syncOverviewFromNative(); }
+    if (name === 'router.status') { native.router = p; syncOverviewFromNative(); }
+    if (name === 'wifi.environment') { native.wifi = p; syncOverviewFromNative(); }
+    if (name === 'security.summary') { native.security = p; syncOverviewFromNative(); }
+    if (name === 'assistant.response') {
+      if (window.jMsgJ) jMsgJ(p.message || 'Assistant response received.');
+      if (Array.isArray(p.cards) && window.addLog) {
+        p.cards.forEach(card => addLog((card.title || 'Assistant') + ': ' + ((card.lines || []).join(' | ') || p.message || ''), 'inf'));
+      }
+      if (p.requiresConfirmation && p.confirmationPrompt && window.addLog) addLog(p.confirmationPrompt, 'wrn');
+    }
   };
 
   const oldBoot = window.boot;

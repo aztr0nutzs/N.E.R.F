@@ -128,6 +128,9 @@ interface DevicesService {
 
 interface DeviceControlService {
   suspend fun ping(deviceId: String): ActionResult
+  suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult
+  suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult
+  suspend fun rename(deviceId: String, name: String): ActionResult
   suspend fun block(deviceId: String): ActionResult
   suspend fun prioritize(deviceId: String): ActionResult
   suspend fun deviceDetails(deviceId: String): DeviceDetails?
@@ -158,13 +161,30 @@ data class Device(
   val unresolvedReasons: Map<String, String> = emptyMap(),
   val transport: String = "LAN",
   val openPortsSummary: String = "",
-  val riskScore: Int = 0
+  val riskScore: Int = 0,
+  val nickname: String? = null,
+  val isBlocked: Boolean = false,
+  val isPaused: Boolean = false,
+  val downMbps: Double? = null,
+  val upMbps: Double? = null,
+  val trafficStatus: ServiceStatus = ServiceStatus.NO_DATA
+)
+
+data class DeviceActionSupport(
+  val canBlock: Boolean = false,
+  val canUnblock: Boolean = false,
+  val canPause: Boolean = false,
+  val canResume: Boolean = false,
+  val canRename: Boolean = false,
+  val canPrioritize: Boolean = false
 )
 
 data class DeviceDetails(
   val device: Device,
   val pingMs: Int? = null,
-  val notes: String = ""
+  val notes: String = "",
+  val support: DeviceActionSupport = DeviceActionSupport(),
+  val trafficMessage: String? = null
 )
 
 sealed class ScanEvent {
@@ -247,6 +267,7 @@ interface AnalyticsService {
   val events: StateFlow<List<String>>
   val snapshot: StateFlow<AnalyticsSnapshot>
   suspend fun refresh()
+  suspend fun exportJson(): ActionResult
 }
 
 enum class QosMode { BALANCED, GAMING, STREAMING }
@@ -269,13 +290,44 @@ data class RouterInfoResult(
   val linkSpeedMbps: Int? = null
 )
 
+data class RouterFeatureState(
+  val supported: Boolean = false,
+  val enabled: Boolean? = null,
+  val status: ServiceStatus = if (supported) ServiceStatus.NO_DATA else ServiceStatus.NOT_SUPPORTED,
+  val message: String? = null
+)
+
+data class RouterStatusSnapshot(
+  val status: ServiceStatus,
+  val message: String,
+  val gatewayIp: String? = null,
+  val publicIp: String? = null,
+  val dnsServers: List<String> = emptyList(),
+  val ssid: String? = null,
+  val linkSpeedMbps: Int? = null,
+  val accessMode: String? = null,
+  val capabilities: List<String> = emptyList(),
+  val guestWifi: RouterFeatureState = RouterFeatureState(message = "Guest Wi-Fi state is unavailable."),
+  val dnsShield: RouterFeatureState = RouterFeatureState(message = "DNS Shield state is unavailable."),
+  val firewall: RouterFeatureState = RouterFeatureState(message = "Firewall state is unavailable."),
+  val vpn: RouterFeatureState = RouterFeatureState(message = "VPN state is unavailable."),
+  val qosMode: String? = null,
+  val lastUpdatedEpochMs: Long = System.currentTimeMillis()
+)
+
 interface RouterControlService {
+  val status: StateFlow<RouterStatusSnapshot>
   suspend fun info(): RouterInfoResult
+  suspend fun refreshStatus(): RouterStatusSnapshot
+  suspend fun setGuestWifiEnabled(enabled: Boolean): ActionResult
+  suspend fun setDnsShieldEnabled(enabled: Boolean): ActionResult
   suspend fun toggleGuest(): ActionResult
   suspend fun setQos(mode: QosMode): ActionResult
   suspend fun renewDhcp(): ActionResult
   suspend fun flushDns(): ActionResult
   suspend fun rebootRouter(): ActionResult
+  suspend fun setFirewallEnabled(enabled: Boolean): ActionResult
+  suspend fun setVpnEnabled(enabled: Boolean): ActionResult
   suspend fun toggleFirewall(): ActionResult
   suspend fun toggleVpn(): ActionResult
 }

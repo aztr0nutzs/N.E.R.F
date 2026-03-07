@@ -60,11 +60,14 @@ private data class ThemePalette(
 @Composable
 fun SettingsScreen(
   themeId: ThemeId,
+  availableThemes: List<ThemeId>,
   onThemeSelected: (ThemeId) -> Unit,
   htmlAssetUrlProvider: (ThemeId) -> String?,
   credentialsStore: RouterCredentialsStore,
   onOpenAssistant: () -> Unit,
-  onOpenDoctor: () -> Unit
+  onOpenDoctor: () -> Unit,
+  onOpenDashboard: () -> Unit,
+  onOpenPreview: () -> Unit
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -93,9 +96,11 @@ fun SettingsScreen(
   val palette = themePalette(previewTheme)
   val themeDescriptions = remember {
     mapOf(
+      ThemeId.NERF_DASH_NEW_HTML to "Jarvis-styled command dashboard with live telemetry, assistant actions, and native bridge support.",
       ThemeId.NERF_MAIN_DASH_HTML to "Default dashboard - High-contrast HUD, dense telemetry cards, orange/cyan emphasis.",
       ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard.",
-      ThemeId.NERF_DASH_NEW_HTML to "Jarvis-styled command dashboard with native bridge wired live telemetry and controls."
+      ThemeId.NERF_SPEED2_HTML to "NERF Speed2 - stylized tactical dashboard with production backend wiring replacing demo actions.",
+      ThemeId.SPEEDTEST6_HTML to "Speedtest6 - holo diagnostic surface wired to live speedtest, topology, analytics, and explicit unsupported states."
     )
   }
   val screenshotAssetPath = remember {
@@ -127,10 +132,14 @@ fun SettingsScreen(
     ElevatedCard {
       Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Expert Surfaces", style = MaterialTheme.typography.titleMedium)
-        Text("Use Assistant for conversational guidance, or Network Doctor for a direct expert readout.", style = MaterialTheme.typography.bodySmall)
+        Text("Use Assistant for conversational guidance, Network Doctor for structured diagnostics, or Dashboard for the active HTML theme.", style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           OutlinedButton(modifier = Modifier.weight(1f), onClick = onOpenAssistant) { Text("Assistant") }
           OutlinedButton(modifier = Modifier.weight(1f), onClick = onOpenDoctor) { Text("Network Doctor") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(modifier = Modifier.weight(1f), onClick = onOpenDashboard) { Text("Dashboard") }
+          OutlinedButton(modifier = Modifier.weight(1f), onClick = onOpenPreview) { Text("Preview") }
         }
       }
     }
@@ -141,7 +150,7 @@ fun SettingsScreen(
         Text("Applied: ${appliedTheme.displayName}", style = MaterialTheme.typography.bodySmall)
         Text("Previewing: ${previewTheme.displayName}", style = MaterialTheme.typography.bodySmall)
 
-        ThemeId.entries.forEach { t ->
+        availableThemes.forEach { t ->
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f).padding(end = 8.dp)) {
               Text(t.displayName)
@@ -435,6 +444,14 @@ private fun colorSwatch(label: String, color: Color) {
 
 private fun themePalette(themeId: ThemeId): ThemePalette {
   return when (themeId) {
+    ThemeId.NERF_DASH_NEW_HTML -> ThemePalette(
+      primary = Color(0xFF02FEFF),
+      accent = Color(0xFF00D4E8),
+      highlight = Color(0xFFF2C14E),
+      panel = Color(0xFF000E16),
+      text = Color(0xFFE9FCFF)
+    )
+
     ThemeId.NERF_MAIN_DASH_HTML -> ThemePalette(
       primary = Color(0xFFFF6A00),
       accent = Color(0xFF00C2FF),
@@ -449,6 +466,22 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
       highlight = Color(0xFFFF8F00),
       panel = Color(0xFF10151A),
       text = Color(0xFFEAF2F8)
+    )
+
+    ThemeId.NERF_SPEED2_HTML -> ThemePalette(
+      primary = Color(0xFFFFE600),
+      accent = Color(0xFF0099FF),
+      highlight = Color(0xFFFF6600),
+      panel = Color(0xFF121212),
+      text = Color(0xFFF7F7F7)
+    )
+
+    ThemeId.SPEEDTEST6_HTML -> ThemePalette(
+      primary = Color(0xFF00FFFF),
+      accent = Color(0xFF7000FF),
+      highlight = Color(0xFFFF4D00),
+      panel = Color(0xFF090C14),
+      text = Color(0xFFF2FAFF)
     )
   }
 }

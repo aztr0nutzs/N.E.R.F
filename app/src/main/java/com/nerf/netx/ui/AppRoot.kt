@@ -81,6 +81,7 @@ fun AppRoot(
         composable(Routes.SETTINGS) {
           SettingsScreen(
             themeId = themeId,
+            availableThemes = themeRepository.availableThemes,
             onThemeSelected = themeRepository::set,
             htmlAssetUrlProvider = themeRepository::htmlAssetUrl,
             credentialsStore = credentialsStore,
@@ -92,6 +93,18 @@ fun AppRoot(
             },
             onOpenDoctor = {
               nav.navigate(Routes.DOCTOR) {
+                launchSingleTop = true
+                restoreState = true
+              }
+            },
+            onOpenDashboard = {
+              nav.navigate(Routes.HTML_DASHBOARD) {
+                launchSingleTop = true
+                restoreState = true
+              }
+            },
+            onOpenPreview = {
+              nav.navigate(Routes.PREVIEW) {
                 launchSingleTop = true
                 restoreState = true
               }

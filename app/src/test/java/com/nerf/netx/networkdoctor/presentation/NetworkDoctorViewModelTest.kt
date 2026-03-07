@@ -19,6 +19,7 @@ import com.nerf.netx.domain.MapTopologyService
 import com.nerf.netx.domain.QosMode
 import com.nerf.netx.domain.RouterControlService
 import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.domain.ScanPhase
 import com.nerf.netx.domain.ScanService
@@ -120,6 +121,9 @@ class NetworkDoctorViewModelTest {
 
     override val deviceControl: DeviceControlService = object : DeviceControlService {
       override suspend fun ping(deviceId: String): ActionResult = ActionResult(true, ServiceStatus.OK, "OK", "Pinged")
+      override suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Block unsupported")
+      override suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Pause unsupported")
+      override suspend fun rename(deviceId: String, name: String): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Rename unsupported")
       override suspend fun block(deviceId: String): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Block unsupported")
       override suspend fun prioritize(deviceId: String): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Prioritize unsupported")
       override suspend fun deviceDetails(deviceId: String): DeviceDetails? = null
@@ -157,15 +161,28 @@ class NetworkDoctorViewModelTest {
         )
       ).asStateFlow()
       override suspend fun refresh() = Unit
+      override suspend fun exportJson(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
     }
 
     override val routerControl: RouterControlService = object : RouterControlService {
+      override val status: StateFlow<RouterStatusSnapshot> = MutableStateFlow(
+        RouterStatusSnapshot(
+          status = ServiceStatus.OK,
+          message = "Router reachable",
+          gatewayIp = "192.168.1.1"
+        )
+      ).asStateFlow()
       override suspend fun info(): RouterInfoResult = RouterInfoResult(ServiceStatus.OK, "Router reachable", gatewayIp = "192.168.1.1")
+      override suspend fun refreshStatus(): RouterStatusSnapshot = status.value
+      override suspend fun setGuestWifiEnabled(enabled: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
+      override suspend fun setDnsShieldEnabled(enabled: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun toggleGuest(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun setQos(mode: QosMode): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun renewDhcp(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun flushDns(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun rebootRouter(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
+      override suspend fun setFirewallEnabled(enabled: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
+      override suspend fun setVpnEnabled(enabled: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun toggleFirewall(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
       override suspend fun toggleVpn(): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Unsupported")
     }

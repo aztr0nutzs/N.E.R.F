@@ -11,6 +11,7 @@ enum class RouterCapability {
   DHCP_LEASES_READ,
   DHCP_LEASES_WRITE,
   DNS_FLUSH,
+  DNS_SHIELD_TOGGLE,
   FIREWALL_TOGGLE,
   VPN_TOGGLE,
   QOS_CONFIG,
@@ -76,6 +77,7 @@ interface RouterApi {
   suspend fun getDhcpLeases(): Result<List<DhcpLease>>
   suspend fun setDhcpLeaseName(macOrIp: String, name: String): RouterActionResult
   suspend fun flushDns(): RouterActionResult
+  suspend fun setDnsShieldEnabled(enabled: Boolean): RouterActionResult
   suspend fun setFirewallEnabled(enabled: Boolean): RouterActionResult
   suspend fun setVpnEnabled(enabled: Boolean): RouterActionResult
   suspend fun setQosConfig(config: QosConfig): RouterActionResult

@@ -9,6 +9,7 @@ import com.nerf.netx.domain.AnalyticsService
 import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.DeviceControlService
 import com.nerf.netx.domain.DeviceDetails
 import com.nerf.netx.domain.DevicesService
@@ -20,7 +21,9 @@ import com.nerf.netx.domain.MapTopologyService
 import com.nerf.netx.domain.MeasurementMode
 import com.nerf.netx.domain.QosMode
 import com.nerf.netx.domain.RouterControlService
+import com.nerf.netx.domain.RouterFeatureState
 import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.domain.ScanPhase
 import com.nerf.netx.domain.ScanService
@@ -1025,6 +1028,39 @@ private class HybridDeviceControl(
     }
   }
 
+  override suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult {
+    if (!blocked) {
+      return ActionResult(
+        ok = false,
+        status = ServiceStatus.NOT_SUPPORTED,
+        code = "ROUTER_API_REQUIRED",
+        message = "Unblock action is NOT_SUPPORTED",
+        errorReason = "Unblocking devices requires router vendor API integration and authenticated credentials."
+      )
+    }
+    return block(deviceId)
+  }
+
+  override suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult {
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NOT_SUPPORTED,
+      code = "ROUTER_API_REQUIRED",
+      message = if (paused) "Pause action is NOT_SUPPORTED" else "Resume action is NOT_SUPPORTED",
+      errorReason = "Pausing devices requires router vendor API integration and authenticated credentials."
+    )
+  }
+
+  override suspend fun rename(deviceId: String, name: String): ActionResult {
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NOT_SUPPORTED,
+      code = "ROUTER_API_REQUIRED",
+      message = "Rename action is NOT_SUPPORTED",
+      errorReason = "Renaming devices requires router vendor API integration and authoritative device metadata storage."
+    )
+  }
+
   override suspend fun block(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
@@ -1057,7 +1093,16 @@ private class HybridDeviceControl(
     return DeviceDetails(
       device = d,
       pingMs = probe.latencyMs,
-      notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Reachability unavailable"
+      notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Reachability unavailable",
+      support = DeviceActionSupport(
+        canBlock = false,
+        canUnblock = false,
+        canPause = false,
+        canResume = false,
+        canRename = false,
+        canPrioritize = false
+      ),
+      trafficMessage = "Per-device traffic telemetry is unavailable from the current backend."
     )
   }
 }
@@ -1232,6 +1277,27 @@ private class HybridAnalytics(
       val exportPath = prefs.getString(keyLastExportPath, null)
       if (!exportPath.isNullOrBlank()) add("LAST_EXPORT=$exportPath")
       add("PAYLOAD_JSON=$payload")
+    }
+  }
+
+  override suspend fun exportJson(): ActionResult {
+    return runCatching {
+      val path = exportAnalyticsJsonToFile()
+      ActionResult(
+        ok = true,
+        status = ServiceStatus.OK,
+        code = "ANALYTICS_EXPORT_OK",
+        message = "Analytics export created.",
+        details = mapOf("path" to path)
+      )
+    }.getOrElse { error ->
+      ActionResult(
+        ok = false,
+        status = ServiceStatus.ERROR,
+        code = "ANALYTICS_EXPORT_FAILED",
+        message = "Analytics export failed.",
+        errorReason = error.message ?: "unknown error"
+      )
     }
   }
 
@@ -1883,11 +1949,43 @@ private class HybridRouterControl(
   private val credentialsStore: RouterCredentialsStore
 ) : RouterControlService {
 
-  override suspend fun info(): RouterInfoResult {
-    val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-      ?: return RouterInfoResult(ServiceStatus.ERROR, "ConnectivityManager unavailable")
+  private val _status = MutableStateFlow(
+    RouterStatusSnapshot(
+      status = ServiceStatus.IDLE,
+      message = "Router status not loaded yet."
+    )
+  )
+  override val status: StateFlow<RouterStatusSnapshot> = _status.asStateFlow()
 
-    val active = cm.activeNetwork ?: return RouterInfoResult(ServiceStatus.NO_DATA, "No active network")
+  override suspend fun info(): RouterInfoResult {
+    val snapshot = refreshStatus()
+    return RouterInfoResult(
+      status = snapshot.status,
+      message = snapshot.message,
+      gatewayIp = snapshot.gatewayIp,
+      dnsServers = snapshot.dnsServers,
+      ssid = snapshot.ssid,
+      linkSpeedMbps = snapshot.linkSpeedMbps
+    )
+  }
+
+  override suspend fun refreshStatus(): RouterStatusSnapshot {
+    val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    if (cm == null) {
+      return RouterStatusSnapshot(
+        status = ServiceStatus.ERROR,
+        message = "ConnectivityManager unavailable"
+      ).also { _status.value = it }
+    }
+
+    val active = cm.activeNetwork
+    if (active == null) {
+      return RouterStatusSnapshot(
+        status = ServiceStatus.NO_DATA,
+        message = "No active network"
+      ).also { _status.value = it }
+    }
+
     val link = cm.getLinkProperties(active)
     val netCaps = cm.getNetworkCapabilities(active)
     val dns = link?.dnsServers?.mapNotNull { it.hostAddress } ?: emptyList()
@@ -1896,57 +1994,108 @@ private class HybridRouterControl(
     val onWifi = netCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     val ssid = if (onWifi) wifi?.connectionInfo?.ssid?.trim('"') else null
     val linkSpeed = if (onWifi) wifi?.connectionInfo?.linkSpeed else null
+    val gatewayIp = link?.routes?.firstOrNull { it.hasGateway() }?.gateway?.hostAddress
+    val publicIp = fetchPublicIp()
 
     val api = buildRouterApi()
-    if (api == null) {
-      val gatewayIp = link?.routes?.firstOrNull { it.hasGateway() }?.gateway?.hostAddress
-      return RouterInfoResult(
+    val snapshot = if (api == null) {
+      RouterStatusSnapshot(
         status = ServiceStatus.NO_DATA,
         message = "Router credentials not configured.",
         gatewayIp = gatewayIp,
+        publicIp = publicIp,
         dnsServers = dns,
         ssid = ssid,
-        linkSpeedMbps = linkSpeed
+        linkSpeedMbps = linkSpeed,
+        accessMode = "READ_ONLY",
+        capabilities = listOf(RouterCapability.READ_INFO.name),
+        guestWifi = RouterFeatureState(message = "Router credentials are required for guest Wi-Fi state."),
+        dnsShield = RouterFeatureState(message = "DNS Shield state is unavailable on this backend."),
+        firewall = RouterFeatureState(message = "Router credentials are required for firewall state."),
+        vpn = RouterFeatureState(message = "Router credentials are required for VPN state.")
+      )
+    } else {
+      val detected = api.detect(connectionInfoFromStore())
+      val capabilities = api.getCapabilities()
+      val accessMode = if (capabilities.any { it != RouterCapability.READ_INFO && it != RouterCapability.DHCP_LEASES_READ }) {
+        "READ_WRITE"
+      } else {
+        "READ_ONLY"
+      }
+      val message = buildString {
+        append("Router detected")
+        detected.vendorName?.let { append(": ").append(it) }
+        detected.modelName?.let { append(" ").append(it) }
+        append(" | auth=").append(detected.detectedAuthType.name)
+        append(" | mode=").append(accessMode)
+        append(" | capabilities=").append(capabilities.joinToString(",") { it.name })
+      }
+
+      RouterStatusSnapshot(
+        status = ServiceStatus.OK,
+        message = message,
+        gatewayIp = detected.routerIp.ifBlank { gatewayIp },
+        publicIp = publicIp,
+        dnsServers = dns,
+        ssid = ssid,
+        linkSpeedMbps = linkSpeed,
+        accessMode = accessMode,
+        capabilities = capabilities.map { it.name },
+        guestWifi = featureState(
+          capabilities = capabilities,
+          capability = RouterCapability.GUEST_WIFI_TOGGLE,
+          unavailableMessage = "Guest Wi-Fi readback is unavailable for this router model."
+        ),
+        dnsShield = featureState(
+          capabilities = capabilities,
+          capability = RouterCapability.DNS_SHIELD_TOGGLE,
+          unavailableMessage = "DNS Shield readback is unavailable for this router model."
+        ),
+        firewall = featureState(
+          capabilities = capabilities,
+          capability = RouterCapability.FIREWALL_TOGGLE,
+          unavailableMessage = "Firewall readback is unavailable for this router model."
+        ),
+        vpn = featureState(
+          capabilities = capabilities,
+          capability = RouterCapability.VPN_TOGGLE,
+          unavailableMessage = "VPN readback is unavailable for this router model."
+        ),
+        qosMode = if (capabilities.contains(RouterCapability.QOS_CONFIG)) "UNKNOWN" else null
       )
     }
 
-    val detected = api.detect(connectionInfoFromStore())
-    val capabilities = api.getCapabilities()
-    val mode = if (capabilities.any { it != RouterCapability.READ_INFO && it != RouterCapability.DHCP_LEASES_READ }) {
-      "READ_WRITE"
-    } else {
-      "READ_ONLY"
-    }
-    val message = buildString {
-      append("Router detected")
-      detected.vendorName?.let { append(": ").append(it) }
-      detected.modelName?.let { append(" ").append(it) }
-      append(" | auth=").append(detected.detectedAuthType.name)
-      append(" | mode=").append(mode)
-      append(" | capabilities=").append(capabilities.joinToString(",") { it.name })
-    }
+    _status.value = snapshot
+    return snapshot
+  }
 
-    return RouterInfoResult(
-      status = ServiceStatus.OK,
-      message = message,
-      gatewayIp = detected.routerIp,
-      dnsServers = dns,
-      ssid = ssid,
-      linkSpeedMbps = linkSpeed
-    )
+  override suspend fun setGuestWifiEnabled(enabled: Boolean): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.GUEST_WIFI_TOGGLE,
+      code = if (enabled) "GUEST_WIFI_ON" else "GUEST_WIFI_OFF"
+    ) { api -> api.setGuestWifiEnabled(enabled) }
+  }
+
+  override suspend fun setDnsShieldEnabled(enabled: Boolean): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.DNS_SHIELD_TOGGLE,
+      code = if (enabled) "DNS_SHIELD_ON" else "DNS_SHIELD_OFF"
+    ) { api -> api.setDnsShieldEnabled(enabled) }
   }
 
   override suspend fun toggleGuest(): ActionResult {
-    return performCapabilityAction(
-      capability = RouterCapability.GUEST_WIFI_TOGGLE,
-      code = "GUEST_WIFI"
-    ) { api -> api.setGuestWifiEnabled(true) }
+    val current = refreshStatus().guestWifi.enabled
+    return if (current == null) {
+      notSupportedAction("toggleGuest", "Guest Wi-Fi state is unavailable; use explicit setGuestWifiEnabled when readback exists.")
+    } else {
+      setGuestWifiEnabled(!current)
+    }
   }
 
   override suspend fun setQos(mode: QosMode): ActionResult {
     return performCapabilityAction(
       capability = RouterCapability.QOS_CONFIG,
-      code = "QOS"
+      code = "QOS_${mode.name}"
     ) { api ->
       api.setQosConfig(
         QosConfig(
@@ -1979,18 +2128,36 @@ private class HybridRouterControl(
     ) { api -> api.reboot() }
   }
 
-  override suspend fun toggleFirewall(): ActionResult {
+  override suspend fun setFirewallEnabled(enabled: Boolean): ActionResult {
     return performCapabilityAction(
       capability = RouterCapability.FIREWALL_TOGGLE,
-      code = "FIREWALL"
-    ) { api -> api.setFirewallEnabled(true) }
+      code = if (enabled) "FIREWALL_ON" else "FIREWALL_OFF"
+    ) { api -> api.setFirewallEnabled(enabled) }
+  }
+
+  override suspend fun setVpnEnabled(enabled: Boolean): ActionResult {
+    return performCapabilityAction(
+      capability = RouterCapability.VPN_TOGGLE,
+      code = if (enabled) "VPN_ON" else "VPN_OFF"
+    ) { api -> api.setVpnEnabled(enabled) }
+  }
+
+  override suspend fun toggleFirewall(): ActionResult {
+    val current = refreshStatus().firewall.enabled
+    return if (current == null) {
+      notSupportedAction("toggleFirewall", "Firewall state is unavailable; use explicit setFirewallEnabled when readback exists.")
+    } else {
+      setFirewallEnabled(!current)
+    }
   }
 
   override suspend fun toggleVpn(): ActionResult {
-    return performCapabilityAction(
-      capability = RouterCapability.VPN_TOGGLE,
-      code = "VPN"
-    ) { api -> api.setVpnEnabled(true) }
+    val current = refreshStatus().vpn.enabled
+    return if (current == null) {
+      notSupportedAction("toggleVpn", "VPN state is unavailable; use explicit setVpnEnabled when readback exists.")
+    } else {
+      setVpnEnabled(!current)
+    }
   }
 
   private suspend fun performCapabilityAction(
@@ -2004,7 +2171,9 @@ private class HybridRouterControl(
       return notSupportedAction(code, "No verified API endpoint for this action. Read-only mode.")
     }
     val result = call(api)
-    return mapRouterActionResult(result, code)
+    val mapped = mapRouterActionResult(result, code)
+    refreshStatus()
+    return mapped
   }
 
   private fun mapRouterActionResult(result: RouterActionResult, code: String): ActionResult {
@@ -2070,6 +2239,45 @@ private class HybridRouterControl(
     val ip = (profile.routerIp ?: creds.host).trim()
     if (ip.isBlank()) return null
     return RouterApiHttp(connectionInfoFromStore())
+  }
+
+  private fun featureState(
+    capabilities: Set<RouterCapability>,
+    capability: RouterCapability,
+    unavailableMessage: String
+  ): RouterFeatureState {
+    return if (capabilities.contains(capability)) {
+      RouterFeatureState(
+        supported = true,
+        enabled = null,
+        status = ServiceStatus.NO_DATA,
+        message = unavailableMessage
+      )
+    } else {
+      RouterFeatureState(
+        supported = false,
+        enabled = null,
+        status = ServiceStatus.NOT_SUPPORTED,
+        message = "No verified API endpoint for this router capability."
+      )
+    }
+  }
+
+  private suspend fun fetchPublicIp(): String? = withContext(Dispatchers.IO) {
+    runCatching {
+      val conn = (URL("https://api.ipify.org?format=text").openConnection() as HttpURLConnection).apply {
+        connectTimeout = 2500
+        readTimeout = 2500
+        requestMethod = "GET"
+      }
+      try {
+        conn.inputStream.bufferedReader().use { reader ->
+          reader.readText().trim().takeIf { it.isNotBlank() }
+        }
+      } finally {
+        conn.disconnect()
+      }
+    }.getOrNull()
   }
 }
 

@@ -1,10 +1,6 @@
 package com.nerf.netx.ui.screens
 
-import android.annotation.SuppressLint
 import android.util.Log
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
@@ -13,22 +9,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.nerf.netx.data.ThemeRepository
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.ui.theme.ThemeId
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: AppServices) {
   val url = themeRepository.htmlAssetUrl(themeId)
-  val bridge = remember { NerfWebBridge(services) }
-  val allowedMainUrls = remember {
-    setOf(
-      "file:///android_asset/themes/nerf_main_dash/index.html",
-      "file:///android_asset/themes/nerf_hud_alt/index.html",
-      "file:///android_asset/themes/nerf_dash_new/index.html"
-    )
+  val allowedMainUrls = remember(themeRepository.availableThemes) {
+    themeRepository.availableThemes.mapNotNull(themeRepository::htmlAssetUrl).toSet()
   }
 
   Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -44,37 +33,18 @@ fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: 
       }
     } else {
       ElevatedCard(Modifier.fillMaxWidth().weight(1f)) {
-        AndroidView(
+        HtmlThemeHost(
           modifier = Modifier.fillMaxSize(),
-          factory = { ctx ->
-            WebView(ctx).apply {
-              settings.javaScriptEnabled = true
-              settings.domStorageEnabled = true
-              settings.allowFileAccess = true
-              webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, loadedUrl: String?) {
-                  super.onPageFinished(view, loadedUrl)
-                  Log.d("NERF.WebView", "Loaded URL=$loadedUrl, selectedTheme=${themeId.id}")
-                }
-
-                override fun shouldOverrideUrlLoading(
-                  view: WebView,
-                  request: WebResourceRequest
-                ): Boolean {
-                  if (!request.isForMainFrame) return false
-                  val next = request.url.toString()
-                  val allowed = next in allowedMainUrls
-                  if (!allowed) {
-                    Log.w("NERF.WebView", "Blocked main-frame URL=$next")
-                  }
-                  return !allowed
-                }
-              }
-              addJavascriptInterface(bridge.attach(this), "NERF_NATIVE")
-              loadUrl(url)
+          themeId = themeId,
+          url = url,
+          allowedMainUrls = allowedMainUrls,
+          services = services,
+          onPageFinished = { loadedUrl ->
+            Log.d("NERF.WebView", "Loaded URL=$loadedUrl, selectedTheme=${themeId.id}")
+            if (loadedUrl != null && loadedUrl !in allowedMainUrls) {
+              Log.w("NERF.WebView", "Blocked main-frame URL=$loadedUrl")
             }
-          },
-          update = { it.loadUrl(url) }
+          }
         )
       }
     }
