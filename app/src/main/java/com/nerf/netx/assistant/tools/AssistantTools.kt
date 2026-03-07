@@ -8,6 +8,8 @@ import com.nerf.netx.assistant.model.AssistantResponseCard
 import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.assistant.model.AssistantToolResult
 import com.nerf.netx.domain.ActionResult
+import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.ActionSupportState
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.ServiceStatus
 
@@ -94,13 +96,7 @@ class DeviceTool(
       supported = result.status != ServiceStatus.NOT_SUPPORTED,
       severity = severity,
       title = title,
-      message = buildString {
-        append(result.message)
-        result.errorReason?.takeIf { it.isNotBlank() }?.let {
-          append(" ")
-          append(it)
-        }
-      },
+      message = actionMessage(result, title),
       details = result.details,
       cards = if (result.details.isEmpty()) emptyList() else listOf(
         AssistantResponseCard(
@@ -121,6 +117,20 @@ class DeviceTool(
       title = title,
       message = message
     )
+  }
+
+  private fun actionMessage(result: ActionResult, title: String): String {
+    return if (result.status == ServiceStatus.NOT_SUPPORTED) {
+      ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message))
+    } else {
+      buildString {
+        append(result.message)
+        result.errorReason?.takeIf { it.isNotBlank() }?.let {
+          append(" ")
+          append(it)
+        }
+      }
+    }
   }
 }
 
@@ -165,11 +175,15 @@ class RouterTool(
       supported = result.status != ServiceStatus.NOT_SUPPORTED,
       severity = severity,
       title = title,
-      message = buildString {
-        append(result.message)
-        result.errorReason?.takeIf { it.isNotBlank() }?.let {
-          append(" ")
-          append(it)
+      message = if (result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA) {
+        ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message))
+      } else {
+        buildString {
+          append(result.message)
+          result.errorReason?.takeIf { it.isNotBlank() }?.let {
+            append(" ")
+            append(it)
+          }
         }
       }
     )

@@ -184,6 +184,7 @@ data class DeviceDetails(
   val pingMs: Int? = null,
   val notes: String = "",
   val support: DeviceActionSupport = DeviceActionSupport(),
+  val actionSupport: Map<String, ActionSupportState> = emptyMap(),
   val trafficMessage: String? = null
 )
 
@@ -312,6 +313,7 @@ data class RouterStatusSnapshot(
   val firewall: RouterFeatureState = RouterFeatureState(message = "Firewall state is unavailable."),
   val vpn: RouterFeatureState = RouterFeatureState(message = "VPN state is unavailable."),
   val qosMode: String? = null,
+  val actionSupport: Map<String, ActionSupportState> = emptyMap(),
   val lastUpdatedEpochMs: Long = System.currentTimeMillis()
 )
 

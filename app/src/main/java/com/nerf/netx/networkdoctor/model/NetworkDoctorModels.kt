@@ -30,7 +30,9 @@ sealed class NetworkDoctorAction {
 data class NetworkDoctorActionItem(
   val label: String,
   val action: NetworkDoctorAction,
-  val prominent: Boolean = false
+  val prominent: Boolean = false,
+  val enabled: Boolean = true,
+  val unavailableReason: String? = null
 )
 
 data class NetworkDoctorHealthSummary(

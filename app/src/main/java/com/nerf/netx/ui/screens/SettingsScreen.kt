@@ -43,7 +43,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.nerf.netx.data.RouterAccessMode
 import com.nerf.netx.data.RouterCapability
 import com.nerf.netx.data.RouterCredentials
+import com.nerf.netx.data.RouterProfile
 import com.nerf.netx.data.RouterCredentialsStore
+import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.ActionSupportState
+import com.nerf.netx.domain.AppActionId
+import com.nerf.netx.domain.RouterFeatureState
+import com.nerf.netx.domain.RouterStatusSnapshot
+import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.ui.theme.ThemeId
 import com.nerf.netx.ui.theme.ThemeType
 import kotlinx.coroutines.launch
@@ -379,36 +386,40 @@ fun SettingsScreen(
           )
         }
 
+        val routerActionSupport = remember(profile) { settingsRouterActionSupport(profile) }
+
         Text("Router Actions (gated)", style = MaterialTheme.typography.titleSmall)
         CapabilityActionRow(
+          label = "Renew DHCP",
+          support = routerActionSupport.getValue(AppActionId.ROUTER_RENEW_DHCP)
+        )
+        CapabilityActionRow(
           label = "Flush DNS",
-          enabled = profile.capabilities.contains(RouterCapability.DNS_FLUSH),
-          mode = profile.mode
+          support = routerActionSupport.getValue(AppActionId.ROUTER_FLUSH_DNS)
+        )
+        CapabilityActionRow(
+          label = "DNS Shield",
+          support = routerActionSupport.getValue(AppActionId.ROUTER_DNS_SHIELD)
         )
         CapabilityActionRow(
           label = "Firewall Toggle",
-          enabled = profile.capabilities.contains(RouterCapability.FIREWALL_TOGGLE),
-          mode = profile.mode
+          support = routerActionSupport.getValue(AppActionId.ROUTER_FIREWALL)
         )
         CapabilityActionRow(
           label = "VPN Toggle",
-          enabled = profile.capabilities.contains(RouterCapability.VPN_TOGGLE),
-          mode = profile.mode
+          support = routerActionSupport.getValue(AppActionId.ROUTER_VPN)
         )
         CapabilityActionRow(
           label = "QoS Configure",
-          enabled = profile.capabilities.contains(RouterCapability.QOS_CONFIG),
-          mode = profile.mode
+          support = routerActionSupport.getValue(AppActionId.ROUTER_QOS)
         )
         CapabilityActionRow(
           label = "Guest Wi-Fi",
-          enabled = profile.capabilities.contains(RouterCapability.GUEST_WIFI_TOGGLE),
-          mode = profile.mode
+          support = routerActionSupport.getValue(AppActionId.ROUTER_GUEST_WIFI)
         )
         CapabilityActionRow(
           label = "Reboot Router",
-          enabled = profile.capabilities.contains(RouterCapability.REBOOT),
-          mode = profile.mode
+          support = routerActionSupport.getValue(AppActionId.ROUTER_REBOOT)
         )
       }
     }
@@ -416,18 +427,61 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun CapabilityActionRow(label: String, enabled: Boolean, mode: RouterAccessMode) {
+private fun CapabilityActionRow(label: String, support: ActionSupportState) {
   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-    OutlinedButton(onClick = {}, enabled = enabled && mode == RouterAccessMode.READ_WRITE) {
-      Text(label)
+    OutlinedButton(onClick = {}, enabled = support.supported) {
+      Text(if (support.supported) label else "$label (Unsupported)")
     }
-    val reason = if (enabled && mode == RouterAccessMode.READ_WRITE) {
-      "Supported"
+    val reason = if (support.supported) {
+      "Available"
     } else {
-      "No verified endpoint (READ_ONLY)"
+      "Unsupported: ${support.reason}"
     }
     Text(reason, style = MaterialTheme.typography.bodySmall)
   }
+}
+
+private fun settingsRouterActionSupport(profile: RouterProfile): Map<String, ActionSupportState> {
+  val configured = !profile.routerIp.isNullOrBlank() || !profile.adminUrl.isNullOrBlank()
+  val baseMessage = when {
+    !configured -> "Router profile is not configured yet."
+    profile.mode != RouterAccessMode.READ_WRITE -> "Validated router profile is read-only. Write actions are unavailable."
+    else -> "Router write capability snapshot loaded from the saved router profile."
+  }
+
+  val snapshot = RouterStatusSnapshot(
+    status = if (configured) ServiceStatus.OK else ServiceStatus.NO_DATA,
+    message = baseMessage,
+    gatewayIp = profile.routerIp,
+    accessMode = profile.mode.name,
+    capabilities = profile.capabilities.map { it.name }.sorted(),
+    guestWifi = settingsFeatureState(profile, RouterCapability.GUEST_WIFI_TOGGLE, "Guest Wi-Fi"),
+    dnsShield = settingsFeatureState(profile, RouterCapability.DNS_SHIELD_TOGGLE, "DNS Shield"),
+    firewall = settingsFeatureState(profile, RouterCapability.FIREWALL_TOGGLE, "Firewall"),
+    vpn = settingsFeatureState(profile, RouterCapability.VPN_TOGGLE, "VPN"),
+    qosMode = if (profile.capabilities.contains(RouterCapability.QOS_CONFIG)) "BALANCED" else null
+  )
+  return ActionSupportCatalog.routerActionSupport(snapshot)
+}
+
+private fun settingsFeatureState(
+  profile: RouterProfile,
+  capability: RouterCapability,
+  label: String
+): RouterFeatureState {
+  val hasCapability = profile.capabilities.contains(capability)
+  val writable = profile.mode == RouterAccessMode.READ_WRITE
+  val message = when {
+    !hasCapability -> "$label is unsupported on the current backend/router."
+    !writable -> "$label cannot be changed while the router profile is in read-only mode."
+    else -> "$label control is available."
+  }
+  return RouterFeatureState(
+    supported = hasCapability,
+    enabled = if (hasCapability && writable) false else null,
+    status = if (hasCapability && writable) ServiceStatus.OK else ServiceStatus.NOT_SUPPORTED,
+    message = message
+  )
 }
 
 @Composable

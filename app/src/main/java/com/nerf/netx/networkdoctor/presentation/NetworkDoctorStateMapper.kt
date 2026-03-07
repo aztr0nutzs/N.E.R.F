@@ -5,6 +5,9 @@ import com.nerf.netx.assistant.model.AssistantDiagnosisReport
 import com.nerf.netx.assistant.model.AssistantDiagnosisType
 import com.nerf.netx.assistant.model.AssistantRecommendation
 import com.nerf.netx.assistant.model.AssistantSeverity
+import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.AppActionId
+import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.networkdoctor.model.NetworkDoctorAction
 import com.nerf.netx.networkdoctor.model.NetworkDoctorActionItem
@@ -36,7 +39,7 @@ class NetworkDoctorStateMapper {
         category = categoryForFinding(finding.type),
         evidence = finding.evidence,
         inferred = finding.inferred,
-        actions = buildFindingActions(finding)
+        actions = buildFindingActions(finding, context)
       )
     }
     val unavailableItems = buildUnavailableItems(context)
@@ -114,7 +117,10 @@ class NetworkDoctorStateMapper {
     )
   }
 
-  private fun buildFindingActions(finding: com.nerf.netx.assistant.model.AssistantDiagnosisFinding): List<NetworkDoctorActionItem> {
+  private fun buildFindingActions(
+    finding: com.nerf.netx.assistant.model.AssistantDiagnosisFinding,
+    context: AssistantContextSnapshot
+  ): List<NetworkDoctorActionItem> {
     val actions = mutableListOf<NetworkDoctorActionItem>()
     when (finding.type) {
       AssistantDiagnosisType.LOCAL_REACHABILITY_ISSUE -> {
@@ -135,8 +141,14 @@ class NetworkDoctorStateMapper {
         actions += NetworkDoctorActionItem("Refresh Topology", NetworkDoctorAction.RefreshTopology, prominent = true)
       }
       AssistantDiagnosisType.UNKNOWN_DEVICE_RISK -> {
+        val blockSupport = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())[AppActionId.DEVICE_BLOCK]
         finding.targetDeviceId?.let { deviceId ->
-          actions += NetworkDoctorActionItem("Block Device", NetworkDoctorAction.BlockDevice(deviceId, "Suspicious device"))
+          actions += NetworkDoctorActionItem(
+            label = if (blockSupport?.supported == true) "Block Device" else "Block Device (Unsupported)",
+            action = NetworkDoctorAction.BlockDevice(deviceId, "Suspicious device"),
+            enabled = blockSupport?.supported == true,
+            unavailableReason = blockSupport?.reason
+          )
         }
         actions += NetworkDoctorActionItem("Open Devices", NetworkDoctorAction.OpenRoute(Routes.DEVICES), prominent = true)
       }
@@ -237,14 +249,42 @@ class NetworkDoctorStateMapper {
       category = NetworkDoctorCategory.WIFI_ENVIRONMENT
     )
     items += NetworkDoctorUnavailableUi(
-      title = "Pause device control unavailable",
-      message = "The current backend does not expose pause/resume device controls for Network Doctor actions.",
+      title = "Device control actions unavailable",
+      message = "Block, pause/resume, rename, and prioritize controls are unsupported on the current backend/router.",
       category = NetworkDoctorCategory.SECURITY
     )
-    if (context.routerInfo == null || context.routerInfo.status != ServiceStatus.OK) {
+    val routerControlUnavailable = context.routerInfo == null ||
+      context.routerInfo.status != ServiceStatus.OK ||
+      context.routerStatus?.actionSupport?.values?.all { !it.supported } == true
+    if (routerControlUnavailable) {
+      val unsupportedRouterActions = context.routerStatus?.actionSupport
+        ?.values
+        ?.filterNot { it.supported }
+        ?.mapNotNull { it.label }
+        ?.distinct()
+        .orEmpty()
+      val unsupportedRouterReasons = context.routerStatus?.actionSupport
+        ?.values
+        ?.filterNot { it.supported }
+        ?.map { it.reason }
+        ?.filter { it.isNotBlank() }
+        ?.distinct()
+        .orEmpty()
       items += NetworkDoctorUnavailableUi(
         title = "Router control unsupported or unavailable",
-        message = context.routerInfo?.message ?: "Router control could not be verified from the current context.",
+        message = when {
+          unsupportedRouterActions.isNotEmpty() -> buildString {
+            append(unsupportedRouterActions.joinToString(", "))
+            append(" are unsupported on the current backend/router.")
+            unsupportedRouterReasons.firstOrNull()?.let {
+              append(" ")
+              append(it)
+            }
+          }
+          else -> context.routerStatus?.message
+            ?: context.routerInfo?.message
+            ?: "Router control could not be verified from the current context."
+        },
         category = NetworkDoctorCategory.ROUTER_HEALTH
       )
     }

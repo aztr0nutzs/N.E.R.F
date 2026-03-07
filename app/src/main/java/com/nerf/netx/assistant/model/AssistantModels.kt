@@ -5,6 +5,7 @@ import com.nerf.netx.domain.Device
 import com.nerf.netx.domain.MapLink
 import com.nerf.netx.domain.MapNode
 import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ScanState
 import com.nerf.netx.domain.SpeedtestResult
 import com.nerf.netx.domain.SpeedtestUiState
@@ -92,6 +93,7 @@ data class AssistantContextSnapshot(
   val topologyLinks: List<MapLink>,
   val analytics: AnalyticsSnapshot?,
   val routerInfo: RouterInfoResult?,
+  val routerStatus: RouterStatusSnapshot?,
   val capturedAtEpochMs: Long = System.currentTimeMillis()
 )
 

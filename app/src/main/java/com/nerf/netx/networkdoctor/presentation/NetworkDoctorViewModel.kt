@@ -7,6 +7,9 @@ import com.nerf.netx.assistant.context.BuildAssistantContextUseCase
 import com.nerf.netx.assistant.diagnostics.NetworkDiagnosisEngine
 import com.nerf.netx.assistant.model.AssistantDiagnosisFocus
 import com.nerf.netx.assistant.recommendation.RecommendationEngine
+import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.AppActionId
+import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.networkdoctor.model.NetworkDoctorAction
 import com.nerf.netx.networkdoctor.state.NetworkDoctorLoadState
@@ -79,13 +82,23 @@ class NetworkDoctorViewModel(
           _uiState.update { it.copy(runningAction = null) }
         }
         is NetworkDoctorAction.BlockDevice -> {
-          runServiceAction(action) {
-            val result = services.deviceControl.block(action.deviceId)
-            buildString {
-              append(result.message)
-              result.errorReason?.takeIf { it.isNotBlank() }?.let {
-                append(" ")
-                append(it)
+          val support = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())[AppActionId.DEVICE_BLOCK]
+          if (support != null && !support.supported) {
+            _uiState.update {
+              it.copy(
+                runningAction = null,
+                actionMessage = ActionSupportCatalog.messageFor("Block device", support)
+              )
+            }
+          } else {
+            runServiceAction(action) {
+              val result = services.deviceControl.block(action.deviceId)
+              buildString {
+                append(result.message)
+                result.errorReason?.takeIf { it.isNotBlank() }?.let {
+                  append(" ")
+                  append(it)
+                }
               }
             }
           }

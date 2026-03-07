@@ -1,4 +1,4 @@
-package com.nerf.netx.ui.screens
+ï»¿package com.nerf.netx.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -43,8 +43,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nerf.netx.domain.ActionResult
+import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.AppActionId
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.DeviceControlService
+import com.nerf.netx.domain.DeviceDetails
 import com.nerf.netx.domain.DevicesService
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -139,6 +143,16 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
         val type = inferDeviceType(d)
         val linkQuality = calculateLinkQuality(d)
         val running = runningActions[d.id] == true
+        var details by remember(d.id) { mutableStateOf<DeviceDetails?>(null) }
+        LaunchedEffect(d.id) {
+          details = deviceControl.deviceDetails(d.id)
+        }
+        val defaultSupport = remember {
+          ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())
+        }
+        val actionSupport = details?.actionSupport ?: defaultSupport
+        val blockSupport = actionSupport[AppActionId.DEVICE_BLOCK] ?: defaultSupport.getValue(AppActionId.DEVICE_BLOCK)
+        val prioritizeSupport = actionSupport[AppActionId.DEVICE_PRIORITIZE] ?: defaultSupport.getValue(AppActionId.DEVICE_PRIORITIZE)
 
         ElevatedCard {
           Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -198,9 +212,9 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
                 }
               )
               ActionButton(
-                label = "Block",
+                label = if (blockSupport.supported) "Block" else "Block (Unsupported)",
                 running = running,
-                enabled = !running,
+                enabled = !running && blockSupport.supported,
                 onClick = {
                   runDeviceAction(
                     scope = scope,
@@ -211,9 +225,9 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
                 }
               )
               ActionButton(
-                label = "Prioritize",
+                label = if (prioritizeSupport.supported) "Prioritize" else "Prioritize (Unsupported)",
                 running = running,
-                enabled = !running,
+                enabled = !running && prioritizeSupport.supported,
                 onClick = {
                   runDeviceAction(
                     scope = scope,
@@ -228,6 +242,16 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 Text("Running...", style = MaterialTheme.typography.bodySmall)
               }
+            }
+
+            if (!blockSupport.supported || !prioritizeSupport.supported) {
+              Text(
+                "Unavailable: " + listOfNotNull(
+                  blockSupport.reason?.takeIf { !blockSupport.supported },
+                  prioritizeSupport.reason?.takeIf { !prioritizeSupport.supported && it != blockSupport.reason }
+                ).joinToString(" "),
+                style = MaterialTheme.typography.bodySmall
+              )
             }
           }
         }
@@ -275,10 +299,10 @@ private fun runDeviceAction(
     }
     val message = buildString {
       append(statusText)
-      append(" • ")
+      append(" â€¢ ")
       append(result.message)
       result.errorReason?.takeIf { it.isNotBlank() }?.let {
-        append(" • ")
+        append(" â€¢ ")
         append(it)
       }
     }

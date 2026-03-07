@@ -308,6 +308,7 @@ body::after {display:none;}
 .dw-tgls{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;}
 .dw-tgl{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--br);flex:1;min-width:120px;cursor:pointer;}
 .tgl-lbl{font-size:7.5px;letter-spacing:1px;color:rgba(2,254,255,.5);flex:1;}
+.dw-note{margin-top:6px;font-size:7px;line-height:1.5;color:#ffd39f;letter-spacing:.8px}
 .tgl-sw{width:34px;height:17px;border-radius:9px;background:rgba(2,254,255,.07);border:1px solid var(--br);position:relative;transition:background .25s;}
 .tgl-sw.on{background:rgba(2,254,255,.2);border-color:var(--c);}
 .tgl-sw::after{content:'';position:absolute;width:13px;height:13px;border-radius:50%;background:rgba(2,254,255,.4);top:1px;left:1px;transition:left .25s,background .25s;}
@@ -1349,6 +1350,12 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 }
 .nd-toggle.on{justify-content:flex-end;background:rgba(231,76,60,.12);border-color:rgba(231,76,60,.42);}
 .nd-toggle.on::after{background:#fff;box-shadow:0 0 16px rgba(231,76,60,.28);}
+.nd-toggle.unsupported,.nd-switch.unsupported,.nd-reboot.unsupported,.dw-tgl.unsupported{
+  opacity:.42;cursor:not-allowed;
+}
+.nd-action.unsupported{
+  border-color:rgba(231,76,60,.22);box-shadow:none;
+}
 .nd-toggle-label{margin-top:4px;font-size:6px;color:rgba(255,255,255,.28);letter-spacing:1.3px;text-transform:uppercase;text-align:right;}
 .nd-empty{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
@@ -1366,12 +1373,14 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 .nd-action{
   border:1px solid rgba(2,254,255,.11);background:rgba(0,0,0,.16);padding:10px;display:flex;justify-content:space-between;gap:10px;align-items:center;
 }
+.nd-action.unsupported{border-color:rgba(255,179,71,.34);background:rgba(255,179,71,.06)}
 .nd-action.glow{
   box-shadow:0 0 20px rgba(46,204,113,.08), inset 0 0 24px rgba(46,204,113,.04);
   border-color:rgba(46,204,113,.32);
 }
 .nd-action-copy .title{font-size:9px;color:#fff;letter-spacing:1.3px;text-transform:uppercase;}
 .nd-action-copy .sub{margin-top:4px;font-size:6.5px;color:rgba(255,255,255,.32);letter-spacing:1.2px;text-transform:uppercase;line-height:1.5;}
+.nd-unsupported{margin-top:6px;font-size:6.5px;color:#ffd39f;letter-spacing:1px;line-height:1.5;text-transform:none}
 .nd-switch{
   width:58px;height:28px;padding:2px;border:1px solid rgba(2,254,255,.18);background:rgba(255,255,255,.05);display:flex;align-items:center;
   cursor:pointer;transition:all .18s;
@@ -1533,7 +1542,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
         <button class="qc" onclick="rc('diag')">âš™ DIAG</button>
         <button class="qc" onclick="rc('export')">â†— EXPORT</button>
         <button class="qc" onclick="rc('speed')">âš¡ SPEED</button>
-        <button class="qc" onclick="rc('flush')">â†º FLUSH DNS</button>
+        <button class="qc" onclick="rc('flush')" title="Flush DNS is unsupported on the current backend/router.">â†º FLUSH DNS (UNSUPPORTED)</button>
         <button class="qc" onclick="rc('clear')">âœ• CLEAR</button>
       </div>
       <div class="cin-row">
@@ -1570,8 +1579,9 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   <div class="dw-tgls" id="dwact"></div>
   <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
     <button class="hbtn" onclick="dvPing()" style="font-size:8px;padding:7px 12px;">â—‰ PING TEST</button>
-    <button class="hbtn dng" onclick="dvBlock()" id="dvblkbtn" style="font-size:8px;padding:7px 12px;">âŠ— BLOCK</button>
+    <button class="hbtn dng" onclick="dvBlock()" id="dvblkbtn" style="font-size:8px;padding:7px 12px;">âŠ— BLOCK (UNSUPPORTED)</button>
   </div>
+  <div class="dw-note" id="dvActionReason">Device control actions are unsupported on the current backend/router.</div>
 </div>
 
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• JARVIS ORB â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
@@ -1727,8 +1737,8 @@ function ensureOverviewTelemetry(){
   if(typeof S.lastScanLabel!=='string') S.lastScanLabel='42s ago';
   if(typeof S.scanBusy!=='boolean') S.scanBusy=false;
   if(typeof S.scanResultsEmpty!=='boolean') S.scanResultsEmpty=false;
-  if(typeof S.guestWifi!=='boolean') S.guestWifi=true;
-  if(typeof S.dnsShield!=='boolean') S.dnsShield=true;
+  if(typeof S.guestWifi!=='boolean') S.guestWifi=false;
+  if(typeof S.dnsShield!=='boolean') S.dnsShield=false;
   if(typeof S.rebooting!=='boolean') S.rebooting=false;
   if(typeof S.publicIp!=='string') S.publicIp='73.162.45.201';
   if(typeof S.ispType!=='string') S.ispType='Fiber / DHCP';
@@ -1747,6 +1757,17 @@ function ensureOverviewTelemetry(){
     }
     if(typeof d.paused!=='boolean') d.paused = !!d.blk;
   });
+}
+function ovRouterSupport(key){
+  const map=window.__NERF_NATIVE_STATE&&window.__NERF_NATIVE_STATE.router&&window.__NERF_NATIVE_STATE.router.actionSupport;
+  const item=map&&map[key];
+  return item&&typeof item==='object'?item:{supported:false,reason:'Unsupported on the current backend/router.'};
+}
+function ovDeviceControlReason(){
+  return 'Block, unblock, pause, rename, and prioritize are unsupported on the current backend/router.';
+}
+function ovWarnUnsupported(label,reason){
+  addLog(`${label} unsupported. ${reason||'Unsupported on the current backend/router.'}`,'wrn');
 }
 function ovPushHistory(){
   ensureOverviewTelemetry();
@@ -1844,6 +1865,10 @@ function buildOv(){
   const latencyColor = S.lat > 100 ? 'var(--amber)' : 'var(--ok)';
   const visibleCount = ovVisibleDevices().length;
   const empty = visibleCount===0;
+  const guestSupport = ovRouterSupport('router.guestWifi');
+  const dnsSupport = ovRouterSupport('router.dnsShield');
+  const rebootSupport = ovRouterSupport('router.reboot');
+  const deviceControlReason = ovDeviceControlReason();
   const el=document.getElementById('s-ov');
   el.innerHTML=`
 <div class="nd-shell">
@@ -1896,7 +1921,7 @@ function buildOv(){
               <div class="nd-metric">
                 <div class="k">Current Public IP</div>
                 <div class="v" id="ov-ip">${S.publicIp}</div>
-                <div class="mini">lease quality Â· ${S.guestWifi ? 'guest vlan armed' : 'guest vlan dormant'}</div>
+                <div class="mini">lease quality Â· ${guestSupport.supported ? (S.guestWifi ? 'guest vlan armed' : 'guest vlan dormant') : 'guest wifi unsupported'}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Latency</div>
@@ -1917,7 +1942,7 @@ function buildOv(){
               <div class="nd-scan-meta" id="ov-last-scan">Last scanned Â· ${ovFmtAgo(S.lastScanAt)}</div>
               <div class="nd-tag">known ${S.knownClients}</div>
               <div class="nd-tag">unknown ${S.unknownClients}</div>
-              <div class="nd-tag">dns shield ${S.dnsShield ? 'on' : 'off'}</div>
+              <div class="nd-tag">${dnsSupport.supported ? ('dns shield ' + (S.dnsShield ? 'on' : 'off')) : 'dns shield unsupported'}</div>
             </div>
           </div>
         </div>
@@ -2001,8 +2026,8 @@ function buildOv(){
                   <div class="nd-hog-rate">${ovFmtRate(d.rate)} current throughput</div>
                 </div>
                 <div>
-                  <div class="nd-toggle ${d.paused ? 'on' : ''}" onclick="ovToggleDevice(${d.id})"></div>
-                  <div class="nd-toggle-label">${d.paused ? 'paused' : 'live'}</div>
+                  <div class="nd-toggle unsupported" title="${deviceControlReason}" onclick="ovToggleDevice(${d.id})"></div>
+                  <div class="nd-toggle-label">unsupported</div>
                 </div>
               </div>`).join('')}</div>`}
         </div>
@@ -2015,30 +2040,30 @@ function buildOv(){
           <div class="nd-title">Tactical Action Center</div>
           <div class="nd-sub">quick toggles and one red button humans always regret</div>
         </div>
-        <div class="nd-stat-pill">${S.guestWifi ? 'guest wifi active' : 'guest wifi sleeping'}</div>
+        <div class="nd-stat-pill">${guestSupport.supported ? (S.guestWifi ? 'guest wifi active' : 'guest wifi sleeping') : 'guest wifi unsupported'}</div>
       </div>
       <div class="nd-body">
         <div class="nd-quick-grid">
-          <div class="nd-action ${S.guestWifi ? 'glow' : ''}">
+          <div class="nd-action ${guestSupport.supported && S.guestWifi ? 'glow' : ''}${guestSupport.supported ? '' : ' unsupported'}">
             <div class="nd-action-copy">
-              <div class="title">Guest Wi-Fi</div>
-              <div class="sub">isolated network lane Â· glow means visitors are leeching politely</div>
+              <div class="title">Guest Wi-Fi${guestSupport.supported ? '' : ' (Unsupported)'}</div>
+              <div class="sub">${guestSupport.supported ? 'isolated network lane Â· glow means visitors are leeching politely' : guestSupport.reason}</div>
             </div>
-            <div class="nd-switch ${S.guestWifi ? 'on' : 'off'}" onclick="ovToggleAction('guestWifi')"><div class="knob"></div></div>
+            <div class="nd-switch ${guestSupport.supported ? (S.guestWifi ? 'on' : 'off') : 'unsupported'}" title="${guestSupport.reason||''}" onclick="ovToggleAction('guestWifi')"><div class="knob"></div></div>
           </div>
-          <div class="nd-action ${S.dnsShield ? 'glow' : ''}">
+          <div class="nd-action ${dnsSupport.supported && S.dnsShield ? 'glow' : ''}${dnsSupport.supported ? '' : ' unsupported'}">
             <div class="nd-action-copy">
-              <div class="title">DNS Shield</div>
-              <div class="sub">ad-blocking and security filtering Â· keeps nonsense in its lane</div>
+              <div class="title">DNS Shield${dnsSupport.supported ? '' : ' (Unsupported)'}</div>
+              <div class="sub">${dnsSupport.supported ? 'ad-blocking and security filtering Â· keeps nonsense in its lane' : dnsSupport.reason}</div>
             </div>
-            <div class="nd-switch ${S.dnsShield ? 'on' : 'off'}" onclick="ovToggleAction('dnsShield')"><div class="knob"></div></div>
+            <div class="nd-switch ${dnsSupport.supported ? (S.dnsShield ? 'on' : 'off') : 'unsupported'}" title="${dnsSupport.reason||''}" onclick="ovToggleAction('dnsShield')"><div class="knob"></div></div>
           </div>
-          <div class="nd-action" style="grid-column:1/-1;">
+          <div class="nd-action${rebootSupport.supported ? '' : ' unsupported'}" style="grid-column:1/-1;">
             <div class="nd-action-copy">
-              <div class="title">System Reboot</div>
-              <div class="sub">requires confirmation because accidental internet suicide is still frowned upon</div>
+              <div class="title">System Reboot${rebootSupport.supported ? '' : ' (Unsupported)'}</div>
+              <div class="sub">${rebootSupport.supported ? 'requires confirmation because accidental internet suicide is still frowned upon' : rebootSupport.reason}</div>
             </div>
-            <button class="nd-reboot" onclick="ovShowRebootModal()">Reboot Router</button>
+            <button class="nd-reboot${rebootSupport.supported ? '' : ' unsupported'}" title="${rebootSupport.reason||''}" onclick="ovShowRebootModal()">Reboot Router${rebootSupport.supported ? '' : ' (Unsupported)'}</button>
           </div>
         </div>
       </div>
@@ -2268,17 +2293,11 @@ function ovDrawCongestionGauge(){
 function ovToggleDevice(id){
   const d = DEVS.find(x=>x.id===id);
   if(!d) return;
-  d.paused = !d.paused;
-  d.blk = d.paused;
-  if(d.paused) addLog(`Traffic paused for ${d.name}`,'wrn');
-  else addLog(`Traffic restored for ${d.name}`,'suc');
-  buildOv();
+  ovWarnUnsupported(`Device control for ${d.name}`, ovDeviceControlReason());
 }
 function ovToggleAction(key){
-  ensureOverviewTelemetry();
-  S[key] = !S[key];
-  addLog(`${key==='guestWifi'?'Guest Wi-Fi':'DNS Shield'} ${S[key]?'enabled':'disabled'}`,'inf');
-  buildOv();
+  const support = ovRouterSupport(key === 'guestWifi' ? 'router.guestWifi' : 'router.dnsShield');
+  ovWarnUnsupported(key==='guestWifi'?'Guest Wi-Fi':'DNS Shield', support.reason);
 }
 function ovShowRebootModal(){
   ensureOverviewTelemetry();
@@ -2293,18 +2312,8 @@ function ovHideRebootModal(){
 function ovConfirmReboot(){
   ensureOverviewTelemetry();
   S.rebooting = false;
-  addLog('Router reboot sequence started. Brace for temporary silence.','wrn');
-  S.scanBusy = true;
-  S.lastScanAt = Date.now();
+  ovWarnUnsupported('Router reboot', ovRouterSupport('router.reboot').reason);
   buildOv();
-  setTimeout(()=>{
-    S.scanBusy = false;
-    S.sameChannelNeighbors = Math.max(1, S.sameChannelNeighbors - 1);
-    S.threatsBlockedToday += Math.floor(Math.random()*2);
-    S.publicIp = `73.162.${40+Math.floor(Math.random()*40)}.${20+Math.floor(Math.random()*180)}`;
-    addLog('Router back online. WAN lease renewed and clients reattached.','suc');
-    buildOv();
-  }, 2200);
 }
 function ovScan(){
   ensureOverviewTelemetry();
@@ -2703,12 +2712,12 @@ function dvOpen(id){
 
   const act=document.getElementById('dwact');
   act.innerHTML=`
-    <div class="dw-tgl" onclick="tglSw(this,'tg1')">
-      <span class="tgl-lbl">ALLOW ACCESS</span>
+    <div class="dw-tgl unsupported" title="${ovDeviceControlReason()}">
+      <span class="tgl-lbl">ALLOW ACCESS (UNSUPPORTED)</span>
       <div class="tgl-sw ${d.blk?'':'on'}" id="tg1"></div>
     </div>
-    <div class="dw-tgl" onclick="tglSw(this,'tg2')">
-      <span class="tgl-lbl">QoS PRIORITY</span>
+    <div class="dw-tgl unsupported" title="${ovDeviceControlReason()}">
+      <span class="tgl-lbl">QoS PRIORITY (UNSUPPORTED)</span>
       <div class="tgl-sw on" id="tg2"></div>
     </div>
     <div class="dw-tgl" onclick="tglSw(this,'tg3')">
@@ -2734,7 +2743,8 @@ function dvOpen(id){
   ctx.fillStyle=grad;ctx.fill();
 
   document.getElementById('dvd').classList.add('open');
-  document.getElementById('dvblkbtn').textContent=d.blk?'âœ“ UNBLOCK':'âŠ— BLOCK';
+  document.getElementById('dvblkbtn').textContent='âŠ— BLOCK (UNSUPPORTED)';
+  document.getElementById('dvblkbtn').title=ovDeviceControlReason();
 }
 function dvClose(){document.getElementById('dvd').classList.remove('open');S.devOpen=-1;}
 function tglSw(row,id){const sw=document.getElementById(id);if(sw)sw.classList.toggle('on');}
@@ -2746,9 +2756,9 @@ function dvPing(){
 }
 function dvBlock(){
   if(S.devOpen<0)return;
-  const d=DEVS[S.devOpen];d.blk=!d.blk;
-  document.getElementById('dvblkbtn').textContent=d.blk?'âœ“ UNBLOCK':'âŠ— BLOCK';
-  addLog(`Device ${d.name} ${d.blk?'BLOCKED':'UNBLOCKED'}`,'wrn');
+  const d=DEVS[S.devOpen];
+  document.getElementById('dvblkbtn').textContent='âŠ— BLOCK (UNSUPPORTED)';
+  ovWarnUnsupported(`Device control for ${d.name}`, ovDeviceControlReason());
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -3034,8 +3044,7 @@ function rc(cmd){
     export:()=>{addLog('Exporting network data to STARK_ARCHIVE...','wrn');
       setTimeout(()=>addLog('Export complete. 4.2MB â†’ /archives/net_2025-03-05.json','suc'),1200);},
     speed:()=>{sw('st',1);addLog('Redirecting to SPEEDTEST module...','inf');},
-    flush:()=>{addLog('Flushing DNS cache...','inf');
-      setTimeout(()=>addLog('DNS cache flushed. 847 records cleared.','suc'),600);},
+    flush:()=>{ovWarnUnsupported('Flush DNS', ovRouterSupport('router.flushDns').reason);},
     clear:()=>{const l=document.getElementById('conlog');if(l)l.innerHTML='';logLines=[];},
   };
   if(cmds[cmd])cmds[cmd]();
@@ -3234,7 +3243,7 @@ window.addEventListener('visibilitychange',()=>{
 <script>
 (function(){
   
-  const native = {
+  const native = window.__NERF_NATIVE_STATE = {
     ready:false,
     scan:{},
     speedtest:{},
@@ -3381,15 +3390,42 @@ window.addEventListener('visibilitychange',()=>{
   window.ovToggleDevice = function(id){
     const d = window.DEVS?.find(x=>x.id===id);
     if (!d) return;
-    const action = d.blk ? 'device.setBlocked' : 'device.setPaused';
-    const key = d.blk ? 'blocked' : 'paused';
-    req(action, {deviceId:d.nativeId || String(d.id), [key]: !d[key]});
+    ovWarnUnsupported(`Device control for ${d.name}`, ovDeviceControlReason());
   };
   window.ovToggleAction = function(key){
+    const support = ovRouterSupport(key === 'guestWifi' ? 'router.guestWifi' : 'router.dnsShield');
+    if (!support.supported) {
+      ovWarnUnsupported(key === 'guestWifi' ? 'Guest Wi-Fi' : 'DNS Shield', support.reason);
+      return;
+    }
     if (key === 'guestWifi') req('router.setGuest', {enabled: !window.S?.guestWifi});
     if (key === 'dnsShield') req('router.setDnsShield', {enabled: !window.S?.dnsShield});
   };
-  window.ovConfirmReboot = function(){ req('router.rebootRouter', {}); if (window.ovHideRebootModal) ovHideRebootModal(); };
+  window.ovShowRebootModal = function(){
+    const support = ovRouterSupport('router.reboot');
+    if (!support.supported) {
+      ovWarnUnsupported('Router reboot', support.reason);
+      return;
+    }
+    if (window.ensureOverviewTelemetry) ensureOverviewTelemetry();
+    S.rebooting = true;
+    if (typeof buildOv === 'function') buildOv();
+  };
+  window.ovHideRebootModal = function(){
+    if (window.ensureOverviewTelemetry) ensureOverviewTelemetry();
+    S.rebooting = false;
+    if (typeof buildOv === 'function') buildOv();
+  };
+  window.ovConfirmReboot = function(){
+    const support = ovRouterSupport('router.reboot');
+    if (!support.supported) {
+      ovWarnUnsupported('Router reboot', support.reason);
+      if (window.ovHideRebootModal) ovHideRebootModal();
+      return;
+    }
+    req('router.rebootRouter', {});
+    if (window.ovHideRebootModal) ovHideRebootModal();
+  };
   window.stStart = function(){ req('speedtest.start',{}); };
   window.stAbort = function(){ req('speedtest.stop',{}); };
   window.stReset = function(){ req('speedtest.reset',{}); };
@@ -3398,7 +3434,9 @@ window.addEventListener('visibilitychange',()=>{
     if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) req('device.ping', {deviceId:window.DEVS[S.devOpen].nativeId});
   };
   window.dvBlock = function(){
-    if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) req('device.setBlocked', {deviceId:window.DEVS[S.devOpen].nativeId, blocked:true});
+    if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) {
+      ovWarnUnsupported(`Device control for ${window.DEVS[S.devOpen].name}`, ovDeviceControlReason());
+    }
   };
   window.mapReset = function(){
     if (typeof originalMapReset === 'function') originalMapReset();
@@ -3417,7 +3455,7 @@ window.addEventListener('visibilitychange',()=>{
     if (panel && panel.classList.contains('open') && chat && !chat.dataset.nativeSeeded) {
       chat.innerHTML = '';
       chat.dataset.nativeSeeded = '1';
-      if (window.jMsgJ) jMsgJ('NERF assistant connected. Ask about network status, diagnostics, speedtest, devices, or router actions.');
+      if (window.jMsgJ) jMsgJ('NERF assistant connected. Ask about network status, diagnostics, speedtest, devices, or router actions. Unsupported actions will be called out explicitly.');
     }
   };
   window.ja = function(action){
@@ -3440,7 +3478,7 @@ window.addEventListener('visibilitychange',()=>{
       return;
     }
     if (action === 'help') {
-      addLog('Available: scan | diag | export | speed | flush | clear | ping <ip>', 'suc');
+      addLog('Available: scan | diag | export | speed | flush dns (unsupported) | clear | ping <ip>', 'suc');
       return;
     }
     const mapped = {
@@ -3451,6 +3489,10 @@ window.addEventListener('visibilitychange',()=>{
       flush: 'flush dns'
     };
     const command = mapped[action] || String(cmd || '');
+    if (action === 'flush') {
+      ovWarnUnsupported('Flush DNS', ovRouterSupport('router.flushDns').reason);
+      return;
+    }
     if (action === 'speed' && typeof sw === 'function') sw('st', 1);
     addLog('> ' + command, 'wrn');
     req('console.execute', {command});
@@ -3461,6 +3503,8 @@ window.addEventListener('visibilitychange',()=>{
     const lower=cmd.toLowerCase();
     if (lower === 'clear' || lower === 'help') {
       window.rc(lower);
+    } else if (lower.includes('flush dns') || lower === 'flush') {
+      ovWarnUnsupported('Flush DNS', ovRouterSupport('router.flushDns').reason);
     } else {
       addLog('> ' + cmd, 'wrn');
       req('console.execute', {command:cmd});
@@ -3477,7 +3521,7 @@ window.addEventListener('visibilitychange',()=>{
       if (p.code === 'SPEEDTEST_HISTORY' && Array.isArray(p.history)) native.speedtest.history = p.history;
       if (p.code === 'ROUTER_STATUS') native.router = p;
       if (p.code === 'MAP_STATE') native.topology = p;
-      if ((p.status === 'NOT_SUPPORTED' || p.code === 'NOT_SUPPORTED') && window.addLog) addLog(p.message || 'Action not supported by backend','wrn');
+      if ((p.status === 'NOT_SUPPORTED' || p.code === 'NOT_SUPPORTED') && window.addLog) addLog(p.errorReason || p.message || 'Action not supported by backend','wrn');
       else if (p.message && window.addLog && !['DEVICES_LIST','SPEEDTEST_STATE','SPEEDTEST_HISTORY','ROUTER_STATUS','MAP_STATE'].includes(p.code)) addLog(p.message, p.ok === false ? 'wrn' : 'suc');
       syncOverviewFromNative();
       return;

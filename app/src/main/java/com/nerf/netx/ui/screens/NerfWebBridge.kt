@@ -22,13 +22,18 @@ import com.nerf.netx.assistant.tools.RouterTool
 import com.nerf.netx.assistant.tools.ScanTool
 import com.nerf.netx.assistant.tools.SpeedtestTool
 import com.nerf.netx.domain.ActionResult
+import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AnalyticsSnapshot
+import com.nerf.netx.domain.ActionSupportState
+import com.nerf.netx.domain.AppActionId
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.MapLink
 import com.nerf.netx.domain.MapNode
 import com.nerf.netx.domain.QosMode
 import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.RouterWriteAction
 import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.domain.ServiceStatus
@@ -308,27 +313,48 @@ class NerfWebBridge(private val services: AppServices) {
               .put("pingMs", details.pingMs)
               .put("notes", details.notes)
               .put("trafficMessage", details.trafficMessage)
+              .put("actionSupport", actionSupportJson(details.actionSupport))
               .put("device", deviceJson(details.device))
           )
           .toString()
       }
       "device.ping" -> actionResultJson(services.deviceControl.ping(payload.optString("deviceId", "")))
-      "device.block" -> actionResultJson(services.deviceControl.block(payload.optString("deviceId", "")))
+      "device.block" -> guardedDeviceActionResult(
+        actionId = AppActionId.DEVICE_BLOCK,
+        deviceId = payload.optString("deviceId", ""),
+        action = { services.deviceControl.block(payload.optString("deviceId", "")) }
+      )
       "device.setBlocked" -> {
         val blocked = if (payload.has("blocked")) payload.optBoolean("blocked") else true
-        actionResultJson(services.deviceControl.setBlocked(payload.optString("deviceId", ""), blocked))
+        guardedDeviceActionResult(
+          actionId = if (blocked) AppActionId.DEVICE_BLOCK else AppActionId.DEVICE_UNBLOCK,
+          deviceId = payload.optString("deviceId", ""),
+          action = { services.deviceControl.setBlocked(payload.optString("deviceId", ""), blocked) }
+        )
       }
       "device.setPaused" -> {
         val paused = if (payload.has("paused")) payload.optBoolean("paused") else true
-        actionResultJson(services.deviceControl.setPaused(payload.optString("deviceId", ""), paused))
-      }
-      "device.rename" -> actionResultJson(
-        services.deviceControl.rename(
-          payload.optString("deviceId", ""),
-          payload.optString("name", "")
+        guardedDeviceActionResult(
+          actionId = if (paused) AppActionId.DEVICE_PAUSE else AppActionId.DEVICE_RESUME,
+          deviceId = payload.optString("deviceId", ""),
+          action = { services.deviceControl.setPaused(payload.optString("deviceId", ""), paused) }
         )
+      }
+      "device.rename" -> guardedDeviceActionResult(
+        actionId = AppActionId.DEVICE_RENAME,
+        deviceId = payload.optString("deviceId", ""),
+        action = {
+          services.deviceControl.rename(
+            payload.optString("deviceId", ""),
+            payload.optString("name", "")
+          )
+        }
       )
-      "device.prioritize" -> actionResultJson(services.deviceControl.prioritize(payload.optString("deviceId", "")))
+      "device.prioritize" -> guardedDeviceActionResult(
+        actionId = AppActionId.DEVICE_PRIORITIZE,
+        deviceId = payload.optString("deviceId", ""),
+        action = { services.deviceControl.prioritize(payload.optString("deviceId", "")) }
+      )
       "map.refresh" -> {
         services.map.refresh()
         services.topology.refreshTopology()
@@ -387,29 +413,81 @@ class NerfWebBridge(private val services: AppServices) {
           .toString()
       }
       "router.info", "router.status" -> routerStatusJson(services.routerControl.refreshStatus(), "ROUTER_STATUS").toString()
-      "router.toggleGuest" -> actionResultJson(services.routerControl.toggleGuest())
-      "router.setGuest" -> actionResultJson(
-        services.routerControl.setGuestWifiEnabled(if (payload.has("enabled")) payload.optBoolean("enabled") else true)
+      "router.toggleGuest" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_GUEST_WIFI,
+        routerAction = RouterWriteAction.GUEST_WIFI,
+        action = { services.routerControl.toggleGuest() }
       )
-      "router.setDnsShield" -> actionResultJson(
-        services.routerControl.setDnsShieldEnabled(if (payload.has("enabled")) payload.optBoolean("enabled") else true)
+      "router.setGuest" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_GUEST_WIFI,
+        routerAction = RouterWriteAction.GUEST_WIFI,
+        action = {
+          services.routerControl.setGuestWifiEnabled(
+            if (payload.has("enabled")) payload.optBoolean("enabled") else true
+          )
+        }
       )
-      "router.rebootRouter" -> actionResultJson(services.routerControl.rebootRouter())
-      "router.toggleFirewall" -> actionResultJson(services.routerControl.toggleFirewall())
-      "router.setFirewall" -> actionResultJson(
-        services.routerControl.setFirewallEnabled(if (payload.has("enabled")) payload.optBoolean("enabled") else true)
+      "router.setDnsShield" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_DNS_SHIELD,
+        routerAction = RouterWriteAction.DNS_SHIELD,
+        action = {
+          services.routerControl.setDnsShieldEnabled(
+            if (payload.has("enabled")) payload.optBoolean("enabled") else true
+          )
+        }
       )
-      "router.toggleVpn" -> actionResultJson(services.routerControl.toggleVpn())
-      "router.setVpn" -> actionResultJson(
-        services.routerControl.setVpnEnabled(if (payload.has("enabled")) payload.optBoolean("enabled") else true)
+      "router.rebootRouter" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_REBOOT,
+        routerAction = RouterWriteAction.REBOOT,
+        action = { services.routerControl.rebootRouter() }
       )
-      "router.renewDhcp" -> actionResultJson(services.routerControl.renewDhcp())
-      "router.flushDns" -> actionResultJson(services.routerControl.flushDns())
+      "router.toggleFirewall" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_FIREWALL,
+        routerAction = RouterWriteAction.FIREWALL,
+        action = { services.routerControl.toggleFirewall() }
+      )
+      "router.setFirewall" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_FIREWALL,
+        routerAction = RouterWriteAction.FIREWALL,
+        action = {
+          services.routerControl.setFirewallEnabled(
+            if (payload.has("enabled")) payload.optBoolean("enabled") else true
+          )
+        }
+      )
+      "router.toggleVpn" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_VPN,
+        routerAction = RouterWriteAction.VPN,
+        action = { services.routerControl.toggleVpn() }
+      )
+      "router.setVpn" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_VPN,
+        routerAction = RouterWriteAction.VPN,
+        action = {
+          services.routerControl.setVpnEnabled(
+            if (payload.has("enabled")) payload.optBoolean("enabled") else true
+          )
+        }
+      )
+      "router.renewDhcp" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_RENEW_DHCP,
+        routerAction = RouterWriteAction.RENEW_DHCP,
+        action = { services.routerControl.renewDhcp() }
+      )
+      "router.flushDns" -> guardedRouterActionResult(
+        actionId = AppActionId.ROUTER_FLUSH_DNS,
+        routerAction = RouterWriteAction.FLUSH_DNS,
+        action = { services.routerControl.flushDns() }
+      )
       "router.setQos" -> {
         val mode = runCatching {
           QosMode.valueOf(payload.optString("mode", "BALANCED").uppercase())
         }.getOrDefault(QosMode.BALANCED)
-        actionResultJson(services.routerControl.setQos(mode))
+        guardedRouterActionResult(
+          actionId = AppActionId.ROUTER_QOS,
+          routerAction = RouterWriteAction.QOS,
+          action = { services.routerControl.setQos(mode) }
+        )
       }
       "wifi.environment" -> wifiEnvironmentJson(
         devices = services.devices.devices.value,
@@ -548,6 +626,54 @@ class NerfWebBridge(private val services: AppServices) {
       .toString()
   }
 
+  private suspend fun guardedDeviceActionResult(
+    actionId: String,
+    deviceId: String,
+    action: suspend () -> ActionResult
+  ): String {
+    val support = resolveDeviceActionSupport(actionId, deviceId)
+    if (support != null && !support.supported) {
+      return actionResultJson(
+        ActionResult(
+          ok = false,
+          status = ServiceStatus.NOT_SUPPORTED,
+          code = "NOT_SUPPORTED",
+          message = "${support.label ?: "Device action"} is unsupported on the current backend/router.",
+          errorReason = support.reason
+        )
+      )
+    }
+    return actionResultJson(action())
+  }
+
+  private suspend fun guardedRouterActionResult(
+    actionId: String,
+    routerAction: RouterWriteAction,
+    action: suspend () -> ActionResult
+  ): String {
+    val snapshot = services.routerControl.refreshStatus()
+    val support = snapshot.actionSupport[actionId] ?: ActionSupportCatalog.routerActionState(actionId, snapshot)
+    if (support != null && !support.supported) {
+      val result = if (snapshot.status == ServiceStatus.OK) {
+        routerAction.unsupportedResult(support.reason)
+      } else {
+        routerAction.unavailableResult(support.reason)
+      }
+      return actionResultJson(result)
+    }
+    return actionResultJson(action())
+  }
+
+  private suspend fun resolveDeviceActionSupport(
+    actionId: String,
+    deviceId: String
+  ): ActionSupportState? {
+    val details = services.deviceControl.deviceDetails(deviceId)
+    return details?.actionSupport?.get(actionId)
+      ?: details?.support?.let { ActionSupportCatalog.deviceActionState(actionId, it) }
+      ?: ActionSupportCatalog.deviceActionState(actionId)
+  }
+
   private fun actionResultJson(result: ActionResult): String {
     return JSONObject()
       .put("ok", result.ok)
@@ -662,6 +788,7 @@ class NerfWebBridge(private val services: AppServices) {
       .put("firewall", featureStateJson(snapshot.firewall))
       .put("vpn", featureStateJson(snapshot.vpn))
       .put("qosMode", snapshot.qosMode)
+      .put("actionSupport", actionSupportJson(snapshot.actionSupport))
       .put("lastUpdatedEpochMs", snapshot.lastUpdatedEpochMs)
   }
 
@@ -671,6 +798,20 @@ class NerfWebBridge(private val services: AppServices) {
       .put("enabled", feature.enabled)
       .put("status", feature.status.name)
       .put("message", feature.message)
+  }
+
+  private fun actionSupportJson(states: Map<String, ActionSupportState>): JSONObject {
+    val json = JSONObject()
+    states.forEach { (key, value) ->
+      json.put(
+        key,
+        JSONObject()
+          .put("supported", value.supported)
+          .put("label", value.label)
+          .put("reason", value.reason)
+      )
+    }
+    return json
   }
 
   private fun wifiEnvironmentJson(
@@ -720,6 +861,7 @@ class NerfWebBridge(private val services: AppServices) {
   }
 
   private fun securitySummaryJson(devices: List<Device>): JSONObject {
+    val deviceSupport = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())
     val unknownCount = devices.count {
       it.vendor.isBlank() || it.name.isBlank() || it.name.equals("Unknown", ignoreCase = true)
     }
@@ -737,10 +879,11 @@ class NerfWebBridge(private val services: AppServices) {
       .put("message", message)
       .put("riskDeviceCount", riskyCount)
       .put("unknownDeviceCount", unknownCount)
-      .put("blockedSupported", false)
-      .put("pausedSupported", false)
+      .put("blockedSupported", deviceSupport["device.block"]?.supported == true)
+      .put("pausedSupported", deviceSupport["device.pause"]?.supported == true)
       .put("blockedStateAuthoritative", false)
       .put("pausedStateAuthoritative", false)
+      .put("actionSupport", actionSupportJson(deviceSupport))
     }
   }
 
@@ -752,6 +895,7 @@ class NerfWebBridge(private val services: AppServices) {
 
   private fun deviceJson(device: Device): JSONObject {
     val quality = device.rssiDbm?.let { (it + 100).coerceIn(5, 99) } ?: latencyToQuality(device.latencyMs)
+    val actionSupport = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())
     return JSONObject()
       .put("id", device.id)
       .put("name", device.name)
@@ -775,6 +919,7 @@ class NerfWebBridge(private val services: AppServices) {
       .put("downMbps", device.downMbps)
       .put("upMbps", device.upMbps)
       .put("trafficStatus", device.trafficStatus.name)
+      .put("actionSupport", actionSupportJson(actionSupport))
   }
 
   private fun assistantResponseJson(response: AssistantResponse): JSONObject {

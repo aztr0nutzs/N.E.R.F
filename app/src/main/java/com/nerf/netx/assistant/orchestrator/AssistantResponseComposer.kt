@@ -13,6 +13,7 @@ import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.assistant.model.AssistantSuggestedAction
 import com.nerf.netx.assistant.model.AssistantToolResult
 import com.nerf.netx.assistant.recommendation.AssistantStarterPromptsProvider
+import com.nerf.netx.domain.ActionSupportState
 
 class AssistantResponseComposer(
   private val promptsProvider: AssistantStarterPromptsProvider
@@ -88,6 +89,24 @@ class AssistantResponseComposer(
       suggestedActions = listOf(
         AssistantSuggestedAction("Open Devices", "open devices"),
         AssistantSuggestedAction("Scan Network", "scan network")
+      )
+    )
+  }
+
+  fun unsupportedAction(label: String, support: ActionSupportState): AssistantResponse {
+    return AssistantResponse(
+      title = "$label unavailable",
+      message = buildString {
+        append("$label is unsupported on the current backend/router.")
+        support.reason?.takeIf { it.isNotBlank() }?.let {
+          append(" ")
+          append(it)
+        }
+      },
+      severity = AssistantSeverity.WARNING,
+      suggestedActions = listOf(
+        AssistantSuggestedAction("Run Diagnostics", "run diagnostics"),
+        AssistantSuggestedAction("Open Devices", "open devices")
       )
     )
   }

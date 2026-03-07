@@ -150,18 +150,23 @@ private fun ActionRow(
   onAction: (NetworkDoctorAction) -> Unit
 ) {
   if (actions.isEmpty()) return
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .horizontalScroll(rememberScrollState()),
-    horizontalArrangement = Arrangement.spacedBy(8.dp)
-  ) {
-    actions.forEach { action ->
-      if (action.prominent) {
-        Button(onClick = { onAction(action.action) }) { Text(action.label) }
-      } else {
-        OutlinedButton(onClick = { onAction(action.action) }) { Text(action.label) }
+  Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .horizontalScroll(rememberScrollState()),
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      actions.forEach { action ->
+        if (action.prominent) {
+          Button(onClick = { onAction(action.action) }, enabled = action.enabled) { Text(action.label) }
+        } else {
+          OutlinedButton(onClick = { onAction(action.action) }, enabled = action.enabled) { Text(action.label) }
+        }
       }
+    }
+    actions.firstOrNull { !it.enabled && !it.unavailableReason.isNullOrBlank() }?.let { disabledAction ->
+      Text("Unsupported: ${disabledAction.unavailableReason.orEmpty()}", style = MaterialTheme.typography.bodySmall)
     }
   }
 }

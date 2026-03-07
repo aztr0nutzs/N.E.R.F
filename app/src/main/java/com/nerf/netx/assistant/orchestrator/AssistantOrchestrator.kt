@@ -12,6 +12,9 @@ import com.nerf.netx.assistant.model.AssistantResponse
 import com.nerf.netx.assistant.recommendation.RecommendationEngine
 import com.nerf.netx.assistant.state.AssistantSessionMemory
 import com.nerf.netx.assistant.tools.AssistantToolRegistry
+import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.AppActionId
+import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.Device
 
 class AssistantOrchestrator(
@@ -41,6 +44,8 @@ class AssistantOrchestrator(
       sessionMemory.clearPendingConfirmation()
       return responseComposer.cancellationAcknowledged()
     }
+
+    unsupportedBeforeConfirmation(intent)?.let { return it }
 
     if (actionPolicy.requiresConfirmation(intent)) {
       sessionMemory.setPendingConfirmation(intent)
@@ -171,4 +176,36 @@ class AssistantOrchestrator(
 
   private val DiagnosisTarget.response: AssistantResponse
     get() = (this as DiagnosisTargetResponse).response
+
+  private suspend fun unsupportedBeforeConfirmation(intent: AssistantIntent): AssistantResponse? {
+    val deviceAction = when (intent.type) {
+      AssistantIntentType.BLOCK_DEVICE -> "Block device" to AppActionId.DEVICE_BLOCK
+      AssistantIntentType.UNBLOCK_DEVICE -> "Unblock device" to AppActionId.DEVICE_UNBLOCK
+      AssistantIntentType.PAUSE_DEVICE -> "Pause device" to AppActionId.DEVICE_PAUSE
+      AssistantIntentType.RESUME_DEVICE -> "Resume device" to AppActionId.DEVICE_RESUME
+      else -> null
+    }
+    if (deviceAction != null) {
+      val support = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())[deviceAction.second]
+      if (support != null && !support.supported) {
+        return responseComposer.unsupportedAction(deviceAction.first, support)
+      }
+    }
+
+    val routerAction = when (intent.type) {
+      AssistantIntentType.SET_GUEST_WIFI -> "Guest Wi-Fi" to AppActionId.ROUTER_GUEST_WIFI
+      AssistantIntentType.SET_DNS_SHIELD -> "DNS Shield" to AppActionId.ROUTER_DNS_SHIELD
+      AssistantIntentType.REBOOT_ROUTER -> "Reboot router" to AppActionId.ROUTER_REBOOT
+      AssistantIntentType.FLUSH_DNS -> "Flush DNS" to AppActionId.ROUTER_FLUSH_DNS
+      else -> null
+    } ?: return null
+
+    val context = contextUseCase()
+    val support = context.routerStatus?.actionSupport?.get(routerAction.second)
+    return if (support != null && !support.supported) {
+      responseComposer.unsupportedAction(routerAction.first, support)
+    } else {
+      null
+    }
+  }
 }

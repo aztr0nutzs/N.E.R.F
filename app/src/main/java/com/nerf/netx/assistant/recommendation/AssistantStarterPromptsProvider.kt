@@ -15,8 +15,7 @@ class AssistantStarterPromptsProvider {
       "start speedtest",
       "open analytics",
       "explain metric ping",
-      "ping device <name>",
-      "reboot router"
+      "ping device <name>"
     )
   }
 

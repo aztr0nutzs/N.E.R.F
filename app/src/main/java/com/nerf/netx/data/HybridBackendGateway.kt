@@ -5,9 +5,11 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import com.nerf.netx.domain.ActionResult
+import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AnalyticsService
 import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.AppServices
+import com.nerf.netx.domain.DeviceControlAction
 import com.nerf.netx.domain.Device
 import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.DeviceControlService
@@ -24,6 +26,7 @@ import com.nerf.netx.domain.RouterControlService
 import com.nerf.netx.domain.RouterFeatureState
 import com.nerf.netx.domain.RouterInfoResult
 import com.nerf.netx.domain.RouterStatusSnapshot
+import com.nerf.netx.domain.RouterWriteAction
 import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.domain.ScanPhase
 import com.nerf.netx.domain.ScanService
@@ -1029,79 +1032,57 @@ private class HybridDeviceControl(
   }
 
   override suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult {
-    if (!blocked) {
-      return ActionResult(
-        ok = false,
-        status = ServiceStatus.NOT_SUPPORTED,
-        code = "ROUTER_API_REQUIRED",
-        message = "Unblock action is NOT_SUPPORTED",
-        errorReason = "Unblocking devices requires router vendor API integration and authenticated credentials."
-      )
+    val deviceLabel = sharedDevices.value.firstOrNull { it.id == deviceId }?.name
+    return if (blocked) {
+      DeviceControlAction.BLOCK.unsupportedResult(deviceLabel)
+    } else {
+      DeviceControlAction.UNBLOCK.unsupportedResult(deviceLabel)
     }
-    return block(deviceId)
   }
 
   override suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult {
-    return ActionResult(
-      ok = false,
-      status = ServiceStatus.NOT_SUPPORTED,
-      code = "ROUTER_API_REQUIRED",
-      message = if (paused) "Pause action is NOT_SUPPORTED" else "Resume action is NOT_SUPPORTED",
-      errorReason = "Pausing devices requires router vendor API integration and authenticated credentials."
-    )
+    val deviceLabel = sharedDevices.value.firstOrNull { it.id == deviceId }?.name
+    return if (paused) {
+      DeviceControlAction.PAUSE.unsupportedResult(deviceLabel)
+    } else {
+      DeviceControlAction.RESUME.unsupportedResult(deviceLabel)
+    }
   }
 
   override suspend fun rename(deviceId: String, name: String): ActionResult {
-    return ActionResult(
-      ok = false,
-      status = ServiceStatus.NOT_SUPPORTED,
-      code = "ROUTER_API_REQUIRED",
-      message = "Rename action is NOT_SUPPORTED",
-      errorReason = "Renaming devices requires router vendor API integration and authoritative device metadata storage."
-    )
+    val deviceLabel = sharedDevices.value.firstOrNull { it.id == deviceId }?.name
+    return DeviceControlAction.RENAME.unsupportedResult(deviceLabel)
   }
 
   override suspend fun block(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
-    return ActionResult(
-      ok = false,
-      status = ServiceStatus.NOT_SUPPORTED,
-      code = "ROUTER_API_REQUIRED",
-      message = "Block action is NOT_SUPPORTED",
-      details = mapOf("device" to d.name),
-      errorReason = "Blocking devices requires router vendor API integration and authenticated credentials."
-    )
+    return DeviceControlAction.BLOCK.unsupportedResult(d.name)
   }
 
   override suspend fun prioritize(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
-    return ActionResult(
-      ok = false,
-      status = ServiceStatus.NOT_SUPPORTED,
-      code = "ROUTER_API_REQUIRED",
-      message = "Prioritize action is NOT_SUPPORTED",
-      details = mapOf("device" to d.name),
-      errorReason = "QoS prioritization requires router vendor API integration and authenticated credentials."
-    )
+    return DeviceControlAction.PRIORITIZE.unsupportedResult(d.name)
   }
 
   override suspend fun deviceDetails(deviceId: String): DeviceDetails? {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId } ?: return null
     val probe = lanScanner.probeReachability(d.ip)
+    val support = DeviceActionSupport(
+      canBlock = false,
+      canUnblock = false,
+      canPause = false,
+      canResume = false,
+      canRename = false,
+      canPrioritize = false
+    )
     return DeviceDetails(
       device = d,
       pingMs = probe.latencyMs,
       notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Reachability unavailable",
-      support = DeviceActionSupport(
-        canBlock = false,
-        canUnblock = false,
-        canPause = false,
-        canResume = false,
-        canRename = false,
-        canPrioritize = false
-      ),
+      support = support,
+      actionSupport = ActionSupportCatalog.deviceActionSupport(support),
       trafficMessage = "Per-device traffic telemetry is unavailable from the current backend."
     )
   }
@@ -2065,12 +2046,16 @@ private class HybridRouterControl(
       )
     }
 
-    _status.value = snapshot
-    return snapshot
+    val enrichedSnapshot = snapshot.copy(
+      actionSupport = ActionSupportCatalog.routerActionSupport(snapshot)
+    )
+    _status.value = enrichedSnapshot
+    return enrichedSnapshot
   }
 
   override suspend fun setGuestWifiEnabled(enabled: Boolean): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.GUEST_WIFI,
       capability = RouterCapability.GUEST_WIFI_TOGGLE,
       code = if (enabled) "GUEST_WIFI_ON" else "GUEST_WIFI_OFF"
     ) { api -> api.setGuestWifiEnabled(enabled) }
@@ -2078,6 +2063,7 @@ private class HybridRouterControl(
 
   override suspend fun setDnsShieldEnabled(enabled: Boolean): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.DNS_SHIELD,
       capability = RouterCapability.DNS_SHIELD_TOGGLE,
       code = if (enabled) "DNS_SHIELD_ON" else "DNS_SHIELD_OFF"
     ) { api -> api.setDnsShieldEnabled(enabled) }
@@ -2086,7 +2072,7 @@ private class HybridRouterControl(
   override suspend fun toggleGuest(): ActionResult {
     val current = refreshStatus().guestWifi.enabled
     return if (current == null) {
-      notSupportedAction("toggleGuest", "Guest Wi-Fi state is unavailable; use explicit setGuestWifiEnabled when readback exists.")
+      RouterWriteAction.GUEST_WIFI.unsupportedResult("Guest Wi-Fi state is unavailable on the current router/backend.")
     } else {
       setGuestWifiEnabled(!current)
     }
@@ -2094,6 +2080,7 @@ private class HybridRouterControl(
 
   override suspend fun setQos(mode: QosMode): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.QOS,
       capability = RouterCapability.QOS_CONFIG,
       code = "QOS_${mode.name}"
     ) { api ->
@@ -2106,16 +2093,21 @@ private class HybridRouterControl(
   }
 
   override suspend fun renewDhcp(): ActionResult {
-    val api = buildRouterApi() ?: return routerNotConfigured("renewDhcp")
+    val api = buildRouterApi() ?: return routerNotConfigured(RouterWriteAction.RENEW_DHCP)
     val caps = api.getCapabilities()
     if (!caps.contains(RouterCapability.DHCP_LEASES_WRITE)) {
-      return notSupportedAction("renewDhcp", "No verified API endpoint for DHCP lease write/renew. Read-only mode.")
+      return RouterWriteAction.RENEW_DHCP.unsupportedResult(
+        "No verified API endpoint for DHCP lease write/renew. The router backend remains read-only."
+      )
     }
-    return notSupportedAction("renewDhcp", "Renew DHCP endpoint is not verified for this router model. Read-only mode.")
+    return RouterWriteAction.RENEW_DHCP.unsupportedResult(
+      "Renew DHCP is unsupported on the current router/backend. Verified renewal endpoints are unavailable."
+    )
   }
 
   override suspend fun flushDns(): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.FLUSH_DNS,
       capability = RouterCapability.DNS_FLUSH,
       code = "DNS_FLUSH"
     ) { api -> api.flushDns() }
@@ -2123,6 +2115,7 @@ private class HybridRouterControl(
 
   override suspend fun rebootRouter(): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.REBOOT,
       capability = RouterCapability.REBOOT,
       code = "REBOOT"
     ) { api -> api.reboot() }
@@ -2130,6 +2123,7 @@ private class HybridRouterControl(
 
   override suspend fun setFirewallEnabled(enabled: Boolean): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.FIREWALL,
       capability = RouterCapability.FIREWALL_TOGGLE,
       code = if (enabled) "FIREWALL_ON" else "FIREWALL_OFF"
     ) { api -> api.setFirewallEnabled(enabled) }
@@ -2137,6 +2131,7 @@ private class HybridRouterControl(
 
   override suspend fun setVpnEnabled(enabled: Boolean): ActionResult {
     return performCapabilityAction(
+      action = RouterWriteAction.VPN,
       capability = RouterCapability.VPN_TOGGLE,
       code = if (enabled) "VPN_ON" else "VPN_OFF"
     ) { api -> api.setVpnEnabled(enabled) }
@@ -2145,7 +2140,7 @@ private class HybridRouterControl(
   override suspend fun toggleFirewall(): ActionResult {
     val current = refreshStatus().firewall.enabled
     return if (current == null) {
-      notSupportedAction("toggleFirewall", "Firewall state is unavailable; use explicit setFirewallEnabled when readback exists.")
+      RouterWriteAction.FIREWALL.unsupportedResult("Firewall state is unavailable on the current router/backend.")
     } else {
       setFirewallEnabled(!current)
     }
@@ -2154,29 +2149,30 @@ private class HybridRouterControl(
   override suspend fun toggleVpn(): ActionResult {
     val current = refreshStatus().vpn.enabled
     return if (current == null) {
-      notSupportedAction("toggleVpn", "VPN state is unavailable; use explicit setVpnEnabled when readback exists.")
+      RouterWriteAction.VPN.unsupportedResult("VPN state is unavailable on the current router/backend.")
     } else {
       setVpnEnabled(!current)
     }
   }
 
   private suspend fun performCapabilityAction(
+    action: RouterWriteAction,
     capability: RouterCapability,
     code: String,
     call: suspend (RouterApi) -> RouterActionResult
   ): ActionResult {
-    val api = buildRouterApi() ?: return routerNotConfigured(code)
+    val api = buildRouterApi() ?: return routerNotConfigured(action)
     val caps = api.getCapabilities()
     if (!caps.contains(capability)) {
-      return notSupportedAction(code, "No verified API endpoint for this action. Read-only mode.")
+      return action.unsupportedResult("No verified API endpoint exists for this router action. The backend is read-only.")
     }
     val result = call(api)
-    val mapped = mapRouterActionResult(result, code)
+    val mapped = mapRouterActionResult(result, action, code)
     refreshStatus()
     return mapped
   }
 
-  private fun mapRouterActionResult(result: RouterActionResult, code: String): ActionResult {
+  private fun mapRouterActionResult(result: RouterActionResult, action: RouterWriteAction, code: String): ActionResult {
     return when (result.status) {
       RouterActionStatus.OK -> ActionResult(
         ok = true,
@@ -2184,13 +2180,7 @@ private class HybridRouterControl(
         code = code,
         message = result.message
       )
-      RouterActionStatus.NOT_SUPPORTED -> ActionResult(
-        ok = false,
-        status = ServiceStatus.NOT_SUPPORTED,
-        code = "NOT_SUPPORTED",
-        message = "$code is NOT_SUPPORTED",
-        errorReason = result.message
-      )
+      RouterActionStatus.NOT_SUPPORTED -> action.unsupportedResult(result.message)
       RouterActionStatus.ERROR -> ActionResult(
         ok = false,
         status = ServiceStatus.ERROR,
@@ -2201,24 +2191,8 @@ private class HybridRouterControl(
     }
   }
 
-  private fun routerNotConfigured(action: String): ActionResult {
-    return ActionResult(
-      ok = false,
-      status = ServiceStatus.NO_DATA,
-      code = "ROUTER_NOT_CONFIGURED",
-      message = "$action unavailable",
-      errorReason = "Router credentials are not configured or validated."
-    )
-  }
-
-  private fun notSupportedAction(action: String, reason: String): ActionResult {
-    return ActionResult(
-      ok = false,
-      status = ServiceStatus.NOT_SUPPORTED,
-      code = "NOT_SUPPORTED",
-      message = "$action is NOT_SUPPORTED",
-      errorReason = reason
-    )
+  private fun routerNotConfigured(action: RouterWriteAction): ActionResult {
+    return action.unavailableResult("Router credentials are not configured or validated.")
   }
 
   private fun connectionInfoFromStore(): RouterConnectionInfo {
