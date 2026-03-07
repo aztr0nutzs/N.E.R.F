@@ -1,9 +1,12 @@
 package com.nerf.netx.assistant.orchestrator
 
 import com.nerf.netx.assistant.model.AssistantCardType
+import com.nerf.netx.assistant.model.AssistantDeviceCandidate
+import com.nerf.netx.assistant.model.AssistantDiagnosisReport
 import com.nerf.netx.assistant.model.AssistantContextSnapshot
 import com.nerf.netx.assistant.model.AssistantIntent
 import com.nerf.netx.assistant.model.AssistantIntentType
+import com.nerf.netx.assistant.model.AssistantRecommendation
 import com.nerf.netx.assistant.model.AssistantResponse
 import com.nerf.netx.assistant.model.AssistantResponseCard
 import com.nerf.netx.assistant.model.AssistantSeverity
@@ -77,17 +80,48 @@ class AssistantResponseComposer(
     )
   }
 
-  fun ambiguousDeviceTarget(candidates: List<String>): AssistantResponse {
+  fun deviceNotFound(query: String): AssistantResponse {
+    return AssistantResponse(
+      title = "Device not found",
+      message = "I couldn't resolve \"$query\" to a discovered device.",
+      severity = AssistantSeverity.WARNING,
+      suggestedActions = listOf(
+        AssistantSuggestedAction("Open Devices", "open devices"),
+        AssistantSuggestedAction("Scan Network", "scan network")
+      )
+    )
+  }
+
+  fun ambiguousDeviceTarget(
+    intent: AssistantIntent,
+    candidates: List<AssistantDeviceCandidate>
+  ): AssistantResponse {
     val card = AssistantResponseCard(
-      type = AssistantCardType.DEVICE,
+      type = AssistantCardType.CLARIFICATION,
       title = "Matching devices",
-      lines = candidates
+      lines = candidates.map { candidate ->
+        buildString {
+          append(candidate.name)
+          append(" - ")
+          append(candidate.ip)
+          candidate.vendor?.takeIf { it.isNotBlank() }?.let {
+            append(" - ")
+            append(it)
+          }
+        }
+      }
     )
     return AssistantResponse(
       title = "Multiple devices matched",
-      message = "Please be more specific. I found multiple candidates.",
+      message = "Please choose one device instead of guessing.",
       severity = AssistantSeverity.WARNING,
-      cards = listOf(card)
+      cards = listOf(card),
+      suggestedActions = candidates.take(5).map { candidate ->
+        AssistantSuggestedAction(
+          label = candidate.name.take(18),
+          command = clarificationCommand(intent, candidate)
+        )
+      }
     )
   }
 
@@ -120,6 +154,43 @@ class AssistantResponseComposer(
       severity = AssistantSeverity.INFO,
       cards = listOf(card),
       suggestedActions = promptsProvider.followUpActions()
+    )
+  }
+
+  fun diagnosisResponse(
+    report: AssistantDiagnosisReport,
+    recommendations: List<AssistantRecommendation>
+  ): AssistantResponse {
+    val findingCards = report.findings.map { finding ->
+      AssistantResponseCard(
+        type = AssistantCardType.DIAGNOSIS,
+        title = finding.title,
+        lines = listOf(finding.summary),
+        severity = finding.severity,
+        bullets = finding.evidence + listOfNotNull(
+          if (finding.inferred) "Inference only: this finding is based on symptoms, not direct backend telemetry." else null
+        )
+      )
+    }
+    val recommendationCard = if (recommendations.isEmpty()) {
+      emptyList()
+    } else {
+      listOf(
+        AssistantResponseCard(
+          type = AssistantCardType.RECOMMENDATION,
+          title = "Recommended next steps",
+          lines = recommendations.map { it.title },
+          bullets = recommendations.map { it.rationale }
+        )
+      )
+    }
+
+    return AssistantResponse(
+      title = report.title,
+      message = report.summary,
+      severity = report.severity,
+      cards = findingCards + recommendationCard,
+      suggestedActions = recommendations.map { it.action }
     )
   }
 
@@ -181,6 +252,21 @@ class AssistantResponseComposer(
       true -> "ON"
       false -> "OFF"
       null -> "state"
+    }
+  }
+
+  private fun clarificationCommand(intent: AssistantIntent, candidate: AssistantDeviceCandidate): String {
+    return when (intent.type) {
+      AssistantIntentType.PING_DEVICE -> "ping device ${candidate.ip}"
+      AssistantIntentType.BLOCK_DEVICE -> "block device ${candidate.ip}"
+      AssistantIntentType.UNBLOCK_DEVICE -> "unblock device ${candidate.ip}"
+      AssistantIntentType.PAUSE_DEVICE -> "pause device ${candidate.ip}"
+      AssistantIntentType.RESUME_DEVICE -> "resume device ${candidate.ip}"
+      AssistantIntentType.DIAGNOSE_NETWORK_ISSUES -> "what's wrong with ${candidate.ip}"
+      AssistantIntentType.DIAGNOSE_SLOW_INTERNET -> "why is ${candidate.ip} slow"
+      AssistantIntentType.DIAGNOSE_HIGH_LATENCY -> "why is ${candidate.ip} latency high"
+      AssistantIntentType.RECOMMEND_NEXT_STEPS -> "what should i do next for ${candidate.ip}"
+      else -> candidate.ip
     }
   }
 }

@@ -4,6 +4,10 @@ enum class AssistantIntentType {
   UNKNOWN,
   NETWORK_STATUS_SUMMARY,
   RUN_DIAGNOSTICS,
+  DIAGNOSE_NETWORK_ISSUES,
+  DIAGNOSE_SLOW_INTERNET,
+  DIAGNOSE_HIGH_LATENCY,
+  RECOMMEND_NEXT_STEPS,
   SCAN_NETWORK,
   START_SPEEDTEST,
   STOP_SPEEDTEST,
@@ -25,6 +29,13 @@ enum class AssistantIntentType {
   CANCEL_PENDING_ACTION
 }
 
+enum class AssistantDiagnosisFocus {
+  GENERAL,
+  SPEED,
+  LATENCY,
+  NEXT_STEPS
+}
+
 enum class AssistantDestination {
   SPEEDTEST,
   DEVICES,
@@ -41,5 +52,6 @@ data class AssistantIntent(
   val metricKey: String? = null,
   val featureKey: String? = null,
   val destination: AssistantDestination? = null,
-  val toggleEnabled: Boolean? = null
+  val toggleEnabled: Boolean? = null,
+  val diagnosisFocus: AssistantDiagnosisFocus? = null
 )

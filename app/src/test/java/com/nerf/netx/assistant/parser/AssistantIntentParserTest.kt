@@ -16,6 +16,10 @@ class AssistantIntentParserTest {
     assertEquals(AssistantIntentType.STOP_SPEEDTEST, parser.parse("stop speedtest").type)
     assertEquals(AssistantIntentType.RESET_SPEEDTEST, parser.parse("reset speedtest").type)
     assertEquals(AssistantIntentType.RUN_DIAGNOSTICS, parser.parse("run diagnostics").type)
+    assertEquals(AssistantIntentType.DIAGNOSE_NETWORK_ISSUES, parser.parse("what's wrong with my network?").type)
+    assertEquals(AssistantIntentType.DIAGNOSE_SLOW_INTERNET, parser.parse("why is my internet slow?").type)
+    assertEquals(AssistantIntentType.DIAGNOSE_HIGH_LATENCY, parser.parse("why is latency high?").type)
+    assertEquals(AssistantIntentType.RECOMMEND_NEXT_STEPS, parser.parse("what should I do next?").type)
   }
 
   @Test
@@ -27,6 +31,10 @@ class AssistantIntentParserTest {
     val ping = parser.parse("ping device office-laptop")
     assertEquals(AssistantIntentType.PING_DEVICE, ping.type)
     assertEquals("office-laptop", ping.targetDeviceQuery)
+
+    val slowDevice = parser.parse("why is office-laptop slow")
+    assertEquals(AssistantIntentType.DIAGNOSE_SLOW_INTERNET, slowDevice.type)
+    assertEquals("office-laptop", slowDevice.targetDeviceQuery)
   }
 
   @Test

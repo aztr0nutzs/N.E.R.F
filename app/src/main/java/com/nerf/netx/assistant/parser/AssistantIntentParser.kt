@@ -1,6 +1,7 @@
 package com.nerf.netx.assistant.parser
 
 import com.nerf.netx.assistant.model.AssistantDestination
+import com.nerf.netx.assistant.model.AssistantDiagnosisFocus
 import com.nerf.netx.assistant.model.AssistantIntent
 import com.nerf.netx.assistant.model.AssistantIntentType
 
@@ -39,6 +40,7 @@ class AssistantIntentParser {
       return AssistantIntent(AssistantIntentType.REFRESH_TOPOLOGY, rawMessage = raw)
     }
 
+    parseDiagnosisIntent(raw, normalized)?.let { return it }
     parseOpenDestination(raw, normalized)?.let { return it }
     parseExplainIntent(raw, normalized)?.let { return it }
     parseRouterIntent(raw, normalized)?.let { return it }
@@ -61,6 +63,100 @@ class AssistantIntentParser {
       rawMessage = raw,
       destination = destination
     )
+  }
+
+  private fun parseDiagnosisIntent(raw: String, normalized: String): AssistantIntent? {
+    if (containsAny(normalized, "what should i do next", "what do i do next", "next steps")) {
+      val query = when {
+        normalized.startsWith("what should i do next for ") -> normalized.removePrefix("what should i do next for ").trim()
+        normalized.startsWith("what do i do next for ") -> normalized.removePrefix("what do i do next for ").trim()
+        else -> null
+      }
+      return AssistantIntent(
+        type = AssistantIntentType.RECOMMEND_NEXT_STEPS,
+        rawMessage = raw,
+        targetDeviceQuery = query?.ifBlank { null },
+        diagnosisFocus = AssistantDiagnosisFocus.NEXT_STEPS
+      )
+    }
+
+    if (containsAny(normalized, "what's wrong with my network", "whats wrong with my network", "what is wrong with my network")) {
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_NETWORK_ISSUES,
+        rawMessage = raw,
+        diagnosisFocus = AssistantDiagnosisFocus.GENERAL
+      )
+    }
+
+    if (normalized.startsWith("what's wrong with ") || normalized.startsWith("whats wrong with ") || normalized.startsWith("what is wrong with ")) {
+      val query = normalized
+        .removePrefix("what's wrong with ")
+        .removePrefix("whats wrong with ")
+        .removePrefix("what is wrong with ")
+        .trim()
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_NETWORK_ISSUES,
+        rawMessage = raw,
+        targetDeviceQuery = query.ifBlank { null },
+        diagnosisFocus = AssistantDiagnosisFocus.GENERAL
+      )
+    }
+
+    if (containsAny(normalized, "why is my internet slow", "why is the internet slow", "why is internet slow", "why is my network slow")) {
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_SLOW_INTERNET,
+        rawMessage = raw,
+        diagnosisFocus = AssistantDiagnosisFocus.SPEED
+      )
+    }
+
+    if (normalized.startsWith("why is ") && normalized.endsWith(" slow")) {
+      val query = normalized.removePrefix("why is ").removeSuffix(" slow").trim()
+      val target = if (query in setOf("my internet", "the internet", "internet", "my network", "the network", "network")) null else query
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_SLOW_INTERNET,
+        rawMessage = raw,
+        targetDeviceQuery = target,
+        diagnosisFocus = AssistantDiagnosisFocus.SPEED
+      )
+    }
+
+    if (normalized.startsWith("why is latency high on ")) {
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_HIGH_LATENCY,
+        rawMessage = raw,
+        targetDeviceQuery = normalized.removePrefix("why is latency high on ").trim().ifBlank { null },
+        diagnosisFocus = AssistantDiagnosisFocus.LATENCY
+      )
+    }
+
+    if (normalized.startsWith("why is ") && normalized.endsWith(" latency high")) {
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_HIGH_LATENCY,
+        rawMessage = raw,
+        targetDeviceQuery = normalized.removePrefix("why is ").removeSuffix(" latency high").trim().ifBlank { null },
+        diagnosisFocus = AssistantDiagnosisFocus.LATENCY
+      )
+    }
+
+    if (normalized.startsWith("why is ") && normalized.endsWith(" ping high")) {
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_HIGH_LATENCY,
+        rawMessage = raw,
+        targetDeviceQuery = normalized.removePrefix("why is ").removeSuffix(" ping high").trim().ifBlank { null },
+        diagnosisFocus = AssistantDiagnosisFocus.LATENCY
+      )
+    }
+
+    if (containsAny(normalized, "why is latency high", "why is ping high", "latency high", "high latency")) {
+      return AssistantIntent(
+        type = AssistantIntentType.DIAGNOSE_HIGH_LATENCY,
+        rawMessage = raw,
+        diagnosisFocus = AssistantDiagnosisFocus.LATENCY
+      )
+    }
+
+    return null
   }
 
   private fun parseExplainIntent(raw: String, normalized: String): AssistantIntent? {

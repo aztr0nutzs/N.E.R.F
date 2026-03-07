@@ -37,15 +37,18 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nerf.netx.assistant.context.BuildAssistantContextUseCase
 import com.nerf.netx.assistant.diagnostics.AssistantDiagnosticsEngine
+import com.nerf.netx.assistant.diagnostics.NetworkDiagnosisEngine
 import com.nerf.netx.assistant.model.AssistantDestination
 import com.nerf.netx.assistant.model.AssistantLoadingState
 import com.nerf.netx.assistant.model.AssistantMessage
 import com.nerf.netx.assistant.model.AssistantMessageAuthor
 import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.assistant.orchestrator.AssistantActionPolicy
+import com.nerf.netx.assistant.orchestrator.AssistantEntityResolver
 import com.nerf.netx.assistant.orchestrator.AssistantOrchestrator
 import com.nerf.netx.assistant.orchestrator.AssistantResponseComposer
 import com.nerf.netx.assistant.parser.AssistantIntentParser
+import com.nerf.netx.assistant.recommendation.RecommendationEngine
 import com.nerf.netx.assistant.recommendation.AssistantStarterPromptsProvider
 import com.nerf.netx.assistant.state.AssistantSessionMemory
 import com.nerf.netx.assistant.tools.AssistantToolRegistry
@@ -70,6 +73,7 @@ fun AssistantPanelHost(
   val parser = remember { AssistantIntentParser() }
   val actionPolicy = remember { AssistantActionPolicy() }
   val memory = remember { AssistantSessionMemory() }
+  val entityResolver = remember { AssistantEntityResolver() }
   val contextUseCase = remember(services) { BuildAssistantContextUseCase(services) }
   val toolRegistry = remember(services) {
     AssistantToolRegistry(
@@ -80,14 +84,17 @@ fun AssistantPanelHost(
       navigationTool = NavigationTool()
     )
   }
-  val orchestrator = remember(contextUseCase, parser, actionPolicy, memory, toolRegistry, prompts) {
+  val orchestrator = remember(contextUseCase, parser, actionPolicy, memory, toolRegistry, entityResolver, prompts) {
     AssistantOrchestrator(
       contextUseCase = contextUseCase,
       parser = parser,
       actionPolicy = actionPolicy,
       sessionMemory = memory,
       toolRegistry = toolRegistry,
+      entityResolver = entityResolver,
       diagnosticsEngine = AssistantDiagnosticsEngine(),
+      networkDiagnosisEngine = NetworkDiagnosisEngine(),
+      recommendationEngine = RecommendationEngine(),
       responseComposer = AssistantResponseComposer(prompts)
     )
   }
@@ -219,8 +226,12 @@ private fun AssistantMessageItem(
               ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                   Text(card.title, style = MaterialTheme.typography.labelLarge)
+                  card.severity?.let { SeverityPill(it) }
                   card.lines.forEach { line ->
                     Text(line, style = MaterialTheme.typography.bodySmall)
+                  }
+                  card.bullets.forEach { bullet ->
+                    Text("- $bullet", style = MaterialTheme.typography.bodySmall)
                   }
                 }
               }

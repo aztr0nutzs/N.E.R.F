@@ -7,6 +7,10 @@ class AssistantStarterPromptsProvider {
     return listOf(
       "network status summary",
       "run diagnostics",
+      "what's wrong with my network?",
+      "why is my internet slow?",
+      "why is latency high?",
+      "what should I do next?",
       "scan network",
       "start speedtest",
       "open analytics",
@@ -20,6 +24,7 @@ class AssistantStarterPromptsProvider {
     return listOf(
       AssistantSuggestedAction(label = "Run Scan", command = "scan network"),
       AssistantSuggestedAction(label = "Run Diagnostics", command = "run diagnostics"),
+      AssistantSuggestedAction(label = "What's Wrong?", command = "what's wrong with my network?"),
       AssistantSuggestedAction(label = "Open Devices", command = "open devices")
     )
   }

@@ -2,10 +2,14 @@ package com.nerf.netx.assistant.orchestrator
 
 import com.nerf.netx.assistant.context.BuildAssistantContextUseCase
 import com.nerf.netx.assistant.diagnostics.AssistantDiagnosticsEngine
+import com.nerf.netx.assistant.diagnostics.NetworkDiagnosisEngine
+import com.nerf.netx.assistant.model.AssistantDiagnosisFocus
 import com.nerf.netx.assistant.model.AssistantContextSnapshot
+import com.nerf.netx.assistant.model.AssistantEntityResolution
 import com.nerf.netx.assistant.model.AssistantIntent
 import com.nerf.netx.assistant.model.AssistantIntentType
 import com.nerf.netx.assistant.model.AssistantResponse
+import com.nerf.netx.assistant.recommendation.RecommendationEngine
 import com.nerf.netx.assistant.state.AssistantSessionMemory
 import com.nerf.netx.assistant.tools.AssistantToolRegistry
 import com.nerf.netx.domain.Device
@@ -16,7 +20,10 @@ class AssistantOrchestrator(
   private val actionPolicy: AssistantActionPolicy,
   private val sessionMemory: AssistantSessionMemory,
   private val toolRegistry: AssistantToolRegistry,
+  private val entityResolver: AssistantEntityResolver,
   private val diagnosticsEngine: AssistantDiagnosticsEngine,
+  private val networkDiagnosisEngine: NetworkDiagnosisEngine,
+  private val recommendationEngine: RecommendationEngine,
   private val responseComposer: AssistantResponseComposer
 ) {
 
@@ -50,38 +57,30 @@ class AssistantOrchestrator(
       AssistantIntentType.UNKNOWN -> responseComposer.unsupportedIntent()
       AssistantIntentType.NETWORK_STATUS_SUMMARY -> responseComposer.networkSummary(context)
       AssistantIntentType.RUN_DIAGNOSTICS -> {
-        val report = diagnosticsEngine.buildReport(context)
-        AssistantResponse(
-          title = report.title,
-          message = report.message,
-          severity = report.severity,
-          cards = report.cards
+        val summary = diagnosticsEngine.buildReport(context)
+        val diagnosis = networkDiagnosisEngine.diagnose(context)
+        val recommendations = recommendationEngine.buildRecommendations(diagnosis, context)
+        val response = responseComposer.diagnosisResponse(diagnosis, recommendations)
+        response.copy(
+          message = if (diagnosis.findings.isEmpty()) summary.message else diagnosis.summary,
+          cards = summary.cards + response.cards
         )
       }
       AssistantIntentType.REFRESH_TOPOLOGY -> {
         val result = toolRegistry.execute(intent)
         responseComposer.fromToolResult(result)
       }
+      AssistantIntentType.DIAGNOSE_NETWORK_ISSUES,
+      AssistantIntentType.DIAGNOSE_SLOW_INTERNET,
+      AssistantIntentType.DIAGNOSE_HIGH_LATENCY,
+      AssistantIntentType.RECOMMEND_NEXT_STEPS -> handleDiagnosisIntent(intent, context)
       AssistantIntentType.EXPLAIN_METRIC -> responseComposer.explainMetric(intent.metricKey)
       AssistantIntentType.EXPLAIN_FEATURE -> responseComposer.explainFeature(intent.featureKey)
       AssistantIntentType.PING_DEVICE,
       AssistantIntentType.BLOCK_DEVICE,
       AssistantIntentType.UNBLOCK_DEVICE,
       AssistantIntentType.PAUSE_DEVICE,
-      AssistantIntentType.RESUME_DEVICE -> {
-        val resolved = resolveDeviceIntent(intent, context)
-        when {
-          resolved == null -> responseComposer.missingDeviceTarget(intent.type)
-          resolved.first == null -> responseComposer.ambiguousDeviceTarget(resolved.second)
-          else -> {
-            val resolvedIntent = intent.copy(targetDeviceId = resolved.first.id)
-            sessionMemory.updateLastDiscussedDevice(resolved.first.id)
-            val result = toolRegistry.execute(resolvedIntent)
-            sessionMemory.recordAction(intent.type)
-            responseComposer.fromToolResult(result)
-          }
-        }
-      }
+      AssistantIntentType.RESUME_DEVICE -> handleDeviceIntent(intent, context)
       else -> {
         val result = toolRegistry.execute(intent)
         sessionMemory.recordAction(intent.type)
@@ -90,45 +89,86 @@ class AssistantOrchestrator(
     }
   }
 
-  private fun resolveDeviceIntent(
+  private suspend fun handleDeviceIntent(
     intent: AssistantIntent,
     context: AssistantContextSnapshot
-  ): Pair<Device?, List<String>>? {
-    if (context.devices.isEmpty()) return null
+  ): AssistantResponse {
+    return when (val resolution = entityResolver.resolveDevice(
+      query = intent.targetDeviceQuery,
+      devices = context.devices,
+      lastDiscussedDeviceId = sessionMemory.lastDiscussedDeviceId,
+      allowContextFallback = true
+    )) {
+      is AssistantEntityResolution.Missing -> {
+        if (resolution.query.isNullOrBlank()) {
+          responseComposer.missingDeviceTarget(intent.type)
+        } else {
+          responseComposer.deviceNotFound(resolution.query)
+        }
+      }
+      is AssistantEntityResolution.Ambiguous -> responseComposer.ambiguousDeviceTarget(intent, resolution.candidates)
+      is AssistantEntityResolution.Resolved -> {
+        sessionMemory.updateLastDiscussedDevice(resolution.candidate.id)
+        val result = toolRegistry.execute(intent.copy(targetDeviceId = resolution.candidate.id))
+        sessionMemory.recordAction(intent.type)
+        responseComposer.fromToolResult(result)
+      }
+    }
+  }
 
+  private fun handleDiagnosisIntent(
+    intent: AssistantIntent,
+    context: AssistantContextSnapshot
+  ): AssistantResponse {
+    val targetDevice = resolveDiagnosisTarget(intent, context)
+    if (targetDevice is DiagnosisTargetResponse) {
+      return targetDevice.response
+    }
+
+    val device = (targetDevice as DiagnosisTargetDevice).device
+    device?.let { sessionMemory.updateLastDiscussedDevice(it.id) }
+
+    val focus = intent.diagnosisFocus ?: when (intent.type) {
+      AssistantIntentType.DIAGNOSE_SLOW_INTERNET -> AssistantDiagnosisFocus.SPEED
+      AssistantIntentType.DIAGNOSE_HIGH_LATENCY -> AssistantDiagnosisFocus.LATENCY
+      AssistantIntentType.RECOMMEND_NEXT_STEPS -> AssistantDiagnosisFocus.NEXT_STEPS
+      else -> AssistantDiagnosisFocus.GENERAL
+    }
+    val diagnosis = networkDiagnosisEngine.diagnose(context, focus = focus, targetDevice = device)
+    val recommendations = recommendationEngine.buildRecommendations(diagnosis, context, device)
+    sessionMemory.recordAction(intent.type)
+    return responseComposer.diagnosisResponse(diagnosis, recommendations)
+  }
+
+  private fun resolveDiagnosisTarget(
+    intent: AssistantIntent,
+    context: AssistantContextSnapshot
+  ): DiagnosisTarget {
     val query = intent.targetDeviceQuery?.trim()
     if (query.isNullOrBlank()) {
-      val remembered = sessionMemory.lastDiscussedDeviceId
-      if (remembered.isNullOrBlank()) return null
-      val byId = context.devices.firstOrNull { it.id == remembered }
-      return if (byId == null) null else (byId to emptyList())
+      return DiagnosisTargetDevice(null)
     }
 
-    val lowered = query.lowercase()
-    val exact = context.devices.filter {
-      it.id.equals(query, ignoreCase = true) ||
-        it.ip.equals(query, ignoreCase = true) ||
-        it.mac.equals(query, ignoreCase = true) ||
-        it.name.equals(query, ignoreCase = true)
-    }
-    if (exact.size == 1) return exact.first() to emptyList()
-    if (exact.size > 1) return null to exact.map { formatDevice(it) }
-
-    val fuzzy = context.devices.filter {
-      it.name.lowercase().contains(lowered) ||
-        it.ip.lowercase().contains(lowered) ||
-        it.mac.lowercase().contains(lowered) ||
-        it.hostname.lowercase().contains(lowered)
-    }
-
-    return when {
-      fuzzy.isEmpty() -> null
-      fuzzy.size == 1 -> fuzzy.first() to emptyList()
-      else -> null to fuzzy.take(6).map { formatDevice(it) }
+    return when (val resolution = entityResolver.resolveDevice(
+      query = query,
+      devices = context.devices,
+      lastDiscussedDeviceId = sessionMemory.lastDiscussedDeviceId,
+      allowContextFallback = false
+    )) {
+      is AssistantEntityResolution.Missing -> DiagnosisTargetResponse(responseComposer.deviceNotFound(query))
+      is AssistantEntityResolution.Ambiguous -> DiagnosisTargetResponse(
+        responseComposer.ambiguousDeviceTarget(intent, resolution.candidates)
+      )
+      is AssistantEntityResolution.Resolved -> {
+        DiagnosisTargetDevice(context.devices.firstOrNull { it.id == resolution.candidate.id })
+      }
     }
   }
 
-  private fun formatDevice(device: Device): String {
-    return "${device.name.ifBlank { "Unknown" }} (${device.ip})"
-  }
+  private sealed interface DiagnosisTarget
+  private data class DiagnosisTargetDevice(val device: Device?) : DiagnosisTarget
+  private data class DiagnosisTargetResponse(val response: AssistantResponse) : DiagnosisTarget
+
+  private val DiagnosisTarget.response: AssistantResponse
+    get() = (this as DiagnosisTargetResponse).response
 }
