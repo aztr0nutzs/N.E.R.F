@@ -1,0 +1,43 @@
+# Suggested Package Structure
+
+```text
+assistant/
+  model/
+    AssistantIntent.kt
+    AssistantResponse.kt
+    AssistantToolResult.kt
+    AssistantUiState.kt
+    AssistantContextSnapshot.kt
+  parser/
+    AssistantIntentParser.kt
+    AssistantEntityResolver.kt
+    AssistantFollowUpResolver.kt
+  orchestrator/
+    AssistantOrchestrator.kt
+    AssistantActionPolicy.kt
+  tools/
+    AssistantToolRegistry.kt
+    ScanTool.kt
+    SpeedtestTool.kt
+    DeviceTool.kt
+    RouterTool.kt
+    SecurityTool.kt
+    WifiEnvironmentTool.kt
+    TopologyTool.kt
+    NavigationTool.kt
+    DiagnosticsTool.kt
+  diagnostics/
+    NetworkDiagnosisEngine.kt
+  recommendation/
+    RecommendationEngine.kt
+    AssistantResponseComposer.kt
+  state/
+    BuildAssistantContextUseCase.kt
+    AssistantSessionMemory.kt
+  ui/
+    AssistantViewModel.kt
+    AssistantPanel.kt
+    AssistantMessageCard.kt
+    AssistantQuickActions.kt
+    AssistantConfirmationDialog.kt
+```

@@ -3,6 +3,10 @@ package com.nerf.netx.ui
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.nerf.netx.assistant.model.AssistantDestination
+import com.nerf.netx.assistant.ui.AssistantPanelActions
+import com.nerf.netx.assistant.ui.AssistantPanelHost
+import com.nerf.netx.assistant.ui.toRoute
 import com.nerf.netx.data.RouterCredentialsStore
 import androidx.navigation.compose.*
 import com.nerf.netx.data.ThemeRepository
@@ -39,15 +43,35 @@ fun AppRoot(
         composable(Routes.MAP) { MapScreen(services.topology, services.deviceControl) }
         composable(Routes.DEVICES) { DevicesScreen(services.devices, services.deviceControl) }
         composable(Routes.ANALYTICS) { AnalyticsScreen(services.analytics) }
+        composable(Routes.ASSISTANT) {
+          AssistantPanelHost(
+            services = services,
+            actions = object : AssistantPanelActions {
+              override fun onNavigate(destination: AssistantDestination) {
+                nav.navigate(destination.toRoute()) {
+                  launchSingleTop = true
+                  restoreState = true
+                }
+              }
+            }
+          )
+        }
         composable(Routes.SETTINGS) {
           SettingsScreen(
             themeId = themeId,
             onThemeSelected = themeRepository::set,
             htmlAssetUrlProvider = themeRepository::htmlAssetUrl,
-            credentialsStore = credentialsStore
+            credentialsStore = credentialsStore,
+            onOpenAssistant = {
+              nav.navigate(Routes.ASSISTANT) {
+                launchSingleTop = true
+                restoreState = true
+              }
+            }
           )
         }
         composable(Routes.PREVIEW) { PreviewScreen(themeId, themeRepository, services) }
+        composable(Routes.HTML_DASHBOARD) { HtmlDashboardScreen(themeRepository, services) }
       }
     }
   }

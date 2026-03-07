@@ -20,7 +20,7 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   override val selected: StateFlow<ThemeId> = _selected
 
   override fun set(themeId: ThemeId) {
-    val safeTheme = if (themeId == ThemeId.NERF_MAIN_DASH_HTML || themeId == ThemeId.NERF_HUD_ALT_HTML) {
+    val safeTheme = if (themeId == ThemeId.NERF_MAIN_DASH_HTML || themeId == ThemeId.NERF_HUD_ALT_HTML || themeId == ThemeId.NERF_DASH_NEW_HTML) {
       themeId
     } else {
       defaultTheme
@@ -32,6 +32,7 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   override fun htmlAssetUrl(themeId: ThemeId): String? = when (themeId) {
     ThemeId.NERF_MAIN_DASH_HTML -> "file:///android_asset/themes/nerf_main_dash/index.html"
     ThemeId.NERF_HUD_ALT_HTML -> "file:///android_asset/themes/nerf_hud_alt/index.html"
+    ThemeId.NERF_DASH_NEW_HTML -> "file:///android_asset/themes/nerf_dash_new/index.html"
   }
 
   private fun readTheme(): ThemeId {

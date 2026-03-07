@@ -61,7 +61,8 @@ fun SettingsScreen(
   themeId: ThemeId,
   onThemeSelected: (ThemeId) -> Unit,
   htmlAssetUrlProvider: (ThemeId) -> String?,
-  credentialsStore: RouterCredentialsStore
+  credentialsStore: RouterCredentialsStore,
+  onOpenAssistant: () -> Unit
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -91,13 +92,15 @@ fun SettingsScreen(
   val themeDescriptions = remember {
     mapOf(
       ThemeId.NERF_MAIN_DASH_HTML to "Default dashboard - High-contrast HUD, dense telemetry cards, orange/cyan emphasis.",
-      ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard."
+      ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard.",
+      ThemeId.NERF_DASH_NEW_HTML to "Jarvis-styled command dashboard with native bridge wired live telemetry and controls."
     )
   }
   val screenshotAssetPath = remember {
     mapOf(
       ThemeId.NERF_MAIN_DASH_HTML to "themes/nerf_main_dash/screenshot.png",
-      ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png"
+      ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png",
+      ThemeId.NERF_DASH_NEW_HTML to "themes/nerf_dash_new/screenshot.png"
     )
   }
   val previewScreenshotPath = screenshotAssetPath[previewTheme]
@@ -117,7 +120,10 @@ fun SettingsScreen(
       .verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(12.dp)
   ) {
-    Text("SETTINGS", style = MaterialTheme.typography.titleLarge)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+      Text("SETTINGS", style = MaterialTheme.typography.titleLarge)
+      OutlinedButton(onClick = onOpenAssistant) { Text("Assistant") }
+    }
 
     ElevatedCard {
       Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
