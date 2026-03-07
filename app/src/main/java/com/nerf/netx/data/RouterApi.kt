@@ -54,6 +54,37 @@ data class RouterActionResult(
   val errorCode: String? = null
 )
 
+data class RouterActionCapability(
+  val capability: RouterCapability,
+  val supported: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val reason: String,
+  val source: String? = null
+)
+
+data class RouterFeatureReadback(
+  val capability: RouterCapability,
+  val supported: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val enabled: Boolean? = null,
+  val message: String? = null,
+  val source: String? = null
+)
+
+data class RouterRuntimeCapabilities(
+  val adapterId: String? = null,
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val capabilities: Set<RouterCapability> = setOf(RouterCapability.READ_INFO),
+  val actionCapabilities: Map<RouterCapability, RouterActionCapability> = emptyMap(),
+  val featureReadback: Map<RouterCapability, RouterFeatureReadback> = emptyMap(),
+  val message: String = "Router capability probe not run."
+)
+
 data class DhcpLease(
   val ip: String,
   val mac: String,
@@ -72,10 +103,12 @@ data class QosConfig(
 interface RouterApi {
   suspend fun detect(info: RouterConnectionInfo): RouterInfo
   suspend fun getCapabilities(): Set<RouterCapability>
+  suspend fun getRuntimeCapabilities(): RouterRuntimeCapabilities
   suspend fun testConnection(): RouterActionResult
   suspend fun validateCredentials(): RouterActionResult
   suspend fun getDhcpLeases(): Result<List<DhcpLease>>
   suspend fun setDhcpLeaseName(macOrIp: String, name: String): RouterActionResult
+  suspend fun renewDhcp(): RouterActionResult
   suspend fun flushDns(): RouterActionResult
   suspend fun setDnsShieldEnabled(enabled: Boolean): RouterActionResult
   suspend fun setFirewallEnabled(enabled: Boolean): RouterActionResult

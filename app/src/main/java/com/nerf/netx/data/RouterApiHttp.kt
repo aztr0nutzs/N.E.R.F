@@ -2,20 +2,28 @@ package com.nerf.netx.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.UUID
 
 class RouterApiHttp(
   private val connectionInfo: RouterConnectionInfo
-) : RouterApi {
+) : RouterApi, RouterHttpSession {
+
+  private val adapters: List<RouterVendorAdapter> = listOf(
+    AsusRouterAdapter(),
+    GenericReadOnlyRouterAdapter()
+  )
 
   private var detectedInfo: RouterInfo? = null
-  private var detectedCapabilities: Set<RouterCapability> = setOf(RouterCapability.READ_INFO)
+  private var runtimeCapabilities: RouterRuntimeCapabilities? = null
+  private var activeAdapter: RouterVendorAdapter? = null
 
   override suspend fun detect(info: RouterConnectionInfo): RouterInfo = withContext(Dispatchers.IO) {
     val candidates = candidateBaseUrls(info)
@@ -48,15 +56,63 @@ class RouterApiHttp(
       detectedAuthType = bestAuth
     )
     detectedInfo = resolved
-    detectedCapabilities = probeCapabilities(resolved)
+    runtimeCapabilities = null
+    activeAdapter = null
     resolved
   }
 
   override suspend fun getCapabilities(): Set<RouterCapability> {
-    if (detectedInfo == null) {
-      detect(connectionInfo)
+    return getRuntimeCapabilities().capabilities
+  }
+
+  override suspend fun getRuntimeCapabilities(): RouterRuntimeCapabilities {
+    runtimeCapabilities?.let { return it }
+
+    val info = ensureDetected()
+    val baseMessage = if (info.adminUrl == null) {
+      "Router detected but no reachable admin endpoint was found."
+    } else {
+      "Router detected at ${info.adminUrl}."
     }
-    return detectedCapabilities
+    if (info.adminUrl == null) {
+      return RouterRuntimeCapabilities(
+        detected = false,
+        authenticated = false,
+        readable = false,
+        writable = false,
+        capabilities = setOf(RouterCapability.READ_INFO),
+        message = baseMessage
+      ).also { runtimeCapabilities = it }
+    }
+
+    val adapter = resolveAdapter(info)
+    activeAdapter = adapter
+    val authResult = validateCredentials()
+    if (authResult.status != RouterActionStatus.OK) {
+      return RouterRuntimeCapabilities(
+        adapterId = adapter.id,
+        detected = true,
+        authenticated = false,
+        readable = false,
+        writable = false,
+        capabilities = setOf(RouterCapability.READ_INFO),
+        message = "Router detected, but authenticated read/write access is unavailable. ${authResult.message}"
+      ).also { runtimeCapabilities = it }
+    }
+
+    val probed = runCatching { adapter.probe(this) }.getOrElse { error ->
+      RouterRuntimeCapabilities(
+        adapterId = adapter.id,
+        detected = true,
+        authenticated = true,
+        readable = false,
+        writable = false,
+        capabilities = setOf(RouterCapability.READ_INFO),
+        message = "Authenticated, but capability probing failed: ${error.message ?: "Unknown error"}"
+      )
+    }
+    runtimeCapabilities = probed
+    return probed
   }
 
   override suspend fun testConnection(): RouterActionResult = withContext(Dispatchers.IO) {
@@ -115,7 +171,8 @@ class RouterApiHttp(
       username = username,
       password = password,
       authType = authType,
-      body = null
+      body = null,
+      contentType = null
     )
 
     if (result.code in 200..299) {
@@ -133,57 +190,155 @@ class RouterApiHttp(
   }
 
   override suspend fun getDhcpLeases(): Result<List<DhcpLease>> {
-    val caps = getCapabilities()
-    if (!caps.contains(RouterCapability.DHCP_LEASES_READ)) {
-      return Result.failure(UnsupportedOperationException(readOnlyReason()))
-    }
-    return Result.failure(UnsupportedOperationException(readOnlyReason()))
+    return Result.failure(UnsupportedOperationException("DHCP lease read is not implemented for this router adapter."))
   }
 
   override suspend fun setDhcpLeaseName(macOrIp: String, name: String): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return notSupported("DHCP lease naming is unsupported on the current router/backend.")
   }
 
   override suspend fun flushDns(): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.DNS_FLUSH,
+      label = "Flush DNS"
+    ) { adapter -> adapter.flushDns(this) }
+  }
+
+  override suspend fun renewDhcp(): RouterActionResult {
+    return performAction(
+      capability = RouterCapability.DHCP_LEASES_WRITE,
+      label = "Renew DHCP"
+    ) { adapter -> adapter.renewDhcp(this) }
   }
 
   override suspend fun setDnsShieldEnabled(enabled: Boolean): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.DNS_SHIELD_TOGGLE,
+      label = "DNS Shield"
+    ) { adapter -> adapter.setDnsShieldEnabled(this, enabled) }
   }
 
   override suspend fun setFirewallEnabled(enabled: Boolean): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.FIREWALL_TOGGLE,
+      label = "Firewall"
+    ) { adapter -> adapter.setFirewallEnabled(this, enabled) }
   }
 
   override suspend fun setVpnEnabled(enabled: Boolean): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.VPN_TOGGLE,
+      label = "VPN"
+    ) { adapter -> adapter.setVpnEnabled(this, enabled) }
   }
 
   override suspend fun setQosConfig(config: QosConfig): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.QOS_CONFIG,
+      label = "QoS"
+    ) { adapter -> adapter.setQosConfig(this, config) }
   }
 
   override suspend fun setGuestWifiEnabled(enabled: Boolean): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.GUEST_WIFI_TOGGLE,
+      label = "Guest Wi-Fi"
+    ) { adapter -> adapter.setGuestWifiEnabled(this, enabled) }
   }
 
   override suspend fun reboot(): RouterActionResult {
-    return notSupported(readOnlyReason())
+    return performAction(
+      capability = RouterCapability.REBOOT,
+      label = "Router reboot"
+    ) { adapter -> adapter.reboot(this) }
+  }
+
+  override suspend fun nvramGet(names: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
+    if (names.isEmpty()) return@withContext emptyMap()
+    val info = ensureDetected()
+    val base = info.adminUrl
+      ?: throw IllegalStateException("Router endpoint not detected")
+    val hook = names.joinToString(";") { "nvram_get($it)" }
+    val encoded = URLEncoder.encode(hook, Charsets.UTF_8.name())
+    val response = authenticatedRequest(
+      url = "$base/appGet.cgi?hook=$encoded",
+      method = "GET",
+      username = connectionInfo.username?.trim().orEmpty(),
+      password = connectionInfo.password.orEmpty(),
+      authType = info.detectedAuthType,
+      body = null,
+      contentType = null
+    )
+    if (response.code !in 200..299) {
+      throw IllegalStateException("appGet.cgi failed with HTTP ${response.code}")
+    }
+    val body = response.body?.trim().orEmpty()
+    if (body.isBlank()) {
+      throw IllegalStateException("appGet.cgi returned an empty body")
+    }
+    val json = JSONObject(body)
+    buildMap {
+      names.forEach { name ->
+        put(name, json.optString(name, ""))
+      }
+    }
+  }
+
+  override suspend fun applyApp(postData: Map<String, String>): RouterActionResult = withContext(Dispatchers.IO) {
+    val info = ensureDetected()
+    val base = info.adminUrl
+      ?: return@withContext RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Router endpoint not detected",
+        errorCode = "ROUTER_UNREACHABLE"
+      )
+    val jsonPayload = JSONObject(postData).toString()
+    val encoded = "data=${URLEncoder.encode(jsonPayload, Charsets.UTF_8.name())}"
+    val response = authenticatedRequest(
+      url = "$base/applyapp.cgi",
+      method = "POST",
+      username = connectionInfo.username?.trim().orEmpty(),
+      password = connectionInfo.password.orEmpty(),
+      authType = info.detectedAuthType,
+      body = encoded.toByteArray(Charsets.UTF_8),
+      contentType = "application/x-www-form-urlencoded"
+    )
+    if (response.code in 200..299) {
+      runtimeCapabilities = null
+      RouterActionResult(
+        status = RouterActionStatus.OK,
+        message = "Router accepted the requested change."
+      )
+    } else {
+      RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Router rejected the requested change (HTTP ${response.code})",
+        errorCode = "HTTP_${response.code}"
+      )
+    }
+  }
+
+  private suspend fun performAction(
+    capability: RouterCapability,
+    label: String,
+    call: suspend (RouterVendorAdapter) -> RouterActionResult
+  ): RouterActionResult {
+    val runtime = getRuntimeCapabilities()
+    val actionCapability = runtime.actionCapabilities[capability]
+    if (actionCapability == null || !actionCapability.writable) {
+      return notSupported(actionCapability?.reason ?: "$label is unsupported on the current router/backend.")
+    }
+
+    val adapter = activeAdapter ?: resolveAdapter(ensureDetected())
+    return call(adapter)
   }
 
   private suspend fun ensureDetected(): RouterInfo {
     return detectedInfo ?: detect(connectionInfo)
   }
 
-  private fun probeCapabilities(@Suppress("UNUSED_PARAMETER") info: RouterInfo): Set<RouterCapability> {
-    // No verified universal write endpoints in this project.
-    // Conservative capability gating: read-only unless verified endpoint map exists.
-    return setOf(RouterCapability.READ_INFO)
-  }
-
-  private fun readOnlyReason(): String {
-    return "No verified API endpoint for this router model. Read-only mode."
+  private fun resolveAdapter(info: RouterInfo): RouterVendorAdapter {
+    return adapters.firstOrNull { it.matches(info) } ?: GenericReadOnlyRouterAdapter()
   }
 
   private fun notSupported(reason: String): RouterActionResult {
@@ -230,8 +385,7 @@ class RouterApiHttp(
           reachable = code in 200..499,
           authType = authType,
           serverHeader = server,
-          htmlTitle = title,
-          authHeader = authHeader
+          htmlTitle = title
         )
       } finally {
         conn.disconnect()
@@ -241,8 +395,7 @@ class RouterApiHttp(
         reachable = false,
         authType = RouterAuthType.NONE,
         serverHeader = null,
-        htmlTitle = null,
-        authHeader = null
+        htmlTitle = null
       )
     }
   }
@@ -307,7 +460,7 @@ class RouterApiHttp(
         while (true) {
           val line = reader.readLine() ?: break
           total += line.length
-          if (total > 8192) break
+          if (total > 16384) break
           sb.append(line)
         }
         sb.toString()
@@ -327,10 +480,11 @@ class RouterApiHttp(
     username: String,
     password: String,
     authType: RouterAuthType,
-    body: ByteArray?
+    body: ByteArray?,
+    contentType: String?
   ): HttpResponse {
     val first = openConnection(url, method)
-    applyBody(first, body)
+    applyBody(first, body, contentType)
     applyAuth(first, authType, username, password, null, method, url)
 
     try {
@@ -340,18 +494,24 @@ class RouterApiHttp(
       }.getOrElse { -1 }
 
       if (firstCode != 401 || authType != RouterAuthType.DIGEST) {
-        return HttpResponse(firstCode)
+        return HttpResponse(
+          code = firstCode,
+          body = readSmallBody(first)
+        )
       }
 
       val challenge = first.getHeaderField("WWW-Authenticate")
       first.disconnect()
 
       val second = openConnection(url, method)
-      applyBody(second, body)
+      applyBody(second, body, contentType)
       applyAuth(second, authType, username, password, challenge, method, url)
       return try {
         second.connect()
-        HttpResponse(second.responseCode)
+        HttpResponse(
+          code = second.responseCode,
+          body = readSmallBody(second)
+        )
       } finally {
         second.disconnect()
       }
@@ -360,9 +520,10 @@ class RouterApiHttp(
     }
   }
 
-  private fun applyBody(conn: HttpURLConnection, body: ByteArray?) {
+  private fun applyBody(conn: HttpURLConnection, body: ByteArray?, contentType: String?) {
     if (body == null) return
     conn.doOutput = true
+    contentType?.let { conn.setRequestProperty("Content-Type", it) }
     conn.setFixedLengthStreamingMode(body.size)
     conn.outputStream.use { out ->
       out.write(body)
@@ -406,7 +567,7 @@ class RouterApiHttp(
     val qop = map["qop"]?.split(',')?.map { it.trim() }?.firstOrNull { it == "auth" } ?: "auth"
     val opaque = map["opaque"]
 
-    val uri = URL(url).path.ifBlank { "/" }
+    val uri = URL(url).path.ifBlank { "/" } + URL(url).query?.let { "?$it" }.orEmpty()
     val nc = "00000001"
     val cnonce = UUID.randomUUID().toString().replace("-", "").take(16)
 
@@ -450,11 +611,11 @@ class RouterApiHttp(
     val reachable: Boolean,
     val authType: RouterAuthType,
     val serverHeader: String?,
-    val htmlTitle: String?,
-    val authHeader: String?
+    val htmlTitle: String?
   )
 
   private data class HttpResponse(
-    val code: Int
+    val code: Int,
+    val body: String?
   )
 }

@@ -211,6 +211,28 @@ fun RouterWriteAction.unsupportedResult(reason: String): ActionResult {
 }
 
 fun RouterStatusSnapshot.availability(action: RouterWriteAction): ActionAvailability {
+  val mappedActionId = when (action) {
+    RouterWriteAction.GUEST_WIFI -> AppActionId.ROUTER_GUEST_WIFI
+    RouterWriteAction.DNS_SHIELD -> AppActionId.ROUTER_DNS_SHIELD
+    RouterWriteAction.FIREWALL -> AppActionId.ROUTER_FIREWALL
+    RouterWriteAction.VPN -> AppActionId.ROUTER_VPN
+    RouterWriteAction.QOS -> AppActionId.ROUTER_QOS
+    RouterWriteAction.REBOOT -> AppActionId.ROUTER_REBOOT
+    RouterWriteAction.FLUSH_DNS -> AppActionId.ROUTER_FLUSH_DNS
+    RouterWriteAction.RENEW_DHCP -> AppActionId.ROUTER_RENEW_DHCP
+  }
+  routerCapabilities[mappedActionId]?.let { capability ->
+    return ActionAvailability(
+      supported = capability.writable,
+      label = capability.label,
+      reason = if (capability.writable) {
+        "${capability.label} is available."
+      } else {
+        capability.reason
+      }
+    )
+  }
+
   val fallbackReason = message.ifBlank {
     "Router control availability could not be verified from the current backend."
   }

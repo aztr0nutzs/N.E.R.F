@@ -783,11 +783,13 @@ class NerfWebBridge(private val services: AppServices) {
       .put("linkSpeedMbps", snapshot.linkSpeedMbps)
       .put("accessMode", snapshot.accessMode)
       .put("capabilities", JSONArray(snapshot.capabilities))
+      .put("backend", routerBackendJson(snapshot))
       .put("guestWifi", featureStateJson(snapshot.guestWifi))
       .put("dnsShield", featureStateJson(snapshot.dnsShield))
       .put("firewall", featureStateJson(snapshot.firewall))
       .put("vpn", featureStateJson(snapshot.vpn))
       .put("qosMode", snapshot.qosMode)
+      .put("routerCapabilities", routerCapabilitiesJson(snapshot))
       .put("actionSupport", actionSupportJson(snapshot.actionSupport))
       .put("lastUpdatedEpochMs", snapshot.lastUpdatedEpochMs)
   }
@@ -795,9 +797,44 @@ class NerfWebBridge(private val services: AppServices) {
   private fun featureStateJson(feature: com.nerf.netx.domain.RouterFeatureState): JSONObject {
     return JSONObject()
       .put("supported", feature.supported)
+      .put("readable", feature.readable)
+      .put("writable", feature.writable)
       .put("enabled", feature.enabled)
       .put("status", feature.status.name)
       .put("message", feature.message)
+  }
+
+  private fun routerBackendJson(snapshot: RouterStatusSnapshot): JSONObject {
+    return JSONObject()
+      .put("detected", snapshot.backend.detected)
+      .put("authenticated", snapshot.backend.authenticated)
+      .put("readable", snapshot.backend.readable)
+      .put("writable", snapshot.backend.writable)
+      .put("vendorName", snapshot.backend.vendorName)
+      .put("modelName", snapshot.backend.modelName)
+      .put("firmwareVersion", snapshot.backend.firmwareVersion)
+      .put("adapterId", snapshot.backend.adapterId)
+      .put("message", snapshot.backend.message)
+  }
+
+  private fun routerCapabilitiesJson(snapshot: RouterStatusSnapshot): JSONObject {
+    val json = JSONObject()
+    snapshot.routerCapabilities.forEach { (key, value) ->
+      json.put(
+        key,
+        JSONObject()
+          .put("label", value.label)
+          .put("supported", value.supported)
+          .put("detected", value.detected)
+          .put("authenticated", value.authenticated)
+          .put("readable", value.readable)
+          .put("writable", value.writable)
+          .put("status", value.status.name)
+          .put("reason", value.reason)
+          .put("source", value.source)
+      )
+    }
+    return json
   }
 
   private fun actionSupportJson(states: Map<String, ActionSupportState>): JSONObject {

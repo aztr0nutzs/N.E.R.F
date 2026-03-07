@@ -8,6 +8,7 @@ import com.nerf.netx.domain.ActionResult
 import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AnalyticsService
 import com.nerf.netx.domain.AnalyticsSnapshot
+import com.nerf.netx.domain.AppActionId
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.DeviceControlAction
 import com.nerf.netx.domain.Device
@@ -22,6 +23,8 @@ import com.nerf.netx.domain.MapService
 import com.nerf.netx.domain.MapTopologyService
 import com.nerf.netx.domain.MeasurementMode
 import com.nerf.netx.domain.QosMode
+import com.nerf.netx.domain.RouterBackendState
+import com.nerf.netx.domain.RouterCapabilityState
 import com.nerf.netx.domain.RouterControlService
 import com.nerf.netx.domain.RouterFeatureState
 import com.nerf.netx.domain.RouterInfoResult
@@ -1990,30 +1993,39 @@ private class HybridRouterControl(
         linkSpeedMbps = linkSpeed,
         accessMode = "READ_ONLY",
         capabilities = listOf(RouterCapability.READ_INFO.name),
+        backend = RouterBackendState(
+          detected = false,
+          authenticated = false,
+          readable = false,
+          writable = false,
+          message = "Router credentials are not configured."
+        ),
         guestWifi = RouterFeatureState(message = "Router credentials are required for guest Wi-Fi state."),
-        dnsShield = RouterFeatureState(message = "DNS Shield state is unavailable on this backend."),
+        dnsShield = RouterFeatureState(message = "Router credentials are required for DNS Shield state."),
         firewall = RouterFeatureState(message = "Router credentials are required for firewall state."),
         vpn = RouterFeatureState(message = "Router credentials are required for VPN state.")
       )
     } else {
       val detected = api.detect(connectionInfoFromStore())
-      val capabilities = api.getCapabilities()
-      val accessMode = if (capabilities.any { it != RouterCapability.READ_INFO && it != RouterCapability.DHCP_LEASES_READ }) {
-        "READ_WRITE"
-      } else {
-        "READ_ONLY"
-      }
+      val runtime = api.getRuntimeCapabilities()
+      val accessMode = if (runtime.writable) "READ_WRITE" else "READ_ONLY"
       val message = buildString {
-        append("Router detected")
+        append(if (runtime.detected) "Router detected" else "Router not detected")
         detected.vendorName?.let { append(": ").append(it) }
         detected.modelName?.let { append(" ").append(it) }
-        append(" | auth=").append(detected.detectedAuthType.name)
-        append(" | mode=").append(accessMode)
-        append(" | capabilities=").append(capabilities.joinToString(",") { it.name })
+        append(" | auth=").append(if (runtime.authenticated) "AUTHENTICATED" else detected.detectedAuthType.name)
+        append(" | readable=").append(runtime.readable)
+        append(" | writable=").append(runtime.writable)
+        append(" | adapter=").append(runtime.adapterId ?: "none")
+        append(" | ").append(runtime.message)
       }
 
       RouterStatusSnapshot(
-        status = ServiceStatus.OK,
+        status = when {
+          runtime.authenticated && runtime.readable -> ServiceStatus.OK
+          runtime.detected -> ServiceStatus.NO_DATA
+          else -> ServiceStatus.ERROR
+        },
         message = message,
         gatewayIp = detected.routerIp.ifBlank { gatewayIp },
         publicIp = publicIp,
@@ -2021,28 +2033,42 @@ private class HybridRouterControl(
         ssid = ssid,
         linkSpeedMbps = linkSpeed,
         accessMode = accessMode,
-        capabilities = capabilities.map { it.name },
+        capabilities = runtime.capabilities.map { it.name }.sorted(),
+        backend = RouterBackendState(
+          detected = runtime.detected,
+          authenticated = runtime.authenticated,
+          readable = runtime.readable,
+          writable = runtime.writable,
+          vendorName = detected.vendorName,
+          modelName = detected.modelName,
+          firmwareVersion = detected.firmwareVersion,
+          adapterId = runtime.adapterId,
+          message = runtime.message
+        ),
+        routerCapabilities = capabilityStates(runtime),
         guestWifi = featureState(
-          capabilities = capabilities,
+          runtime = runtime,
           capability = RouterCapability.GUEST_WIFI_TOGGLE,
           unavailableMessage = "Guest Wi-Fi readback is unavailable for this router model."
         ),
         dnsShield = featureState(
-          capabilities = capabilities,
+          runtime = runtime,
           capability = RouterCapability.DNS_SHIELD_TOGGLE,
           unavailableMessage = "DNS Shield readback is unavailable for this router model."
         ),
         firewall = featureState(
-          capabilities = capabilities,
+          runtime = runtime,
           capability = RouterCapability.FIREWALL_TOGGLE,
           unavailableMessage = "Firewall readback is unavailable for this router model."
         ),
         vpn = featureState(
-          capabilities = capabilities,
+          runtime = runtime,
           capability = RouterCapability.VPN_TOGGLE,
           unavailableMessage = "VPN readback is unavailable for this router model."
         ),
-        qosMode = if (capabilities.contains(RouterCapability.QOS_CONFIG)) "UNKNOWN" else null
+        qosMode = runtime.actionCapabilities[RouterCapability.QOS_CONFIG]
+          ?.takeIf { it.readable }
+          ?.let { "READABLE_ONLY" }
       )
     }
 
@@ -2093,16 +2119,11 @@ private class HybridRouterControl(
   }
 
   override suspend fun renewDhcp(): ActionResult {
-    val api = buildRouterApi() ?: return routerNotConfigured(RouterWriteAction.RENEW_DHCP)
-    val caps = api.getCapabilities()
-    if (!caps.contains(RouterCapability.DHCP_LEASES_WRITE)) {
-      return RouterWriteAction.RENEW_DHCP.unsupportedResult(
-        "No verified API endpoint for DHCP lease write/renew. The router backend remains read-only."
-      )
-    }
-    return RouterWriteAction.RENEW_DHCP.unsupportedResult(
-      "Renew DHCP is unsupported on the current router/backend. Verified renewal endpoints are unavailable."
-    )
+    return performCapabilityAction(
+      action = RouterWriteAction.RENEW_DHCP,
+      capability = RouterCapability.DHCP_LEASES_WRITE,
+      code = "DHCP_RENEW"
+    ) { api -> api.renewDhcp() }
   }
 
   override suspend fun flushDns(): ActionResult {
@@ -2162,9 +2183,12 @@ private class HybridRouterControl(
     call: suspend (RouterApi) -> RouterActionResult
   ): ActionResult {
     val api = buildRouterApi() ?: return routerNotConfigured(action)
-    val caps = api.getCapabilities()
-    if (!caps.contains(capability)) {
-      return action.unsupportedResult("No verified API endpoint exists for this router action. The backend is read-only.")
+    val runtime = api.getRuntimeCapabilities()
+    val capabilityState = capabilityStates(runtime)[actionIdFor(capability)]
+    if (capabilityState == null || !capabilityState.writable) {
+      return action.unsupportedResult(
+        capabilityState?.reason ?: "No verified API endpoint exists for this router action."
+      )
     }
     val result = call(api)
     val mapped = mapRouterActionResult(result, action, code)
@@ -2216,24 +2240,83 @@ private class HybridRouterControl(
   }
 
   private fun featureState(
-    capabilities: Set<RouterCapability>,
+    runtime: RouterRuntimeCapabilities,
     capability: RouterCapability,
     unavailableMessage: String
   ): RouterFeatureState {
-    return if (capabilities.contains(capability)) {
+    val readback = runtime.featureReadback[capability]
+    return if (readback != null) {
       RouterFeatureState(
-        supported = true,
-        enabled = null,
-        status = ServiceStatus.NO_DATA,
-        message = unavailableMessage
+        supported = readback.supported,
+        readable = readback.readable,
+        writable = readback.writable,
+        enabled = readback.enabled,
+        status = when {
+          readback.readable -> ServiceStatus.OK
+          readback.supported -> ServiceStatus.NO_DATA
+          else -> ServiceStatus.NOT_SUPPORTED
+        },
+        message = readback.message ?: unavailableMessage
       )
     } else {
       RouterFeatureState(
         supported = false,
+        readable = false,
+        writable = false,
         enabled = null,
         status = ServiceStatus.NOT_SUPPORTED,
         message = "No verified API endpoint for this router capability."
       )
+    }
+  }
+
+  private fun capabilityStates(runtime: RouterRuntimeCapabilities): Map<String, RouterCapabilityState> {
+    return runtime.actionCapabilities.values.associate { capability ->
+      actionIdFor(capability.capability) to RouterCapabilityState(
+        actionId = actionIdFor(capability.capability),
+        label = routerActionLabel(capability.capability),
+        supported = capability.supported,
+        detected = runtime.detected,
+        authenticated = runtime.authenticated,
+        readable = capability.readable,
+        writable = capability.writable,
+        status = when {
+          capability.writable -> ServiceStatus.OK
+          capability.readable -> ServiceStatus.NO_DATA
+          capability.supported -> ServiceStatus.NO_DATA
+          else -> ServiceStatus.NOT_SUPPORTED
+        },
+        reason = capability.reason,
+        source = capability.source
+      )
+    }
+  }
+
+  private fun actionIdFor(capability: RouterCapability): String {
+    return when (capability) {
+      RouterCapability.GUEST_WIFI_TOGGLE -> AppActionId.ROUTER_GUEST_WIFI
+      RouterCapability.DNS_SHIELD_TOGGLE -> AppActionId.ROUTER_DNS_SHIELD
+      RouterCapability.FIREWALL_TOGGLE -> AppActionId.ROUTER_FIREWALL
+      RouterCapability.VPN_TOGGLE -> AppActionId.ROUTER_VPN
+      RouterCapability.QOS_CONFIG -> AppActionId.ROUTER_QOS
+      RouterCapability.REBOOT -> AppActionId.ROUTER_REBOOT
+      RouterCapability.DNS_FLUSH -> AppActionId.ROUTER_FLUSH_DNS
+      RouterCapability.DHCP_LEASES_WRITE -> AppActionId.ROUTER_RENEW_DHCP
+      else -> capability.name
+    }
+  }
+
+  private fun routerActionLabel(capability: RouterCapability): String {
+    return when (capability) {
+      RouterCapability.GUEST_WIFI_TOGGLE -> RouterWriteAction.GUEST_WIFI.label
+      RouterCapability.DNS_SHIELD_TOGGLE -> RouterWriteAction.DNS_SHIELD.label
+      RouterCapability.FIREWALL_TOGGLE -> RouterWriteAction.FIREWALL.label
+      RouterCapability.VPN_TOGGLE -> RouterWriteAction.VPN.label
+      RouterCapability.QOS_CONFIG -> RouterWriteAction.QOS.label
+      RouterCapability.REBOOT -> RouterWriteAction.REBOOT.label
+      RouterCapability.DNS_FLUSH -> RouterWriteAction.FLUSH_DNS.label
+      RouterCapability.DHCP_LEASES_WRITE -> RouterWriteAction.RENEW_DHCP.label
+      else -> capability.name
     }
   }
 

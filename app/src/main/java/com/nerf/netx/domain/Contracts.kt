@@ -293,9 +293,36 @@ data class RouterInfoResult(
 
 data class RouterFeatureState(
   val supported: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
   val enabled: Boolean? = null,
   val status: ServiceStatus = if (supported) ServiceStatus.NO_DATA else ServiceStatus.NOT_SUPPORTED,
   val message: String? = null
+)
+
+data class RouterBackendState(
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val vendorName: String? = null,
+  val modelName: String? = null,
+  val firmwareVersion: String? = null,
+  val adapterId: String? = null,
+  val message: String? = null
+)
+
+data class RouterCapabilityState(
+  val actionId: String,
+  val label: String,
+  val supported: Boolean = false,
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val status: ServiceStatus = if (supported) ServiceStatus.OK else ServiceStatus.NOT_SUPPORTED,
+  val reason: String,
+  val source: String? = null
 )
 
 data class RouterStatusSnapshot(
@@ -308,6 +335,8 @@ data class RouterStatusSnapshot(
   val linkSpeedMbps: Int? = null,
   val accessMode: String? = null,
   val capabilities: List<String> = emptyList(),
+  val backend: RouterBackendState = RouterBackendState(),
+  val routerCapabilities: Map<String, RouterCapabilityState> = emptyMap(),
   val guestWifi: RouterFeatureState = RouterFeatureState(message = "Guest Wi-Fi state is unavailable."),
   val dnsShield: RouterFeatureState = RouterFeatureState(message = "DNS Shield state is unavailable."),
   val firewall: RouterFeatureState = RouterFeatureState(message = "Firewall state is unavailable."),

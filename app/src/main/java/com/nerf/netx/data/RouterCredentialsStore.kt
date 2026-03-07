@@ -3,8 +3,10 @@ package com.nerf.netx.data
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.nerf.netx.domain.AppActionId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 data class RouterCredentials(
   val host: String,
@@ -22,10 +24,25 @@ data class RouterProfile(
   val modelName: String? = null,
   val vendorName: String? = null,
   val firmwareVersion: String? = null,
+  val adapterId: String? = null,
   val authType: RouterAuthType = RouterAuthType.NONE,
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
   val capabilities: Set<RouterCapability> = setOf(RouterCapability.READ_INFO),
+  val actionCapabilities: Map<String, RouterProfileAction> = emptyMap(),
   val mode: RouterAccessMode = RouterAccessMode.READ_ONLY,
   val lastValidatedEpochMs: Long? = null
+)
+
+data class RouterProfileAction(
+  val actionId: String,
+  val label: String,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val reason: String,
+  val source: String? = null
 )
 
 data class RouterCredentialCheck(
@@ -57,7 +74,13 @@ class RouterCredentialsStore(context: Context) {
   private val keyModel = "model"
   private val keyVendor = "vendor"
   private val keyFirmware = "firmware"
+  private val keyAdapterId = "adapter_id"
   private val keyCapabilities = "capabilities"
+  private val keyDetected = "detected"
+  private val keyAuthenticated = "authenticated"
+  private val keyReadable = "readable"
+  private val keyWritable = "writable"
+  private val keyActionCapabilities = "action_capabilities"
   private val keyMode = "access_mode"
   private val keyLastValidated = "last_validated"
 
@@ -80,8 +103,14 @@ class RouterCredentialsStore(context: Context) {
       modelName = prefs.getString(keyModel, null),
       vendorName = prefs.getString(keyVendor, null),
       firmwareVersion = prefs.getString(keyFirmware, null),
+      adapterId = prefs.getString(keyAdapterId, null),
       authType = parseAuthType(prefs.getString(keyAuthType, null)),
+      detected = prefs.getBoolean(keyDetected, false),
+      authenticated = prefs.getBoolean(keyAuthenticated, false),
+      readable = prefs.getBoolean(keyReadable, false),
+      writable = prefs.getBoolean(keyWritable, false),
       capabilities = caps,
+      actionCapabilities = parseActionCapabilities(prefs.getString(keyActionCapabilities, null)),
       mode = parseAccessMode(prefs.getString(keyMode, null), caps),
       lastValidatedEpochMs = prefs.getLong(keyLastValidated, -1L).takeIf { it > 0L }
     )
@@ -117,15 +146,31 @@ class RouterCredentialsStore(context: Context) {
       )
     )
     val connection = api.testConnection()
-    val caps = api.getCapabilities()
+    val runtime = api.getRuntimeCapabilities()
+    val caps = runtime.capabilities
     val profile = RouterProfile(
       routerIp = detected.routerIp,
       adminUrl = detected.adminUrl,
       modelName = detected.modelName,
       vendorName = detected.vendorName,
       firmwareVersion = detected.firmwareVersion,
+      adapterId = runtime.adapterId,
       authType = detected.detectedAuthType,
+      detected = runtime.detected,
+      authenticated = runtime.authenticated,
+      readable = runtime.readable,
+      writable = runtime.writable,
       capabilities = caps,
+      actionCapabilities = runtime.actionCapabilities.values.associate { capability ->
+        actionIdFor(capability.capability) to RouterProfileAction(
+          actionId = actionIdFor(capability.capability),
+          label = labelFor(capability.capability),
+          readable = capability.readable,
+          writable = capability.writable,
+          reason = capability.reason,
+          source = capability.source
+        )
+      },
       mode = deriveMode(caps),
       lastValidatedEpochMs = System.currentTimeMillis()
     )
@@ -165,10 +210,26 @@ class RouterCredentialsStore(context: Context) {
       )
     }
 
-    val finalCaps = api.getCapabilities()
+    val finalRuntime = api.getRuntimeCapabilities()
+    val finalCaps = finalRuntime.capabilities
     val finalMode = deriveMode(finalCaps)
     val finalProfile = profile.copy(
+      adapterId = finalRuntime.adapterId,
+      detected = finalRuntime.detected,
+      authenticated = finalRuntime.authenticated,
+      readable = finalRuntime.readable,
+      writable = finalRuntime.writable,
       capabilities = finalCaps,
+      actionCapabilities = finalRuntime.actionCapabilities.values.associate { capability ->
+        actionIdFor(capability.capability) to RouterProfileAction(
+          actionId = actionIdFor(capability.capability),
+          label = labelFor(capability.capability),
+          readable = capability.readable,
+          writable = capability.writable,
+          reason = capability.reason,
+          source = capability.source
+        )
+      },
       mode = finalMode,
       lastValidatedEpochMs = System.currentTimeMillis()
     )
@@ -207,7 +268,13 @@ class RouterCredentialsStore(context: Context) {
       .putString(keyModel, profile.modelName)
       .putString(keyVendor, profile.vendorName)
       .putString(keyFirmware, profile.firmwareVersion)
+      .putString(keyAdapterId, profile.adapterId)
       .putString(keyCapabilities, profile.capabilities.joinToString(",") { it.name })
+      .putBoolean(keyDetected, profile.detected)
+      .putBoolean(keyAuthenticated, profile.authenticated)
+      .putBoolean(keyReadable, profile.readable)
+      .putBoolean(keyWritable, profile.writable)
+      .putString(keyActionCapabilities, encodeActionCapabilities(profile.actionCapabilities))
       .putString(keyMode, profile.mode.name)
       .putLong(keyLastValidated, profile.lastValidatedEpochMs ?: System.currentTimeMillis())
       .apply()
@@ -235,5 +302,74 @@ class RouterCredentialsStore(context: Context) {
 
   private fun parseAccessMode(raw: String?, capabilities: Set<RouterCapability>): RouterAccessMode {
     return runCatching { RouterAccessMode.valueOf(raw ?: "") }.getOrElse { deriveMode(capabilities) }
+  }
+
+  private fun parseActionCapabilities(raw: String?): Map<String, RouterProfileAction> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    return runCatching {
+      val root = JSONObject(raw)
+      buildMap {
+        val keys = root.keys()
+        while (keys.hasNext()) {
+          val key = keys.next()
+          val item = root.getJSONObject(key)
+          put(
+            key,
+            RouterProfileAction(
+              actionId = key,
+              label = item.optString("label", key),
+              readable = item.optBoolean("readable", false),
+              writable = item.optBoolean("writable", false),
+              reason = item.optString("reason", ""),
+              source = item.optString("source").takeIf { it.isNotBlank() }
+            )
+          )
+        }
+      }
+    }.getOrDefault(emptyMap())
+  }
+
+  private fun encodeActionCapabilities(value: Map<String, RouterProfileAction>): String {
+    val root = JSONObject()
+    value.forEach { (key, action) ->
+      root.put(
+        key,
+        JSONObject()
+          .put("label", action.label)
+          .put("readable", action.readable)
+          .put("writable", action.writable)
+          .put("reason", action.reason)
+          .put("source", action.source)
+      )
+    }
+    return root.toString()
+  }
+
+  private fun actionIdFor(capability: RouterCapability): String {
+    return when (capability) {
+      RouterCapability.GUEST_WIFI_TOGGLE -> AppActionId.ROUTER_GUEST_WIFI
+      RouterCapability.DNS_SHIELD_TOGGLE -> AppActionId.ROUTER_DNS_SHIELD
+      RouterCapability.FIREWALL_TOGGLE -> AppActionId.ROUTER_FIREWALL
+      RouterCapability.VPN_TOGGLE -> AppActionId.ROUTER_VPN
+      RouterCapability.QOS_CONFIG -> AppActionId.ROUTER_QOS
+      RouterCapability.REBOOT -> AppActionId.ROUTER_REBOOT
+      RouterCapability.DNS_FLUSH -> AppActionId.ROUTER_FLUSH_DNS
+      RouterCapability.DHCP_LEASES_WRITE -> AppActionId.ROUTER_RENEW_DHCP
+      else -> capability.name
+    }
+  }
+
+  private fun labelFor(capability: RouterCapability): String {
+    return when (capability) {
+      RouterCapability.GUEST_WIFI_TOGGLE -> "Guest Wi-Fi"
+      RouterCapability.DNS_SHIELD_TOGGLE -> "DNS Shield"
+      RouterCapability.FIREWALL_TOGGLE -> "Firewall"
+      RouterCapability.VPN_TOGGLE -> "VPN"
+      RouterCapability.QOS_CONFIG -> "QoS"
+      RouterCapability.REBOOT -> "Router reboot"
+      RouterCapability.DNS_FLUSH -> "Flush DNS"
+      RouterCapability.DHCP_LEASES_WRITE -> "Renew DHCP"
+      else -> capability.name
+    }
   }
 }

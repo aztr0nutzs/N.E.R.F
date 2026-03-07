@@ -370,8 +370,13 @@ fun SettingsScreen(
         Text("Model: ${profile.modelName ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
         Text("Firmware: ${profile.firmwareVersion ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
         Text("Admin URL: ${profile.adminUrl ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+        Text("Adapter: ${profile.adapterId ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
         Text("Auth: ${profile.authType.name}", style = MaterialTheme.typography.bodySmall)
         Text("Mode: ${profile.mode.name}", style = MaterialTheme.typography.bodySmall)
+        Text("Detected: ${profile.detected}", style = MaterialTheme.typography.bodySmall)
+        Text("Authenticated: ${profile.authenticated}", style = MaterialTheme.typography.bodySmall)
+        Text("Readable: ${profile.readable}", style = MaterialTheme.typography.bodySmall)
+        Text("Writable: ${profile.writable}", style = MaterialTheme.typography.bodySmall)
         Text(
           "Last Validated: ${profile.lastValidatedEpochMs?.toString() ?: "Never"}",
           style = MaterialTheme.typography.bodySmall
@@ -442,6 +447,25 @@ private fun CapabilityActionRow(label: String, support: ActionSupportState) {
 }
 
 private fun settingsRouterActionSupport(profile: RouterProfile): Map<String, ActionSupportState> {
+  if (profile.actionCapabilities.isNotEmpty()) {
+    val base = ActionSupportCatalog.routerActionSupport(
+      RouterStatusSnapshot(
+        status = ServiceStatus.NO_DATA,
+        message = "Saved router profile action support.",
+        accessMode = if (profile.writable) "READ_WRITE" else "READ_ONLY",
+        capabilities = profile.capabilities.map { it.name }
+      )
+    ).toMutableMap()
+    profile.actionCapabilities.forEach { (key, action) ->
+      base[key] = ActionSupportState(
+        supported = action.writable,
+        reason = action.reason,
+        label = action.label
+      )
+    }
+    return base
+  }
+
   val configured = !profile.routerIp.isNullOrBlank() || !profile.adminUrl.isNullOrBlank()
   val baseMessage = when {
     !configured -> "Router profile is not configured yet."
@@ -478,6 +502,8 @@ private fun settingsFeatureState(
   }
   return RouterFeatureState(
     supported = hasCapability,
+    readable = hasCapability,
+    writable = hasCapability && writable,
     enabled = if (hasCapability && writable) false else null,
     status = if (hasCapability && writable) ServiceStatus.OK else ServiceStatus.NOT_SUPPORTED,
     message = message
