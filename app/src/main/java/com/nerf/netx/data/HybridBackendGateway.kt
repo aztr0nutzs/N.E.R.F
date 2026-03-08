@@ -49,6 +49,7 @@ import com.nerf.netx.domain.SpeedtestServer
 import com.nerf.netx.domain.SpeedtestTargetMode
 import com.nerf.netx.domain.ThroughputSample
 import com.nerf.netx.domain.SpeedtestUiState
+import com.nerf.netx.domain.deviceHasStableRouterId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,24 +83,94 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-class HybridBackendGateway(
-  context: Context,
-  private val credentialsStore: RouterCredentialsStore = RouterCredentialsStore(context)
+class HybridBackendGateway private constructor(
+  private val composition: HybridBackendComposition
 ) : AppServices {
 
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-  private val lanScanner = RealLanScanner(context)
-  private val sharedDevices = MutableStateFlow<List<Device>>(emptyList())
-  private val selectedNodeId = MutableStateFlow<String?>(null)
+  constructor(
+    context: Context,
+    credentialsStore: RouterCredentialsStore = RouterCredentialsStore(context)
+  ) : this(HybridBackendComposition.create(context, credentialsStore))
 
-  override val speedtest: SpeedtestService = HybridSpeedtest(context, scope)
-  override val scan: ScanService = HybridScanService(scope, lanScanner, sharedDevices)
-  override val devices: DevicesService = HybridDevicesService(sharedDevices, scan)
-  override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner, credentialsStore)
-  override val map: MapService = HybridMapService(sharedDevices, selectedNodeId)
-  override val topology: MapTopologyService = HybridTopologyService(sharedDevices, selectedNodeId)
-  override val analytics: AnalyticsService = HybridAnalytics(context, speedtest, sharedDevices, scan)
-  override val routerControl: RouterControlService = HybridRouterControl(context, credentialsStore)
+  override val speedtest: SpeedtestService = composition.speedtest
+  override val scan: ScanService = composition.scan
+  override val devices: DevicesService = composition.devices
+  override val deviceControl: DeviceControlService = composition.deviceControl
+  override val map: MapService = composition.map
+  override val topology: MapTopologyService = composition.topology
+  override val analytics: AnalyticsService = composition.analytics
+  override val routerControl: RouterControlService = composition.routerControl
+}
+
+/**
+ * Real backend composition root used by Compose screens, WebView bridge events, and assistant tooling.
+ * Every service resolves from the same shared state and router backend access wiring.
+ */
+private data class HybridBackendComposition(
+  val speedtest: SpeedtestService,
+  val scan: ScanService,
+  val devices: DevicesService,
+  val deviceControl: DeviceControlService,
+  val map: MapService,
+  val topology: MapTopologyService,
+  val analytics: AnalyticsService,
+  val routerControl: RouterControlService
+) {
+  companion object {
+    fun create(
+      context: Context,
+      credentialsStore: RouterCredentialsStore
+    ): HybridBackendComposition {
+      val appContext = context.applicationContext
+      val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+      val sharedDevices = MutableStateFlow<List<Device>>(emptyList())
+      val selectedNodeId = MutableStateFlow<String?>(null)
+      val lanScanner = RealLanScanner(appContext)
+      val routerBackend = HybridRouterBackend(credentialsStore)
+
+      val speedtest = HybridSpeedtest(appContext, scope)
+      val scan = HybridScanService(scope, lanScanner, sharedDevices)
+      val devices = HybridDevicesService(sharedDevices, scan)
+      val deviceControl = HybridDeviceControl(sharedDevices, lanScanner, routerBackend)
+      val map = HybridMapService(sharedDevices, selectedNodeId)
+      val topology = HybridTopologyService(sharedDevices, selectedNodeId)
+      val analytics = HybridAnalytics(appContext, speedtest, sharedDevices, scan)
+      val routerControl = HybridRouterControl(appContext, routerBackend)
+
+      return HybridBackendComposition(
+        speedtest = speedtest,
+        scan = scan,
+        devices = devices,
+        deviceControl = deviceControl,
+        map = map,
+        topology = topology,
+        analytics = analytics,
+        routerControl = routerControl
+      )
+    }
+  }
+}
+
+private class HybridRouterBackend(
+  private val credentialsStore: RouterCredentialsStore
+) {
+  fun connectionInfo(): RouterConnectionInfo {
+    val creds = credentialsStore.read()
+    val profile = credentialsStore.readProfile()
+    return RouterConnectionInfo(
+      routerIp = profile.routerIp ?: creds.host,
+      adminUrl = profile.adminUrl ?: creds.adminUrl,
+      username = creds.username.ifBlank { null },
+      password = creds.token.ifBlank { null },
+      preferredAuthType = profile.authType
+    )
+  }
+
+  fun apiOrNull(): RouterApi? {
+    val info = connectionInfo()
+    if (info.routerIp.trim().isBlank()) return null
+    return RouterApiHttp(info)
+  }
 }
 
 private class HybridSpeedtest(
@@ -1153,7 +1224,7 @@ private class HybridDevicesService(
 private class HybridDeviceControl(
   private val sharedDevices: MutableStateFlow<List<Device>>,
   private val lanScanner: RealLanScanner,
-  private val credentialsStore: RouterCredentialsStore
+  private val routerBackend: HybridRouterBackend
 ) : DeviceControlService {
   private val _status = MutableStateFlow(
     DeviceControlStatusSnapshot(
@@ -1164,7 +1235,7 @@ private class HybridDeviceControl(
   override val status: StateFlow<DeviceControlStatusSnapshot> = _status.asStateFlow()
 
   override suspend fun refreshStatus(): DeviceControlStatusSnapshot {
-    return runCatching { refreshDeviceStatus() }.getOrElse { error ->
+    return runCatching { refreshDeviceStatus(routerBackend.apiOrNull()) }.getOrElse { error ->
       DeviceControlStatusSnapshot(
         status = ServiceStatus.ERROR,
         message = error.message ?: "Device control status refresh failed.",
@@ -1224,7 +1295,7 @@ private class HybridDeviceControl(
     val device = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
     val routerDevice = routerDevice(device)
-    val api = buildRouterApi()
+    val api = routerBackend.apiOrNull()
       ?: return deviceUnavailable(
         action = if (blocked) DeviceControlAction.BLOCK else DeviceControlAction.UNBLOCK,
         device = device,
@@ -1260,21 +1331,43 @@ private class HybridDeviceControl(
   override suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult {
     val device = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    val api = routerBackend.apiOrNull()
+      ?: return deviceUnavailable(
+        action = if (paused) DeviceControlAction.PAUSE else DeviceControlAction.RESUME,
+        device = device,
+        reason = "Router credentials are not configured or validated."
+      )
     val capability = getDeviceCapabilityState(device)
     val actionId = if (paused) AppActionId.DEVICE_PAUSE else AppActionId.DEVICE_RESUME
     val support = capability.actionSupport[actionId]
-    return deviceSupportResult(
+    if (support == null || !support.supported) {
+      return deviceSupportResult(
+        action = if (paused) DeviceControlAction.PAUSE else DeviceControlAction.RESUME,
+        device = device,
+        backend = capability.backend,
+        reason = support?.reason ?: capability.message
+      )
+    }
+
+    val result = api.setDevicePaused(routerDevice(device), paused)
+    val mapped = mapDeviceActionResult(
+      result = result,
       action = if (paused) DeviceControlAction.PAUSE else DeviceControlAction.RESUME,
-      device = device,
-      backend = capability.backend,
-      reason = support?.reason ?: capability.message
+      okCode = if (paused) "DEVICE_PAUSED" else "DEVICE_RESUMED",
+      device = device
     )
+    if (mapped.ok) {
+      refreshDeviceState(deviceId)
+    } else {
+      refreshDeviceStatus(api)
+    }
+    return mapped
   }
 
   override suspend fun rename(deviceId: String, name: String): ActionResult {
     val device = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
-    val api = buildRouterApi()
+    val api = routerBackend.apiOrNull()
       ?: return deviceUnavailable(
         action = DeviceControlAction.RENAME,
         device = device,
@@ -1314,13 +1407,36 @@ private class HybridDeviceControl(
   override suspend fun prioritize(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    val api = routerBackend.apiOrNull()
+      ?: return deviceUnavailable(
+        action = DeviceControlAction.PRIORITIZE,
+        device = d,
+        reason = "Router credentials are not configured or validated."
+      )
     val capability = getDeviceCapabilityState(d)
-    return deviceSupportResult(
+    val support = capability.actionSupport[AppActionId.DEVICE_PRIORITIZE]
+    if (support == null || !support.supported) {
+      return deviceSupportResult(
+        action = DeviceControlAction.PRIORITIZE,
+        device = d,
+        backend = capability.backend,
+        reason = support?.reason ?: capability.message
+      )
+    }
+
+    val result = api.prioritizeDevice(routerDevice(d))
+    val mapped = mapDeviceActionResult(
+      result = result,
       action = DeviceControlAction.PRIORITIZE,
-      device = d,
-      backend = capability.backend,
-      reason = capability.actionSupport[AppActionId.DEVICE_PRIORITIZE]?.reason ?: capability.message
+      okCode = "DEVICE_PRIORITIZED",
+      device = d
     )
+    if (mapped.ok) {
+      refreshDeviceState(deviceId)
+    } else {
+      refreshDeviceStatus(api)
+    }
+    return mapped
   }
 
   override suspend fun deviceDetails(deviceId: String): DeviceDetails? {
@@ -1341,7 +1457,7 @@ private class HybridDeviceControl(
   }
 
   private suspend fun getDeviceCapabilityState(device: Device): DeviceCapabilitySnapshot {
-    val api = buildRouterApi()
+    val api = routerBackend.apiOrNull()
     if (api == null) {
       val snapshot = DeviceControlStatusSnapshot(
         status = ServiceStatus.NO_DATA,
@@ -1359,7 +1475,7 @@ private class HybridDeviceControl(
       return DeviceCapabilitySnapshot(device, snapshot.backend, emptyMap(), actionSupport, snapshot.message)
     }
 
-    val statusSnapshot = refreshStatus()
+    val statusSnapshot = refreshDeviceStatus(api)
     val routerDevice = routerDevice(device)
     val runtime = api.getDeviceRuntimeCapabilities(routerDevice)
     val backend = statusSnapshot.backend
@@ -1396,7 +1512,7 @@ private class HybridDeviceControl(
     )
   }
 
-  private suspend fun refreshDeviceStatus(api: RouterApi? = buildRouterApi()): DeviceControlStatusSnapshot {
+  private suspend fun refreshDeviceStatus(api: RouterApi? = routerBackend.apiOrNull()): DeviceControlStatusSnapshot {
     val resolvedApi = api ?: return DeviceControlStatusSnapshot(
       status = ServiceStatus.NO_DATA,
       message = "Router credentials are not configured.",
@@ -1408,15 +1524,61 @@ private class HybridDeviceControl(
         message = "Router credentials are not configured."
       )
     ).also { _status.value = it }
+    val detected = resolvedApi.detect(routerBackend.connectionInfo())
     val runtime = resolvedApi.getRuntimeCapabilities()
-    val detected = resolvedApi.detect(connectionInfoFromStore())
+    val representativeDevice = sharedDevices.value.firstOrNull(::deviceHasStableRouterId) ?: sharedDevices.value.firstOrNull()
+    val representativeRuntime = representativeDevice?.let { device ->
+      runCatching { resolvedApi.getDeviceRuntimeCapabilities(routerDevice(device)) }.getOrNull()
+    }
     val capabilityStates = linkedMapOf(
-      AppActionId.DEVICE_BLOCK to deviceCapabilityState(runtime, AppActionId.DEVICE_BLOCK, RouterDeviceCapability.BLOCK, DeviceControlAction.BLOCK.label),
-      AppActionId.DEVICE_UNBLOCK to deviceCapabilityState(runtime, AppActionId.DEVICE_UNBLOCK, RouterDeviceCapability.BLOCK, DeviceControlAction.UNBLOCK.label),
-      AppActionId.DEVICE_PAUSE to deviceCapabilityState(runtime, AppActionId.DEVICE_PAUSE, RouterDeviceCapability.PAUSE, DeviceControlAction.PAUSE.label),
-      AppActionId.DEVICE_RESUME to deviceCapabilityState(runtime, AppActionId.DEVICE_RESUME, RouterDeviceCapability.PAUSE, DeviceControlAction.RESUME.label),
-      AppActionId.DEVICE_RENAME to deviceCapabilityState(runtime, AppActionId.DEVICE_RENAME, RouterDeviceCapability.RENAME, DeviceControlAction.RENAME.label),
-      AppActionId.DEVICE_PRIORITIZE to deviceCapabilityState(runtime, AppActionId.DEVICE_PRIORITIZE, RouterDeviceCapability.PRIORITIZE, DeviceControlAction.PRIORITIZE.label)
+      AppActionId.DEVICE_BLOCK to deviceCapabilityState(
+        runtime = runtime,
+        representativeRuntime = representativeRuntime,
+        representativeDevice = representativeDevice,
+        actionId = AppActionId.DEVICE_BLOCK,
+        capability = RouterDeviceCapability.BLOCK,
+        label = DeviceControlAction.BLOCK.label
+      ),
+      AppActionId.DEVICE_UNBLOCK to deviceCapabilityState(
+        runtime = runtime,
+        representativeRuntime = representativeRuntime,
+        representativeDevice = representativeDevice,
+        actionId = AppActionId.DEVICE_UNBLOCK,
+        capability = RouterDeviceCapability.BLOCK,
+        label = DeviceControlAction.UNBLOCK.label
+      ),
+      AppActionId.DEVICE_PAUSE to deviceCapabilityState(
+        runtime = runtime,
+        representativeRuntime = representativeRuntime,
+        representativeDevice = representativeDevice,
+        actionId = AppActionId.DEVICE_PAUSE,
+        capability = RouterDeviceCapability.PAUSE,
+        label = DeviceControlAction.PAUSE.label
+      ),
+      AppActionId.DEVICE_RESUME to deviceCapabilityState(
+        runtime = runtime,
+        representativeRuntime = representativeRuntime,
+        representativeDevice = representativeDevice,
+        actionId = AppActionId.DEVICE_RESUME,
+        capability = RouterDeviceCapability.PAUSE,
+        label = DeviceControlAction.RESUME.label
+      ),
+      AppActionId.DEVICE_RENAME to deviceCapabilityState(
+        runtime = runtime,
+        representativeRuntime = representativeRuntime,
+        representativeDevice = representativeDevice,
+        actionId = AppActionId.DEVICE_RENAME,
+        capability = RouterDeviceCapability.RENAME,
+        label = DeviceControlAction.RENAME.label
+      ),
+      AppActionId.DEVICE_PRIORITIZE to deviceCapabilityState(
+        runtime = runtime,
+        representativeRuntime = representativeRuntime,
+        representativeDevice = representativeDevice,
+        actionId = AppActionId.DEVICE_PRIORITIZE,
+        capability = RouterDeviceCapability.PRIORITIZE,
+        label = DeviceControlAction.PRIORITIZE.label
+      )
     )
     val snapshot = DeviceControlStatusSnapshot(
       status = when {
@@ -1428,7 +1590,7 @@ private class HybridDeviceControl(
       backend = DeviceControlBackendState(
         detected = runtime.detected,
         authenticated = runtime.authenticated,
-        readable = runtime.readable,
+        readable = runtime.readable || representativeRuntime?.readable == true,
         writable = capabilityStates.values.any { it.writable },
         vendorName = detected.vendorName,
         modelName = detected.modelName,
@@ -1448,26 +1610,6 @@ private class HybridDeviceControl(
     updateSharedDevice(capability.device)
   }
 
-  private fun buildRouterApi(): RouterApi? {
-    val creds = credentialsStore.read()
-    val profile = credentialsStore.readProfile()
-    val ip = (profile.routerIp ?: creds.host).trim()
-    if (ip.isBlank()) return null
-    return RouterApiHttp(connectionInfoFromStore())
-  }
-
-  private fun connectionInfoFromStore(): RouterConnectionInfo {
-    val creds = credentialsStore.read()
-    val profile = credentialsStore.readProfile()
-    return RouterConnectionInfo(
-      routerIp = profile.routerIp ?: creds.host,
-      adminUrl = profile.adminUrl ?: creds.adminUrl,
-      username = creds.username.ifBlank { null },
-      password = creds.token.ifBlank { null },
-      preferredAuthType = profile.authType
-    )
-  }
-
   private fun routerDevice(device: Device): RouterManagedDevice {
     return RouterManagedDevice(
       deviceId = device.id,
@@ -1480,61 +1622,49 @@ private class HybridDeviceControl(
 
   private fun deviceCapabilityState(
     runtime: RouterRuntimeCapabilities,
+    representativeRuntime: RouterDeviceRuntimeCapabilities?,
+    representativeDevice: Device?,
     actionId: String,
     capability: RouterDeviceCapability,
     label: String
   ): DeviceCapabilityState {
-    val asusDeviceSupport = runtime.adapterId == "asuswrt-app" && runtime.authenticated && runtime.readable
+    val actionCapability = representativeRuntime?.actionCapabilities?.get(capability)
     val authUnavailable = runtime.detected && !runtime.authenticated
-    val reason = when (capability) {
-      RouterDeviceCapability.BLOCK -> if (authUnavailable) {
+    val capabilityPending = runtime.authenticated && runtime.readable && actionCapability == null
+    val reason = when {
+      actionCapability != null -> actionCapability.reason
+      authUnavailable -> {
         "Router detected, but authenticated device control is unavailable until credentials are validated."
-      } else if (asusDeviceSupport) {
-        "Per-device internet blocking is available for supported ASUSWRT devices with a stable MAC address."
-      } else {
-        "Per-device internet blocking is unsupported on the current backend/router."
       }
-      RouterDeviceCapability.PAUSE -> if (authUnavailable) {
-        "Router detected, but authenticated device control is unavailable until credentials are validated."
-      } else {
-        "Pause/resume is unsupported on the current backend/router."
+      representativeDevice == null -> {
+        "Run a scan to discover a device and verify whether $label is supported on the current router/backend."
       }
-      RouterDeviceCapability.RENAME -> if (authUnavailable) {
-        "Router detected, but authenticated device control is unavailable until credentials are validated."
-      } else if (asusDeviceSupport) {
-        "Device rename is available for supported ASUSWRT devices with a stable MAC address."
-      } else {
-        "Device rename is unsupported on the current backend/router."
+      !deviceHasStableRouterId(representativeDevice) -> {
+        "Router-backed device control requires a stable MAC address for this device."
       }
-      RouterDeviceCapability.PRIORITIZE -> if (authUnavailable) {
-        "Router detected, but authenticated device control is unavailable until credentials are validated."
-      } else {
-        "Device prioritization is unsupported on the current backend/router."
+      capabilityPending -> {
+        "Device control capability could not be verified from the current router/backend."
       }
+      else -> "$label is unsupported on the current backend/router."
     }
-    val writable = when (capability) {
-      RouterDeviceCapability.BLOCK, RouterDeviceCapability.RENAME -> asusDeviceSupport
-      RouterDeviceCapability.PAUSE, RouterDeviceCapability.PRIORITIZE -> false
-    }
-    val readable = when (capability) {
-      RouterDeviceCapability.BLOCK, RouterDeviceCapability.RENAME -> runtime.readable
-      RouterDeviceCapability.PAUSE, RouterDeviceCapability.PRIORITIZE -> false
-    }
+    val writable = actionCapability?.writable == true
+    val readable = actionCapability?.readable == true
+    val supported = actionCapability?.supported == true
     return DeviceCapabilityState(
       actionId = actionId,
       label = label,
-      supported = writable,
+      supported = supported,
       detected = runtime.detected,
       authenticated = runtime.authenticated,
       readable = readable,
       writable = writable,
       status = when {
         writable -> ServiceStatus.OK
-        authUnavailable -> ServiceStatus.NO_DATA
+        readable || supported || authUnavailable || capabilityPending -> ServiceStatus.NO_DATA
         else -> ServiceStatus.NOT_SUPPORTED
       },
       reason = reason,
-      source = runtime.adapterId
+      source = actionCapability?.source ?: representativeRuntime?.adapterId ?: runtime.adapterId
     )
   }
 
@@ -2492,7 +2622,7 @@ private class HybridAnalytics(
 
 private class HybridRouterControl(
   private val context: Context,
-  private val credentialsStore: RouterCredentialsStore
+  private val routerBackend: HybridRouterBackend
 ) : RouterControlService {
 
   private val _status = MutableStateFlow(
@@ -2568,7 +2698,7 @@ private class HybridRouterControl(
         vpn = RouterFeatureState(message = "Router credentials are required for VPN state.")
       )
     } else {
-      val detected = api.detect(connectionInfoFromStore())
+      val detected = api.detect(routerBackend.connectionInfo())
       val runtime = api.getRuntimeCapabilities()
       val accessMode = if (runtime.writable) "READ_WRITE" else "READ_ONLY"
       val message = buildString {
@@ -2781,24 +2911,8 @@ private class HybridRouterControl(
     return action.unavailableResult("Router credentials are not configured or validated.")
   }
 
-  private fun connectionInfoFromStore(): RouterConnectionInfo {
-    val creds = credentialsStore.read()
-    val profile = credentialsStore.readProfile()
-    return RouterConnectionInfo(
-      routerIp = profile.routerIp ?: creds.host,
-      adminUrl = profile.adminUrl ?: creds.adminUrl,
-      username = creds.username.ifBlank { null },
-      password = creds.token.ifBlank { null },
-      preferredAuthType = profile.authType
-    )
-  }
-
   private fun buildRouterApi(): RouterApi? {
-    val creds = credentialsStore.read()
-    val profile = credentialsStore.readProfile()
-    val ip = (profile.routerIp ?: creds.host).trim()
-    if (ip.isBlank()) return null
-    return RouterApiHttp(connectionInfoFromStore())
+    return routerBackend.apiOrNull()
   }
 
   private fun featureState(
