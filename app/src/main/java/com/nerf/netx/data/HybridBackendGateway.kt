@@ -1245,6 +1245,12 @@ private class HybridDeviceControl(
           readable = false,
           writable = false,
           message = error.message ?: "Device control status refresh failed."
+        ),
+        deviceCapabilities = unavailableDeviceCapabilityStates(
+          backendDetected = false,
+          backendAuthenticated = false,
+          reason = error.message ?: "Device control status refresh failed.",
+          status = ServiceStatus.ERROR
         )
       ).also { _status.value = it }
     }
@@ -1468,11 +1474,17 @@ private class HybridDeviceControl(
           readable = false,
           writable = false,
           message = "Router credentials are not configured."
+        ),
+        deviceCapabilities = unavailableDeviceCapabilityStates(
+          backendDetected = false,
+          backendAuthenticated = false,
+          reason = "Router credentials are not configured.",
+          status = ServiceStatus.NO_DATA
         )
       )
       _status.value = snapshot
       val actionSupport = ActionSupportCatalog.deviceActionSupport(device, snapshot)
-      return DeviceCapabilitySnapshot(device, snapshot.backend, emptyMap(), actionSupport, snapshot.message)
+      return DeviceCapabilitySnapshot(device, snapshot.backend, snapshot.deviceCapabilities, actionSupport, snapshot.message)
     }
 
     val statusSnapshot = refreshDeviceStatus(api)
@@ -1522,6 +1534,12 @@ private class HybridDeviceControl(
         readable = false,
         writable = false,
         message = "Router credentials are not configured."
+      ),
+      deviceCapabilities = unavailableDeviceCapabilityStates(
+        backendDetected = false,
+        backendAuthenticated = false,
+        reason = "Router credentials are not configured.",
+        status = ServiceStatus.NO_DATA
       )
     ).also { _status.value = it }
     val detected = resolvedApi.detect(routerBackend.connectionInfo())
@@ -1717,14 +1735,17 @@ private class HybridDeviceControl(
         details = mapOf("device" to device.name.ifBlank { device.ip })
       )
       RouterActionStatus.NOT_SUPPORTED -> deviceUnsupported(action, device, result.message)
-      RouterActionStatus.ERROR -> ActionResult(
-        ok = false,
-        status = ServiceStatus.ERROR,
-        code = result.errorCode ?: "DEVICE_ACTION_ERROR",
-        message = result.message,
-        details = mapOf("device" to device.name.ifBlank { device.ip }),
-        errorReason = result.message
-      )
+      RouterActionStatus.ERROR -> when (result.errorCode) {
+        "AUTH_REQUIRED", "ROUTER_UNAVAILABLE" -> deviceUnavailable(action, device, result.message)
+        else -> ActionResult(
+          ok = false,
+          status = ServiceStatus.ERROR,
+          code = result.errorCode ?: "DEVICE_ACTION_ERROR",
+          message = result.message,
+          details = mapOf("device" to device.name.ifBlank { device.ip }),
+          errorReason = result.message
+        )
+      }
     }
   }
 
@@ -1771,6 +1792,85 @@ private class HybridDeviceControl(
       canResume = actionSupport[AppActionId.DEVICE_RESUME]?.supported == true,
       canRename = actionSupport[AppActionId.DEVICE_RENAME]?.supported == true,
       canPrioritize = actionSupport[AppActionId.DEVICE_PRIORITIZE]?.supported == true
+    )
+  }
+
+  private fun unavailableDeviceCapabilityStates(
+    backendDetected: Boolean,
+    backendAuthenticated: Boolean,
+    reason: String,
+    status: ServiceStatus
+  ): Map<String, DeviceCapabilityState> {
+    return linkedMapOf(
+      AppActionId.DEVICE_BLOCK to unavailableDeviceCapabilityState(
+        actionId = AppActionId.DEVICE_BLOCK,
+        label = DeviceControlAction.BLOCK.label,
+        backendDetected = backendDetected,
+        backendAuthenticated = backendAuthenticated,
+        reason = reason,
+        status = status
+      ),
+      AppActionId.DEVICE_UNBLOCK to unavailableDeviceCapabilityState(
+        actionId = AppActionId.DEVICE_UNBLOCK,
+        label = DeviceControlAction.UNBLOCK.label,
+        backendDetected = backendDetected,
+        backendAuthenticated = backendAuthenticated,
+        reason = reason,
+        status = status
+      ),
+      AppActionId.DEVICE_PAUSE to unavailableDeviceCapabilityState(
+        actionId = AppActionId.DEVICE_PAUSE,
+        label = DeviceControlAction.PAUSE.label,
+        backendDetected = backendDetected,
+        backendAuthenticated = backendAuthenticated,
+        reason = reason,
+        status = status
+      ),
+      AppActionId.DEVICE_RESUME to unavailableDeviceCapabilityState(
+        actionId = AppActionId.DEVICE_RESUME,
+        label = DeviceControlAction.RESUME.label,
+        backendDetected = backendDetected,
+        backendAuthenticated = backendAuthenticated,
+        reason = reason,
+        status = status
+      ),
+      AppActionId.DEVICE_RENAME to unavailableDeviceCapabilityState(
+        actionId = AppActionId.DEVICE_RENAME,
+        label = DeviceControlAction.RENAME.label,
+        backendDetected = backendDetected,
+        backendAuthenticated = backendAuthenticated,
+        reason = reason,
+        status = status
+      ),
+      AppActionId.DEVICE_PRIORITIZE to unavailableDeviceCapabilityState(
+        actionId = AppActionId.DEVICE_PRIORITIZE,
+        label = DeviceControlAction.PRIORITIZE.label,
+        backendDetected = backendDetected,
+        backendAuthenticated = backendAuthenticated,
+        reason = reason,
+        status = status
+      )
+    )
+  }
+
+  private fun unavailableDeviceCapabilityState(
+    actionId: String,
+    label: String,
+    backendDetected: Boolean,
+    backendAuthenticated: Boolean,
+    reason: String,
+    status: ServiceStatus
+  ): DeviceCapabilityState {
+    return DeviceCapabilityState(
+      actionId = actionId,
+      label = label,
+      supported = false,
+      detected = backendDetected,
+      authenticated = backendAuthenticated,
+      readable = false,
+      writable = false,
+      status = status,
+      reason = reason
     )
   }
 

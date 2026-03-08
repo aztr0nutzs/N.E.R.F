@@ -138,23 +138,31 @@ class RouterApiHttp(
     val runtime = getRuntimeCapabilities()
     val adapter = activeAdapter ?: resolveAdapter(ensureDetected())
     if (!runtime.authenticated) {
+      val reason = "Router detected, but device control is unavailable until credentials are validated."
       return RouterDeviceRuntimeCapabilities(
         adapterId = runtime.adapterId ?: adapter.id,
         detected = runtime.detected,
         authenticated = false,
         readable = false,
         writable = false,
-        message = "Router detected, but device control is unavailable until credentials are validated."
+        actionCapabilities = unsupportedRouterDeviceActionCapabilities(source = runtime.adapterId ?: adapter.id) { capability ->
+          "${routerDeviceCapabilityLabel(capability)} is unavailable until router credentials are validated."
+        },
+        message = reason
       )
     }
     return runCatching { adapter.probeDevice(this, device, runtime) }.getOrElse { error ->
+      val reason = "Device capability probing failed: ${error.message ?: "Unknown error"}"
       RouterDeviceRuntimeCapabilities(
         adapterId = runtime.adapterId ?: adapter.id,
         detected = runtime.detected,
         authenticated = runtime.authenticated,
         readable = false,
         writable = false,
-        message = "Device capability probing failed: ${error.message ?: "Unknown error"}"
+        actionCapabilities = unsupportedRouterDeviceActionCapabilities(source = runtime.adapterId ?: adapter.id) { capability ->
+          "${routerDeviceCapabilityLabel(capability)} is unavailable. $reason"
+        },
+        message = reason
       )
     }
   }

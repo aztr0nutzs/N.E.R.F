@@ -77,6 +77,102 @@ class RouterVendorAdaptersTest {
     assertEquals("1", session.nvram["wl0.1_bss_enabled"])
   }
 
+  @Test
+  fun `default device probe exposes explicit unsupported device actions`() = runTest {
+    val runtime = object : RouterVendorAdapter {
+      override val id: String = "fake-adapter"
+      override fun matches(info: RouterInfo): Boolean = true
+      override suspend fun probe(session: RouterHttpSession): RouterRuntimeCapabilities = RouterRuntimeCapabilities()
+    }.probeDevice(
+      session = FakeRouterHttpSession(),
+      device = RouterManagedDevice(
+        deviceId = "device-1",
+        macAddress = "AA:BB:CC:DD:EE:FF",
+        ipAddress = "192.168.1.20",
+        hostName = "tablet",
+        displayName = "Tablet"
+      ),
+      routerRuntime = RouterRuntimeCapabilities(
+        adapterId = "fake-adapter",
+        detected = true,
+        authenticated = true,
+        readable = true
+      )
+    )
+
+    assertEquals(routerDeviceCapabilities.toSet(), runtime.actionCapabilities.keys)
+    assertTrue(runtime.actionCapabilities.values.all { !it.readable && !it.writable })
+  }
+
+  @Test
+  fun `asus device probe reports real block and rename support only`() = runTest {
+    val session = FakeRouterHttpSession(
+      nvram = mutableMapOf(
+        "custom_clientlist" to "Tablet>AA:BB:CC:DD:EE:FF>0>0>>",
+        "MULTIFILTER_ENABLE" to "2",
+        "MULTIFILTER_MAC" to "AA:BB:CC:DD:EE:FF",
+        "MULTIFILTER_DEVICENAME" to "Tablet"
+      )
+    )
+
+    val runtime = AsusRouterAdapter().probeDevice(
+      session = session,
+      device = RouterManagedDevice(
+        deviceId = "device-1",
+        macAddress = "AA:BB:CC:DD:EE:FF",
+        ipAddress = "192.168.1.20",
+        hostName = "tablet",
+        displayName = "Tablet"
+      ),
+      routerRuntime = RouterRuntimeCapabilities(
+        adapterId = "asuswrt-app",
+        detected = true,
+        authenticated = true,
+        readable = true,
+        writable = true
+      )
+    )
+
+    assertTrue(runtime.actionCapabilities.getValue(RouterDeviceCapability.BLOCK).writable)
+    assertTrue(runtime.actionCapabilities.getValue(RouterDeviceCapability.RENAME).writable)
+    assertFalse(runtime.actionCapabilities.getValue(RouterDeviceCapability.PAUSE).writable)
+    assertFalse(runtime.actionCapabilities.getValue(RouterDeviceCapability.PRIORITIZE).writable)
+    assertEquals(true, runtime.readback.blocked)
+    assertEquals("Tablet", runtime.readback.nickname)
+  }
+
+  @Test
+  fun `asus device rename uses verified start_apply2 path and readback`() = runTest {
+    val session = FakeRouterHttpSession(
+      nvram = mutableMapOf(
+        "custom_clientlist" to "Tablet>AA:BB:CC:DD:EE:FF>0>0>>"
+      ),
+      submitFormHandler = { _, data, store ->
+        data["custom_clientlist"]?.let { store["custom_clientlist"] = it }
+        RouterActionResult(
+          status = RouterActionStatus.OK,
+          message = "Submitted"
+        )
+      }
+    )
+
+    val result = AsusRouterAdapter().renameDevice(
+      session = session,
+      device = RouterManagedDevice(
+        deviceId = "device-1",
+        macAddress = "AA:BB:CC:DD:EE:FF",
+        ipAddress = "192.168.1.20",
+        hostName = "tablet",
+        displayName = "Tablet"
+      ),
+      name = "Kids iPad"
+    )
+
+    assertEquals(RouterActionStatus.OK, result.status)
+    assertEquals("/start_apply2.htm", session.lastSubmitPath)
+    assertTrue(session.nvram["custom_clientlist"].orEmpty().contains("Kids iPad"))
+  }
+
   private class FakeRouterHttpSession(
     val nvram: MutableMap<String, String> = mutableMapOf(),
     private val applyAppHandler: (Map<String, String>, MutableMap<String, String>) -> RouterActionResult = { _, _ ->
@@ -84,9 +180,17 @@ class RouterVendorAdaptersTest {
         status = RouterActionStatus.OK,
         message = "Applied"
       )
+    },
+    private val submitFormHandler: (String, Map<String, String>, MutableMap<String, String>) -> RouterActionResult = { _, _, _ ->
+      RouterActionResult(
+        status = RouterActionStatus.OK,
+        message = "Submitted"
+      )
     }
   ) : RouterHttpSession {
     var lastApplyApp: Map<String, String>? = null
+      private set
+    var lastSubmitPath: String? = null
       private set
 
     override suspend fun nvramGet(names: List<String>): Map<String, String> {
@@ -99,10 +203,8 @@ class RouterVendorAdaptersTest {
     }
 
     override suspend fun submitForm(path: String, postData: Map<String, String>): RouterActionResult {
-      return RouterActionResult(
-        status = RouterActionStatus.OK,
-        message = "Submitted"
-      )
+      lastSubmitPath = path
+      return submitFormHandler(path, postData, nvram)
     }
   }
 }

@@ -127,6 +127,38 @@ data class RouterDeviceRuntimeCapabilities(
   val message: String = "Device capability probe not run."
 )
 
+internal val routerDeviceCapabilities: List<RouterDeviceCapability> = listOf(
+  RouterDeviceCapability.BLOCK,
+  RouterDeviceCapability.PAUSE,
+  RouterDeviceCapability.RENAME,
+  RouterDeviceCapability.PRIORITIZE
+)
+
+internal fun routerDeviceCapabilityLabel(capability: RouterDeviceCapability): String {
+  return when (capability) {
+    RouterDeviceCapability.BLOCK -> "Block device"
+    RouterDeviceCapability.PAUSE -> "Pause device"
+    RouterDeviceCapability.RENAME -> "Rename device"
+    RouterDeviceCapability.PRIORITIZE -> "Prioritize device"
+  }
+}
+
+internal fun unsupportedRouterDeviceActionCapabilities(
+  source: String? = null,
+  reasonFor: (RouterDeviceCapability) -> String
+): Map<RouterDeviceCapability, RouterDeviceActionCapability> {
+  return routerDeviceCapabilities.associateWith { capability ->
+    RouterDeviceActionCapability(
+      capability = capability,
+      supported = false,
+      readable = false,
+      writable = false,
+      reason = reasonFor(capability),
+      source = source
+    )
+  }
+}
+
 data class DhcpLease(
   val ip: String,
   val mac: String,

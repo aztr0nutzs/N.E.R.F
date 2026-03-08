@@ -18,13 +18,17 @@ internal interface RouterVendorAdapter {
     device: RouterManagedDevice,
     routerRuntime: RouterRuntimeCapabilities
   ): RouterDeviceRuntimeCapabilities {
+    val reason = "Device write control is not implemented for this router adapter."
     return RouterDeviceRuntimeCapabilities(
       adapterId = id,
       detected = routerRuntime.detected,
       authenticated = routerRuntime.authenticated,
       readable = routerRuntime.readable,
       writable = false,
-      message = "Device write control is not implemented for this router adapter."
+      actionCapabilities = unsupportedRouterDeviceActionCapabilities(source = id) { capability ->
+        "${routerDeviceCapabilityLabel(capability)} is unsupported on this router backend. $reason"
+      },
+      message = reason
     )
   }
 
