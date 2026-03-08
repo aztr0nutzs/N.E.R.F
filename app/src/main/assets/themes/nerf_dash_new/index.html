@@ -3163,7 +3163,7 @@ function jMsgU(txt){
 }
 
 const jReplies = {
-  speedtest:['Running speedtest now. Switching to speed analysis module.','Initiating bandwidth analysis...'],
+  speedtest:['Running the current speedtest mode now. Switching to speed analysis module.','Initiating bandwidth analysis for the active internet/LAN path...'],
   scan:['Scanning all network nodes. This will take approximately 3 seconds.','Network scan initiated. Stand by for results.'],
   alerts:['One alert active: unverified device at 192.168.1.99 has been on the network for 47 minutes. Recommend immediate investigation.','Current threat index is LOW. No critical alerts.'],
   optimize:['Optimizing animation framerate. Reduced particle count by 40%. UI response improved.','Performance optimization applied. All subsystems running at optimal efficiency.'],
@@ -3360,10 +3360,17 @@ window.addEventListener('visibilitychange',()=>{
       S.stJit = toNum(s.jitterMs, 0);
       S.stLoss = toNum(s.packetLossPct, 0);
       S.stPhase = String(s.phase || 'idle').toLowerCase();
+      S.stTargetMode = String(s.targetMode || 'PUBLIC_INTERNET');
+      S.stTargetLabel = S.stTargetMode === 'PRIVATE_LOCAL' ? 'PRIVATE/LAN' : 'PUBLIC INTERNET';
       S.dl = S.stDl || S.dl;
       S.ul = S.stUl || S.ul;
       S.lat = Math.round(S.stPing || S.lat || 0);
       S.loss = Number((S.stLoss || 0) / 100);
+    }
+    if (typeof stPhaseLbl === 'function') {
+      const phase = String(s.phase || 'IDLE').toUpperCase();
+      const mode = String(s.targetMode || 'PUBLIC_INTERNET') === 'PRIVATE_LOCAL' ? 'PRIVATE/LAN' : 'PUBLIC INTERNET';
+      stPhaseLbl(phase + ' // ' + mode);
     }
     if (typeof syncStHud === 'function') syncStHud();
   }

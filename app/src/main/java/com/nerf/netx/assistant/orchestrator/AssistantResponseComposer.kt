@@ -292,7 +292,7 @@ class AssistantResponseComposer(
   fun explainFeature(feature: String?): AssistantResponse {
     val normalized = feature?.trim()?.lowercase().orEmpty()
     val explanation = when {
-      normalized.contains("speedtest") -> "Speedtest measures ping, download, and upload using configured test servers."
+      normalized.contains("speedtest") -> "Speedtest measures ping, download, and upload in the currently selected mode. Public internet mode uses external LibreSpeed-compatible servers, while private/LAN mode requires a configured local LibreSpeed-compatible endpoint."
       normalized.contains("diagnostic") -> "Diagnostics summarize scan, speedtest, analytics, and router state for quick triage."
       normalized.contains("topology") || normalized.contains("map") -> "Topology map visualizes discovered devices and inferred link quality."
       normalized.contains("guest wifi") -> "Guest Wi-Fi is controlled through router API support and may be unavailable on unsupported routers."

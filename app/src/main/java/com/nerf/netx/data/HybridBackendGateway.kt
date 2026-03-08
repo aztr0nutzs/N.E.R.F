@@ -135,9 +135,11 @@ private class HybridSpeedtest(
       latencyMs = null,
       phase = SpeedtestPhase.IDLE.name,
       phaseEnum = SpeedtestPhase.IDLE,
+      targetMode = _config.value.targetMode,
       mode = MeasurementMode.NOT_AVAILABLE,
       status = ServiceStatus.IDLE,
-      message = "Ready"
+      message = modeSummary(_config.value),
+      reason = modeReason(_config.value)
     )
   )
   override val ui: StateFlow<SpeedtestUiState> = _ui.asStateFlow()

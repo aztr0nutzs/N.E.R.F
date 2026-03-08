@@ -23,7 +23,7 @@ class RecommendationEngine {
           out += recommendation(
             title = "Verify internet path with a fresh speedtest",
             rationale = "The latest internet-facing check failed while the router still appears reachable.",
-            action = AssistantSuggestedAction("Run Speedtest", "start speedtest", style = AssistantActionStyle.PRIMARY),
+            action = AssistantSuggestedAction("Run Current Speedtest Mode", "start speedtest", style = AssistantActionStyle.PRIMARY),
             priority = 10
           )
           out += recommendation(

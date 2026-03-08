@@ -12,6 +12,7 @@ import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.ActionSupportState
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.ServiceStatus
+import com.nerf.netx.domain.SpeedtestTargetMode
 
 class ScanTool(
   private val services: AppServices
@@ -49,10 +50,54 @@ class SpeedtestTool(
   private val services: AppServices
 ) {
   suspend fun run(intent: AssistantIntent): AssistantToolResult {
+    val config = services.speedtest.config.value
     return when (intent.type) {
       AssistantIntentType.START_SPEEDTEST -> {
+        if (config.targetMode == SpeedtestTargetMode.PRIVATE_LOCAL && config.privateServerBaseUrl.isNullOrBlank()) {
+          return AssistantToolResult(
+            handled = true,
+            success = false,
+            supported = false,
+            severity = AssistantSeverity.WARNING,
+            title = "Private/LAN speedtest unavailable",
+            message = "Private/LAN speedtest is selected, but no local LibreSpeed-compatible server is configured. Add a local server endpoint in Speedtest settings, or switch back to public internet mode.",
+            cards = listOf(
+              AssistantResponseCard(
+                type = AssistantCardType.ACTION,
+                title = "What you can do next",
+                lines = listOf(
+                  "Current mode: Private/LAN",
+                  "Missing requirement: local LibreSpeed-compatible base URL",
+                  "Fallback remains available: public internet speedtest against external servers"
+                )
+              )
+            ),
+            suggestedActions = listOf(
+              com.nerf.netx.assistant.model.AssistantSuggestedAction(
+                label = "Open speedtest",
+                command = "open speedtest",
+                description = "Configure a private/LAN server or review the current mode."
+              ),
+              com.nerf.netx.assistant.model.AssistantSuggestedAction(
+                label = "Run diagnostics",
+                command = "run diagnostics",
+                description = "Check the current network state before changing speedtest mode."
+              )
+            )
+          )
+        }
         services.speedtest.start()
-        AssistantToolResult(true, true, true, AssistantSeverity.INFO, "Speedtest started", "Speedtest is now running.")
+        val targetLabel = if (config.targetMode == SpeedtestTargetMode.PRIVATE_LOCAL) {
+          "Private/LAN"
+        } else {
+          "Public internet"
+        }
+        val message = if (config.targetMode == SpeedtestTargetMode.PRIVATE_LOCAL) {
+          "Private/LAN speedtest is now running against the configured local LibreSpeed-compatible server."
+        } else {
+          "Public internet speedtest is now running against external LibreSpeed-compatible servers."
+        }
+        AssistantToolResult(true, true, true, AssistantSeverity.INFO, "$targetLabel speedtest started", message)
       }
       AssistantIntentType.STOP_SPEEDTEST -> {
         services.speedtest.stop()

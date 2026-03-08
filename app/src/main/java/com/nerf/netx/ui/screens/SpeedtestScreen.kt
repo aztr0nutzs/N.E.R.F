@@ -524,3 +524,29 @@ private fun HistoryList(
 
 private fun Double.format1(): String = String.format(Locale.US, "%.1f", this)
 private fun Double.format2(): String = String.format(Locale.US, "%.2f", this)
+
+private fun targetModeLabel(mode: SpeedtestTargetMode): String {
+  return when (mode) {
+    SpeedtestTargetMode.PUBLIC_INTERNET -> "Public internet"
+    SpeedtestTargetMode.PRIVATE_LOCAL -> "Private/LAN"
+  }
+}
+
+private fun serverScopeLabel(scope: SpeedtestServerScope?): String {
+  return when (scope) {
+    SpeedtestServerScope.PUBLIC_INTERNET -> "External server"
+    SpeedtestServerScope.PRIVATE_LOCAL -> "Local server"
+    null -> "Pending server selection"
+  }
+}
+
+private fun visibleServers(
+  config: com.nerf.netx.domain.SpeedtestConfig,
+  servers: List<com.nerf.netx.domain.SpeedtestServer>
+): List<com.nerf.netx.domain.SpeedtestServer> {
+  val requiredScope = when (config.targetMode) {
+    SpeedtestTargetMode.PUBLIC_INTERNET -> SpeedtestServerScope.PUBLIC_INTERNET
+    SpeedtestTargetMode.PRIVATE_LOCAL -> SpeedtestServerScope.PRIVATE_LOCAL
+  }
+  return servers.filter { it.scope == requiredScope }
+}
