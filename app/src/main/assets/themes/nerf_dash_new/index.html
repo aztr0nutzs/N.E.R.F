@@ -1499,9 +1499,9 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     <canvas id="map-canvas"></canvas>
     <div class="hud-deco-corner"><div class="r1"></div><div class="r2"></div><div class="ticks"></div></div>
     <div class="m-ov">
-      <button class="mbtn act" id="mradar" onclick="mapRadarToggle()">â—‰ RADAR</button>
-      <button class="mbtn" id="mthreat" onclick="mapThreatToggle()">âš  THREAT</button>
-      <button class="mbtn" onclick="mapReset()">âŠ™ RESET</button>
+      <button class="mbtn act" id="mradar" onclick="mapRadarToggle()" title="Visual-only map overlay.">â—‰ RADAR VIEW</button>
+      <button class="mbtn" id="mthreat" onclick="mapThreatToggle()" title="Visual-only map overlay.">âš  THREAT VIEW</button>
+      <button class="mbtn" onclick="mapReset()" title="Visual-only camera reset.">âŠ™ RESET VIEW</button>
     </div>
     <div class="m-info" id="minfo">NODES: 0 | LINKS: 0<br>MODE: PASSIVE SCAN<br>28.5Â°N / 81.3Â°W</div>
     <div class="m-leg">
@@ -1763,8 +1763,13 @@ function ovRouterSupport(key){
   const item=map&&map[key];
   return item&&typeof item==='object'?item:{supported:false,reason:'Unsupported on the current backend/router.'};
 }
-function ovDeviceControlReason(){
-  return 'Block, unblock, pause, rename, and prioritize are unsupported on the current backend/router.';
+function ovDeviceSupport(device){
+  const item=device&&device.actionSupport&&device.actionSupport['device.block'];
+  return item&&typeof item==='object'?item:{supported:false,reason:'Block/unblock is unsupported on the current backend/router.'};
+}
+function ovDeviceControlReason(device){
+  const support = ovDeviceSupport(device);
+  return support.supported ? 'Tap to block or unblock this device through the router backend.' : (support.reason || 'Block/unblock is unsupported on the current backend/router.');
 }
 function ovWarnUnsupported(label,reason){
   addLog(`${label} unsupported. ${reason||'Unsupported on the current backend/router.'}`,'wrn');
@@ -1868,7 +1873,6 @@ function buildOv(){
   const guestSupport = ovRouterSupport('router.guestWifi');
   const dnsSupport = ovRouterSupport('router.dnsShield');
   const rebootSupport = ovRouterSupport('router.reboot');
-  const deviceControlReason = ovDeviceControlReason();
   const el=document.getElementById('s-ov');
   el.innerHTML=`
 <div class="nd-shell">
@@ -2026,8 +2030,8 @@ function buildOv(){
                   <div class="nd-hog-rate">${ovFmtRate(d.rate)} current throughput</div>
                 </div>
                 <div>
-                  <div class="nd-toggle unsupported" title="${deviceControlReason}" onclick="ovToggleDevice(${d.id})"></div>
-                  <div class="nd-toggle-label">unsupported</div>
+                  <div class="nd-toggle ${ovDeviceSupport(d).supported ? (d.blk ? 'on' : '') : 'unsupported'}" title="${ovDeviceControlReason(d)}" onclick="ovToggleDevice(${d.id})"></div>
+                  <div class="nd-toggle-label">${ovDeviceSupport(d).supported ? (d.blk ? 'blocked' : 'live') : 'unavailable'}</div>
                 </div>
               </div>`).join('')}</div>`}
         </div>
@@ -2720,8 +2724,8 @@ function dvOpen(id){
       <span class="tgl-lbl">QoS PRIORITY (UNSUPPORTED)</span>
       <div class="tgl-sw on" id="tg2"></div>
     </div>
-    <div class="dw-tgl" onclick="tglSw(this,'tg3')">
-      <span class="tgl-lbl">MONITOR MODE</span>
+    <div class="dw-tgl" onclick="tglSw(this,'tg3')" title="Visual-only device drawer indicator.">
+      <span class="tgl-lbl">MONITOR VISUAL ONLY</span>
       <div class="tgl-sw" id="tg3"></div>
     </div>`;
 
@@ -2743,8 +2747,7 @@ function dvOpen(id){
   ctx.fillStyle=grad;ctx.fill();
 
   document.getElementById('dvd').classList.add('open');
-  document.getElementById('dvblkbtn').textContent='âŠ— BLOCK (UNSUPPORTED)';
-  document.getElementById('dvblkbtn').title=ovDeviceControlReason();
+  applyDrawerActionState();
 }
 function dvClose(){document.getElementById('dvd').classList.remove('open');S.devOpen=-1;}
 function tglSw(row,id){const sw=document.getElementById(id);if(sw)sw.classList.toggle('on');}
@@ -2757,8 +2760,14 @@ function dvPing(){
 function dvBlock(){
   if(S.devOpen<0)return;
   const d=DEVS[S.devOpen];
-  document.getElementById('dvblkbtn').textContent='âŠ— BLOCK (UNSUPPORTED)';
-  ovWarnUnsupported(`Device control for ${d.name}`, ovDeviceControlReason());
+  const nativeDevice = nativeOpenDevice();
+  const support = nativeDeviceSupport(nativeDevice, 'device.block', 'Block device');
+  if(!support.supported){
+    ovWarnUnsupported(`Device control for ${d.name}`, support.reason);
+    applyDrawerActionState();
+    return;
+  }
+  req('device.setBlocked', {deviceId:nativeDevice.id, blocked:!nativeDevice.isBlocked});
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -3272,6 +3281,47 @@ window.addEventListener('visibilitychange',()=>{
   }
 
   function toNum(v,d=0){ const n=Number(v); return Number.isFinite(n)?n:d; }
+  function normalizeActionSupportMap(map){
+    const out = {};
+    const src = map && typeof map === 'object' ? map : {};
+    Object.keys(src).forEach(key => {
+      const item = src[key];
+      out[key] = item && typeof item === 'object'
+        ? {supported:item.supported===true,label:item.label||key,reason:item.reason||'Unsupported on the current backend/router.'}
+        : {supported:false,label:key,reason:'Unsupported on the current backend/router.'};
+    });
+    return out;
+  }
+  function nativeDeviceByThemeId(id){
+    return Array.isArray(native.devices) ? native.devices.find((_, idx) => idx === id) || null : null;
+  }
+  function nativeOpenDevice(){
+    return window.S?.devOpen >= 0 ? nativeDeviceByThemeId(window.S.devOpen) : null;
+  }
+  function nativeDeviceSupport(device, key, label){
+    const item = device && device.actionSupport && device.actionSupport[key];
+    return item && typeof item === 'object'
+      ? item
+      : {supported:false,label:label,reason:`${label} is unsupported on the current backend/router.`};
+  }
+  function applyDrawerActionState(){
+    const button = document.getElementById('dvblkbtn');
+    const note = document.getElementById('dvActionReason');
+    const device = nativeOpenDevice();
+    const support = nativeDeviceSupport(device, 'device.block', 'Block device');
+    if (button) {
+      button.disabled = !device || !support.supported;
+      button.title = device && support.supported ? '' : support.reason;
+      button.textContent = device && support.supported
+        ? (device.isBlocked ? '⊘ UNBLOCK DEVICE' : '⊘ BLOCK DEVICE')
+        : '⊘ BLOCK (UNAVAILABLE)';
+    }
+    if (note) {
+      note.textContent = device && support.supported
+        ? 'Block/unblock is wired to the router for this device. QoS and pause controls remain unavailable here.'
+        : (support.reason || 'Device control actions are unavailable on the current backend/router.');
+    }
+  }
   function applyDevices(devices){
     if (!Array.isArray(devices)) return;
     native.devices = devices;
@@ -3291,9 +3341,11 @@ window.addEventListener('visibilitychange',()=>{
         lat: d.latencyMs == null ? null : toNum(d.latencyMs, 0),
         blk: !!d.isBlocked,
         paused: !!d.isPaused,
-        up: toNum(d.quality, 0)
+        up: toNum(d.quality, 0),
+        actionSupport: normalizeActionSupportMap(d.actionSupport)
       }));
     }
+    applyDrawerActionState();
     if (typeof buildDv === 'function' && window.S?.screen==='dv') buildDv();
     if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
   }
@@ -3389,8 +3441,14 @@ window.addEventListener('visibilitychange',()=>{
   window.ovScan = function(){ req('scan.start', {}); };
   window.ovToggleDevice = function(id){
     const d = window.DEVS?.find(x=>x.id===id);
-    if (!d) return;
-    ovWarnUnsupported(`Device control for ${d.name}`, ovDeviceControlReason());
+    const nativeDevice = nativeDeviceByThemeId(id);
+    const support = nativeDeviceSupport(nativeDevice, 'device.block', 'Block device');
+    if (!d || !nativeDevice) return;
+    if (!support.supported) {
+      ovWarnUnsupported(`Device control for ${d.name}`, support.reason);
+      return;
+    }
+    req('device.setBlocked', {deviceId:nativeDevice.id, blocked:!nativeDevice.isBlocked});
   };
   window.ovToggleAction = function(key){
     const support = ovRouterSupport(key === 'guestWifi' ? 'router.guestWifi' : 'router.dnsShield');
@@ -3434,18 +3492,28 @@ window.addEventListener('visibilitychange',()=>{
     if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) req('device.ping', {deviceId:window.DEVS[S.devOpen].nativeId});
   };
   window.dvBlock = function(){
-    if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) {
-      ovWarnUnsupported(`Device control for ${window.DEVS[S.devOpen].name}`, ovDeviceControlReason());
+    if (window.S?.devOpen < 0 || !window.DEVS?.[S.devOpen]) return;
+    const d = window.DEVS[S.devOpen];
+    const nativeDevice = nativeOpenDevice();
+    const support = nativeDeviceSupport(nativeDevice, 'device.block', 'Block device');
+    if (!nativeDevice || !support.supported) {
+      ovWarnUnsupported(`Device control for ${d.name}`, support.reason);
+      applyDrawerActionState();
+      return;
     }
+    req('device.setBlocked', {deviceId:nativeDevice.id, blocked:!nativeDevice.isBlocked});
   };
   window.mapReset = function(){
     if (typeof originalMapReset === 'function') originalMapReset();
+    addLog('Map camera reset is visual-only in this theme.', 'inf');
   };
   window.mapRadarToggle = function(){
     if (typeof originalMapRadarToggle === 'function') originalMapRadarToggle();
+    addLog('Radar overlay toggled. This affects only the HTML map visualization.', 'inf');
   };
   window.mapThreatToggle = function(){
     if (typeof originalMapThreatToggle === 'function') originalMapThreatToggle();
+    addLog('Threat overlay toggled. This affects only the HTML map visualization.', 'inf');
   };
 
   window.jToggle = function(){
@@ -3521,9 +3589,11 @@ window.addEventListener('visibilitychange',()=>{
       if (p.code === 'SPEEDTEST_HISTORY' && Array.isArray(p.history)) native.speedtest.history = p.history;
       if (p.code === 'ROUTER_STATUS') native.router = p;
       if (p.code === 'MAP_STATE') native.topology = p;
+      if (/^DEVICE_/.test(String(p.code || '')) && p.code !== 'DEVICE_DETAILS') req('devices.list', {});
       if ((p.status === 'NOT_SUPPORTED' || p.code === 'NOT_SUPPORTED') && window.addLog) addLog(p.errorReason || p.message || 'Action not supported by backend','wrn');
       else if (p.message && window.addLog && !['DEVICES_LIST','SPEEDTEST_STATE','SPEEDTEST_HISTORY','ROUTER_STATUS','MAP_STATE'].includes(p.code)) addLog(p.message, p.ok === false ? 'wrn' : 'suc');
       syncOverviewFromNative();
+      applyDrawerActionState();
       return;
     }
     if (name === 'scan.state' || name === 'scan.progress' || name === 'scan.results') {
@@ -3533,14 +3603,14 @@ window.addEventListener('visibilitychange',()=>{
       if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
       return;
     }
-    if (name === 'devices.update') { applyDevices(p.devices || []); return; }
+    if (name === 'devices.update') { applyDevices(p.devices || []); applyDrawerActionState(); return; }
     if (name === 'speedtest.ui') { applySpeedtest(p); return; }
     if (name === 'speedtest.result') { applySpeedtest(p); return; }
     if (name === 'topology.state') { native.topology = p; }
-    if (name === 'analytics.snapshot') { native.analytics = p; syncOverviewFromNative(); }
-    if (name === 'router.status') { native.router = p; syncOverviewFromNative(); }
-    if (name === 'wifi.environment') { native.wifi = p; syncOverviewFromNative(); }
-    if (name === 'security.summary') { native.security = p; syncOverviewFromNative(); }
+    if (name === 'analytics.snapshot') { native.analytics = p; syncOverviewFromNative(); applyDrawerActionState(); }
+    if (name === 'router.status') { native.router = p; syncOverviewFromNative(); applyDrawerActionState(); }
+    if (name === 'wifi.environment') { native.wifi = p; syncOverviewFromNative(); applyDrawerActionState(); }
+    if (name === 'security.summary') { native.security = p; syncOverviewFromNative(); applyDrawerActionState(); }
     if (name === 'assistant.response') {
       if (window.jMsgJ) jMsgJ(p.message || 'Assistant response received.');
       if (Array.isArray(p.cards) && window.addLog) {
