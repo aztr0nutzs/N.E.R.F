@@ -3,7 +3,9 @@ package com.nerf.netx.assistant.state
 import com.nerf.netx.assistant.model.AssistantIntent
 import com.nerf.netx.assistant.model.AssistantIntentType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AssistantSessionMemoryTest {
@@ -18,9 +20,11 @@ class AssistantSessionMemoryTest {
 
     assertEquals("device-1", memory.lastDiscussedDeviceId)
     assertEquals(AssistantIntentType.REBOOT_ROUTER, memory.lastPendingConfirmationIntent?.type)
+    assertTrue(memory.hasPendingConfirmation())
 
     memory.clearPendingConfirmation()
     assertNull(memory.lastPendingConfirmationIntent)
+    assertFalse(memory.hasPendingConfirmation())
   }
 
   @Test

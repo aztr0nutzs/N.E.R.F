@@ -7,6 +7,7 @@ import com.nerf.netx.assistant.model.AssistantDestination
 import com.nerf.netx.assistant.model.AssistantLoadingState
 import com.nerf.netx.assistant.model.AssistantMessage
 import com.nerf.netx.assistant.model.AssistantMessageAuthor
+import com.nerf.netx.assistant.model.AssistantResponse
 import com.nerf.netx.assistant.model.AssistantUiState
 import com.nerf.netx.assistant.orchestrator.AssistantOrchestrator
 import com.nerf.netx.assistant.recommendation.AssistantStarterPromptsProvider
@@ -52,11 +53,33 @@ class AssistantViewModel(
   }
 
   fun confirmPendingAction() {
-    submitMessage("yes")
+    appendMessage(
+      AssistantMessage(
+        author = AssistantMessageAuthor.USER,
+        text = "Confirm action",
+        id = UUID.randomUUID().toString()
+      )
+    )
+    _uiState.update { it.copy(loadingState = AssistantLoadingState.PROCESSING) }
+    viewModelScope.launch {
+      val response = orchestrator.confirmPendingAction()
+      appendResponse(response)
+    }
   }
 
   fun cancelPendingAction() {
-    submitMessage("cancel")
+    appendMessage(
+      AssistantMessage(
+        author = AssistantMessageAuthor.USER,
+        text = "Cancel action",
+        id = UUID.randomUUID().toString()
+      )
+    )
+    _uiState.update { it.copy(loadingState = AssistantLoadingState.PROCESSING) }
+    viewModelScope.launch {
+      val response = orchestrator.cancelPendingAction()
+      appendResponse(response)
+    }
   }
 
   private fun submitMessage(message: String) {
@@ -65,17 +88,21 @@ class AssistantViewModel(
 
     viewModelScope.launch {
       val response = orchestrator.handleUserMessage(message)
-      appendMessage(
-        AssistantMessage(
-          id = UUID.randomUUID().toString(),
-          author = AssistantMessageAuthor.ASSISTANT,
-          text = response.message,
-          response = response
-        )
-      )
-      _uiState.update { it.copy(loadingState = AssistantLoadingState.IDLE) }
-      response.destination?.let { _navigationEvents.emit(it) }
+      appendResponse(response)
     }
+  }
+
+  private suspend fun appendResponse(response: AssistantResponse) {
+    appendMessage(
+      AssistantMessage(
+        id = UUID.randomUUID().toString(),
+        author = AssistantMessageAuthor.ASSISTANT,
+        text = response.message,
+        response = response
+      )
+    )
+    _uiState.update { it.copy(loadingState = AssistantLoadingState.IDLE) }
+    response.destination?.let { _navigationEvents.emit(it) }
   }
 
   private fun appendMessage(message: AssistantMessage) {

@@ -52,6 +52,14 @@ data class AssistantSuggestedAction(
   val description: String? = null
 )
 
+data class AssistantConfirmationUi(
+  val title: String,
+  val summary: String,
+  val details: List<String> = emptyList(),
+  val confirmLabel: String = "Confirm",
+  val cancelLabel: String = "Cancel"
+)
+
 data class AssistantResponseCard(
   val type: AssistantCardType,
   val title: String,
@@ -81,6 +89,7 @@ data class AssistantResponse(
   val cards: List<AssistantResponseCard> = emptyList(),
   val requiresConfirmation: Boolean = false,
   val confirmationPrompt: String? = null,
+  val confirmationUi: AssistantConfirmationUi? = null,
   val pendingIntent: AssistantIntent? = null,
   val destination: AssistantDestination? = null
 )

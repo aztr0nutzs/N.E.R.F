@@ -28,6 +28,8 @@ class AssistantSessionMemory(
     lastPendingConfirmationIntent = null
   }
 
+  fun hasPendingConfirmation(): Boolean = lastPendingConfirmationIntent != null
+
   fun recordAction(type: AssistantIntentType) {
     _recentActions.addLast(type)
     while (_recentActions.size > maxRecentActions) {

@@ -29,26 +29,36 @@ class AssistantOrchestrator(
   private val responseComposer: AssistantResponseComposer
 ) {
 
+  suspend fun confirmPendingAction(): AssistantResponse {
+    val pending = sessionMemory.lastPendingConfirmationIntent
+      ?: return responseComposer.noPendingConfirmation()
+    sessionMemory.clearPendingConfirmation()
+    return executeIntent(pending)
+  }
+
+  fun cancelPendingAction(): AssistantResponse {
+    if (!sessionMemory.hasPendingConfirmation()) {
+      return responseComposer.noPendingConfirmation()
+    }
+    sessionMemory.clearPendingConfirmation()
+    return responseComposer.cancellationAcknowledged()
+  }
+
   suspend fun handleUserMessage(message: String): AssistantResponse {
     val intent = parser.parse(message)
 
     if (intent.type == AssistantIntentType.CONFIRM_PENDING_ACTION) {
-      val pending = sessionMemory.lastPendingConfirmationIntent
-        ?: return responseComposer.noPendingConfirmation()
-      sessionMemory.clearPendingConfirmation()
-      return executeIntent(pending)
+      return confirmPendingAction()
     }
 
     if (intent.type == AssistantIntentType.CANCEL_PENDING_ACTION) {
-      sessionMemory.clearPendingConfirmation()
-      return responseComposer.cancellationAcknowledged()
+      return cancelPendingAction()
     }
 
     unsupportedBeforeConfirmation(intent)?.let { return it }
 
     if (actionPolicy.requiresConfirmation(intent)) {
-      sessionMemory.setPendingConfirmation(intent)
-      return responseComposer.confirmationRequired(intent)
+      return buildConfirmationResponse(intent)
     }
 
     return executeIntent(intent)
@@ -216,6 +226,78 @@ class AssistantOrchestrator(
       responseComposer.unsupportedAction(routerAction.first, support)
     } else {
       null
+    }
+  }
+
+  private suspend fun buildConfirmationResponse(intent: AssistantIntent): AssistantResponse {
+    return when (intent.type) {
+      AssistantIntentType.BLOCK_DEVICE,
+      AssistantIntentType.UNBLOCK_DEVICE,
+      AssistantIntentType.PAUSE_DEVICE,
+      AssistantIntentType.RESUME_DEVICE -> buildDeviceConfirmationResponse(intent)
+      AssistantIntentType.SET_GUEST_WIFI,
+      AssistantIntentType.SET_DNS_SHIELD,
+      AssistantIntentType.REBOOT_ROUTER -> {
+        sessionMemory.setPendingConfirmation(intent)
+        val details = when (intent.type) {
+          AssistantIntentType.SET_GUEST_WIFI -> listOf("Target: router guest Wi-Fi", "Requested state: ${toggleSummary(intent.toggleEnabled)}")
+          AssistantIntentType.SET_DNS_SHIELD -> listOf("Target: router DNS Shield", "Requested state: ${toggleSummary(intent.toggleEnabled)}")
+          AssistantIntentType.REBOOT_ROUTER -> listOf("Target: active router backend", "Impact: active sessions and connectivity will briefly drop")
+          else -> emptyList()
+        }
+        responseComposer.confirmationRequired(intent, detailLines = details)
+      }
+      else -> {
+        sessionMemory.setPendingConfirmation(intent)
+        responseComposer.confirmationRequired(intent)
+      }
+    }
+  }
+
+  private suspend fun buildDeviceConfirmationResponse(intent: AssistantIntent): AssistantResponse {
+    val context = contextUseCase()
+    return when (val resolution = entityResolver.resolveDevice(
+      query = intent.targetDeviceQuery,
+      devices = context.devices,
+      lastDiscussedDeviceId = sessionMemory.lastDiscussedDeviceId,
+      allowContextFallback = true
+    )) {
+      is AssistantEntityResolution.Missing -> {
+        if (resolution.query.isNullOrBlank()) {
+          responseComposer.missingDeviceTarget(intent.type)
+        } else {
+          responseComposer.deviceNotFound(resolution.query)
+        }
+      }
+      is AssistantEntityResolution.Ambiguous -> responseComposer.ambiguousDeviceTarget(intent, resolution.candidates)
+      is AssistantEntityResolution.Resolved -> {
+        val device = context.devices.firstOrNull { it.id == resolution.candidate.id }
+        val pendingIntent = intent.copy(targetDeviceId = resolution.candidate.id)
+        sessionMemory.updateLastDiscussedDevice(resolution.candidate.id)
+        sessionMemory.setPendingConfirmation(pendingIntent)
+        responseComposer.confirmationRequired(
+          intent = pendingIntent,
+          resolvedTarget = deviceConfirmationLabel(device, resolution.candidate),
+          detailLines = listOfNotNull(
+            "Target: ${deviceConfirmationLabel(device, resolution.candidate)}",
+            device?.ip?.takeIf { it.isNotBlank() }?.let { "IP: $it" },
+            device?.vendor?.takeIf { it.isNotBlank() }?.let { "Vendor: $it" }
+          )
+        )
+      }
+    }
+  }
+
+  private fun deviceConfirmationLabel(device: Device?, candidate: com.nerf.netx.assistant.model.AssistantDeviceCandidate): String {
+    return device?.name?.takeIf { it.isNotBlank() }
+      ?: candidate.name.ifBlank { candidate.ip }
+  }
+
+  private fun toggleSummary(enabled: Boolean?): String {
+    return when (enabled) {
+      true -> "ON"
+      false -> "OFF"
+      null -> "unspecified"
     }
   }
 }

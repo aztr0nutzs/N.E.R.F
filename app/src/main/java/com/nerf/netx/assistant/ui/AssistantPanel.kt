@@ -242,22 +242,48 @@ private fun AssistantMessageItem(
               }
             }
             if (response.requiresConfirmation) {
-              Text(response.confirmationPrompt.orEmpty(), style = MaterialTheme.typography.bodySmall)
-              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onConfirm) { Text("Confirm") }
-                OutlinedButton(onClick = onCancel) { Text("Cancel") }
+              val confirmationUi = response.confirmationUi
+              ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Text(
+                    confirmationUi?.title ?: "Confirm action",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                  )
+                  Text(
+                    confirmationUi?.summary ?: response.confirmationPrompt.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall
+                  )
+                  confirmationUi?.details?.forEach { line ->
+                    Text(line, style = MaterialTheme.typography.bodySmall)
+                  }
+                  response.confirmationPrompt?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onConfirm) { Text(confirmationUi?.confirmLabel ?: "Confirm") }
+                    OutlinedButton(onClick = onCancel) { Text(confirmationUi?.cancelLabel ?: "Cancel") }
+                  }
+                }
               }
             }
             if (response.suggestedActions.isNotEmpty()) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
+              Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  response.suggestedActions.forEach { action ->
+                    OutlinedButton(onClick = { onSuggestedAction(action.command) }) {
+                      Text(action.label)
+                    }
+                  }
+                }
                 response.suggestedActions.forEach { action ->
-                  OutlinedButton(onClick = { onSuggestedAction(action.command) }) {
-                    Text(action.label)
+                  action.description?.takeIf { it.isNotBlank() }?.let { description ->
+                    Text("${action.label}: $description", style = MaterialTheme.typography.bodySmall)
                   }
                 }
               }

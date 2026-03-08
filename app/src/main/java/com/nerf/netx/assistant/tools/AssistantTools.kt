@@ -90,6 +90,26 @@ class DeviceTool(
       result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA -> AssistantSeverity.WARNING
       else -> AssistantSeverity.ERROR
     }
+    val unsupported = result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA
+    val cards = mutableListOf<AssistantResponseCard>()
+    if (unsupported) {
+      cards += AssistantResponseCard(
+        type = AssistantCardType.ACTION,
+        title = "Why this device action is unavailable",
+        lines = listOf(
+          "$title could not be completed.",
+          result.errorReason ?: result.message,
+          "Cause: current router/backend capability for this device action is unavailable."
+        ),
+        bullets = fallbackSuggestions(title).mapNotNull { it.description }
+      )
+    } else if (result.details.isNotEmpty()) {
+      cards += AssistantResponseCard(
+        type = AssistantCardType.ACTION,
+        title = "Result details",
+        lines = result.details.entries.map { "${it.key}: ${it.value}" }
+      )
+    }
     return AssistantToolResult(
       handled = true,
       success = result.ok,
@@ -98,13 +118,8 @@ class DeviceTool(
       title = title,
       message = actionMessage(result, title),
       details = result.details,
-      cards = if (result.details.isEmpty()) emptyList() else listOf(
-        AssistantResponseCard(
-          type = AssistantCardType.ACTION,
-          title = "Result details",
-          lines = result.details.entries.map { "${it.key}: ${it.value}" }
-        )
-      )
+      cards = cards,
+      suggestedActions = if (unsupported) fallbackSuggestions(title) else emptyList()
     )
   }
 
@@ -121,7 +136,11 @@ class DeviceTool(
 
   private fun actionMessage(result: ActionResult, title: String): String {
     return if (result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA) {
-      ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message))
+      buildString {
+        append("I couldn't complete $title. ")
+        append(ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message)))
+        append(" This is a router/backend limitation.")
+      }
     } else {
       buildString {
         append(result.message)
@@ -131,6 +150,21 @@ class DeviceTool(
         }
       }
     }
+  }
+
+  private fun fallbackSuggestions(title: String): List<com.nerf.netx.assistant.model.AssistantSuggestedAction> {
+    return listOf(
+      com.nerf.netx.assistant.model.AssistantSuggestedAction(
+        label = "Open devices",
+        command = "open devices",
+        description = "Inspect the resolved device and current access state."
+      ),
+      com.nerf.netx.assistant.model.AssistantSuggestedAction(
+        label = "Run diagnostics",
+        command = "run diagnostics",
+        description = "Check backend capability, scan state, and router reachability."
+      )
+    )
   }
 }
 
@@ -169,6 +203,7 @@ class RouterTool(
       result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA -> AssistantSeverity.WARNING
       else -> AssistantSeverity.ERROR
     }
+    val unsupported = result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA
     return AssistantToolResult(
       handled = true,
       success = result.ok,
@@ -176,7 +211,11 @@ class RouterTool(
       severity = severity,
       title = title,
       message = if (result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA) {
-        ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message))
+        buildString {
+          append("I couldn't complete $title. ")
+          append(ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message)))
+          append(" This is a router/backend limitation.")
+        }
       } else {
         buildString {
           append(result.message)
@@ -185,7 +224,20 @@ class RouterTool(
             append(it)
           }
         }
-      }
+      },
+      cards = if (unsupported) listOf(
+        AssistantResponseCard(
+          type = AssistantCardType.ACTION,
+          title = "Why this router action is unavailable",
+          lines = listOf(
+            "$title could not be completed.",
+            result.errorReason ?: result.message,
+            "Cause: current router/backend capability for this setting is unavailable."
+          ),
+          bullets = routerFallbackSuggestions(title).mapNotNull { it.description }
+        )
+      ) else emptyList(),
+      suggestedActions = if (unsupported) routerFallbackSuggestions(title) else emptyList()
     )
   }
 
@@ -197,6 +249,30 @@ class RouterTool(
       severity = AssistantSeverity.WARNING,
       title = title,
       message = message
+    )
+  }
+
+  private fun routerFallbackSuggestions(title: String): List<com.nerf.netx.assistant.model.AssistantSuggestedAction> {
+    val reviewAction = if (title.contains("Guest", ignoreCase = true) || title.contains("DNS", ignoreCase = true) || title.contains("router", ignoreCase = true)) {
+      com.nerf.netx.assistant.model.AssistantSuggestedAction(
+        label = "Run diagnostics",
+        command = "run diagnostics",
+        description = "Review router reachability and supported controls."
+      )
+    } else {
+      com.nerf.netx.assistant.model.AssistantSuggestedAction(
+        label = "Scan network",
+        command = "scan network",
+        description = "Refresh current topology and assistant context."
+      )
+    }
+    return listOf(
+      reviewAction,
+      com.nerf.netx.assistant.model.AssistantSuggestedAction(
+        label = "Open devices",
+        command = "open devices",
+        description = "Review network state without sending router writes."
+      )
     )
   }
 }

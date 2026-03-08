@@ -1060,6 +1060,17 @@ class NerfWebBridge(private val services: AppServices) {
       .put("severity", response.severity.name)
       .put("requiresConfirmation", response.requiresConfirmation)
       .put("confirmationPrompt", response.confirmationPrompt)
+      .put(
+        "confirmationUi",
+        response.confirmationUi?.let { confirmation ->
+          JSONObject()
+            .put("title", confirmation.title)
+            .put("summary", confirmation.summary)
+            .put("details", JSONArray(confirmation.details))
+            .put("confirmLabel", confirmation.confirmLabel)
+            .put("cancelLabel", confirmation.cancelLabel)
+        }
+      )
       .put("suggestedActions", suggestedActions)
       .put("cards", cards)
   }

@@ -4,6 +4,7 @@ import com.nerf.netx.assistant.model.AssistantCardType
 import com.nerf.netx.assistant.model.AssistantDeviceCandidate
 import com.nerf.netx.assistant.model.AssistantDiagnosisReport
 import com.nerf.netx.assistant.model.AssistantContextSnapshot
+import com.nerf.netx.assistant.model.AssistantConfirmationUi
 import com.nerf.netx.assistant.model.AssistantIntent
 import com.nerf.netx.assistant.model.AssistantIntentType
 import com.nerf.netx.assistant.model.AssistantRecommendation
@@ -28,27 +29,58 @@ class AssistantResponseComposer(
     )
   }
 
-  fun confirmationRequired(intent: AssistantIntent): AssistantResponse {
-    val text = when (intent.type) {
+  fun confirmationRequired(
+    intent: AssistantIntent,
+    resolvedTarget: String? = null,
+    detailLines: List<String> = emptyList()
+  ): AssistantResponse {
+    val text = confirmationActionLabel(intent, resolvedTarget)
+    val title = "Confirm action"
+    val summary = when (intent.type) {
+      AssistantIntentType.REBOOT_ROUTER -> "This will reboot the router and interrupt active sessions."
+      AssistantIntentType.BLOCK_DEVICE,
+      AssistantIntentType.UNBLOCK_DEVICE,
+      AssistantIntentType.PAUSE_DEVICE,
+      AssistantIntentType.RESUME_DEVICE -> "This changes device access on the router backend for the resolved target."
+      AssistantIntentType.SET_GUEST_WIFI,
+      AssistantIntentType.SET_DNS_SHIELD -> "This changes a live router setting and may affect connected clients."
+      else -> "This action changes live network behavior."
+    }
+    val confirmLabel = when (intent.type) {
       AssistantIntentType.REBOOT_ROUTER -> "Reboot router"
       AssistantIntentType.BLOCK_DEVICE -> "Block device"
       AssistantIntentType.UNBLOCK_DEVICE -> "Unblock device"
       AssistantIntentType.PAUSE_DEVICE -> "Pause device"
       AssistantIntentType.RESUME_DEVICE -> "Resume device"
-      AssistantIntentType.SET_GUEST_WIFI -> "Set guest Wi-Fi ${toggleText(intent.toggleEnabled)}"
-      AssistantIntentType.SET_DNS_SHIELD -> "Set DNS Shield ${toggleText(intent.toggleEnabled)}"
-      else -> "Run this action"
+      AssistantIntentType.SET_GUEST_WIFI -> "Apply guest Wi-Fi change"
+      AssistantIntentType.SET_DNS_SHIELD -> "Apply DNS Shield change"
+      else -> "Confirm"
     }
     return AssistantResponse(
-      title = "Confirmation required",
-      message = "This action is marked risky and needs explicit confirmation.",
+      title = title,
+      message = summary,
       severity = AssistantSeverity.WARNING,
       requiresConfirmation = true,
-      confirmationPrompt = "$text? Reply \"yes\" to continue or \"cancel\".",
+      confirmationPrompt = "$text. Use the confirmation buttons below, or reply \"yes\" / \"cancel\" if you prefer typing.",
+      confirmationUi = AssistantConfirmationUi(
+        title = text,
+        summary = summary,
+        details = detailLines,
+        confirmLabel = confirmLabel,
+        cancelLabel = "Cancel"
+      ),
       pendingIntent = intent,
       suggestedActions = listOf(
-        AssistantSuggestedAction("Confirm", "yes"),
-        AssistantSuggestedAction("Cancel", "cancel")
+        AssistantSuggestedAction(
+          label = "Run diagnostics instead",
+          command = "run diagnostics",
+          description = "Check current network state before making the change."
+        ),
+        AssistantSuggestedAction(
+          label = "Open devices",
+          command = "open devices",
+          description = "Review the device list or router context before acting."
+        )
       )
     )
   }
@@ -64,8 +96,15 @@ class AssistantResponseComposer(
   fun cancellationAcknowledged(): AssistantResponse {
     return AssistantResponse(
       title = "Action cancelled",
-      message = "Pending action has been cancelled.",
-      severity = AssistantSeverity.INFO
+      message = "Pending action has been cancelled. No router or device change was sent.",
+      severity = AssistantSeverity.INFO,
+      suggestedActions = listOf(
+        AssistantSuggestedAction(
+          label = "Run diagnostics",
+          command = "run diagnostics",
+          description = "Review the current network state instead."
+        )
+      )
     )
   }
 
@@ -94,20 +133,30 @@ class AssistantResponseComposer(
   }
 
   fun unsupportedAction(label: String, support: ActionSupportState): AssistantResponse {
+    val reason = support.reason?.takeIf { it.isNotBlank() } ?: "$label is unavailable."
+    val alternatives = unsupportedAlternatives(label)
     return AssistantResponse(
       title = "$label unavailable",
       message = buildString {
-        append("$label is unsupported on the current backend/router.")
-        support.reason?.takeIf { it.isNotBlank() }?.let {
-          append(" ")
-          append(it)
-        }
+        append("I couldn't complete $label.")
+        append(" ")
+        append(reason)
+        append(" This is a backend/router capability limit, not a temporary assistant UI error.")
       },
       severity = AssistantSeverity.WARNING,
-      suggestedActions = listOf(
-        AssistantSuggestedAction("Run Diagnostics", "run diagnostics"),
-        AssistantSuggestedAction("Open Devices", "open devices")
-      )
+      cards = listOf(
+        AssistantResponseCard(
+          type = AssistantCardType.ACTION,
+          title = "Why this is unavailable",
+          lines = listOf(
+            "$label could not be sent.",
+            reason,
+            "Current limitation: router/backend support for this action is missing or unavailable."
+          ),
+          bullets = alternatives.map { it.description ?: it.label }
+        )
+      ),
+      suggestedActions = alternatives
     )
   }
 
@@ -272,6 +321,48 @@ class AssistantResponseComposer(
       false -> "OFF"
       null -> "state"
     }
+  }
+
+  private fun confirmationActionLabel(intent: AssistantIntent, resolvedTarget: String?): String {
+    return when (intent.type) {
+      AssistantIntentType.REBOOT_ROUTER -> "Reboot router"
+      AssistantIntentType.BLOCK_DEVICE -> "Block ${resolvedTarget ?: "device"}"
+      AssistantIntentType.UNBLOCK_DEVICE -> "Unblock ${resolvedTarget ?: "device"}"
+      AssistantIntentType.PAUSE_DEVICE -> "Pause ${resolvedTarget ?: "device"}"
+      AssistantIntentType.RESUME_DEVICE -> "Resume ${resolvedTarget ?: "device"}"
+      AssistantIntentType.SET_GUEST_WIFI -> "Turn guest Wi-Fi ${toggleText(intent.toggleEnabled)}"
+      AssistantIntentType.SET_DNS_SHIELD -> "Turn DNS Shield ${toggleText(intent.toggleEnabled)}"
+      else -> "Run this action"
+    }
+  }
+
+  private fun unsupportedAlternatives(label: String): List<AssistantSuggestedAction> {
+    val normalized = label.lowercase()
+    val safeAction = when {
+      normalized.contains("device") -> AssistantSuggestedAction(
+        label = "Open devices",
+        command = "open devices",
+        description = "Review the device list and current state."
+      )
+      normalized.contains("guest") || normalized.contains("dns") || normalized.contains("router") -> AssistantSuggestedAction(
+        label = "Run diagnostics",
+        command = "run diagnostics",
+        description = "Check router status, backend capability, and scan health."
+      )
+      else -> AssistantSuggestedAction(
+        label = "Run diagnostics",
+        command = "run diagnostics",
+        description = "Inspect what is currently available."
+      )
+    }
+    return listOf(
+      safeAction,
+      AssistantSuggestedAction(
+        label = "Scan network",
+        command = "scan network",
+        description = "Refresh devices, topology, and assistant context."
+      )
+    )
   }
 
   private fun clarificationCommand(intent: AssistantIntent, candidate: AssistantDeviceCandidate): String {
