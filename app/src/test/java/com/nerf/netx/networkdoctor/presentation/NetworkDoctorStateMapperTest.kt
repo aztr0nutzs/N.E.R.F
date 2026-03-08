@@ -10,6 +10,7 @@ import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.assistant.model.AssistantSuggestedAction
 import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceControlStatusSnapshot
 import com.nerf.netx.domain.RouterInfoResult
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.networkdoctor.model.NetworkDoctorAction
@@ -142,6 +143,10 @@ class NetworkDoctorStateMapperTest {
       scanDurationMs = 500,
       lastScanEpochMs = 1L,
       status = ServiceStatus.OK
+    ),
+    deviceControlStatus = DeviceControlStatusSnapshot(
+      status = ServiceStatus.NOT_SUPPORTED,
+      message = "Device control unsupported."
     ),
     routerInfo = routerInfo
   )

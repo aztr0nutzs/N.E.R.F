@@ -85,6 +85,48 @@ data class RouterRuntimeCapabilities(
   val message: String = "Router capability probe not run."
 )
 
+enum class RouterDeviceCapability {
+  BLOCK,
+  PAUSE,
+  RENAME,
+  PRIORITIZE
+}
+
+data class RouterManagedDevice(
+  val deviceId: String,
+  val macAddress: String?,
+  val ipAddress: String?,
+  val hostName: String?,
+  val displayName: String?
+)
+
+data class RouterDeviceActionCapability(
+  val capability: RouterDeviceCapability,
+  val supported: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val reason: String,
+  val source: String? = null
+)
+
+data class RouterDeviceReadback(
+  val blocked: Boolean? = null,
+  val paused: Boolean? = null,
+  val nickname: String? = null,
+  val prioritized: Boolean? = null
+)
+
+data class RouterDeviceRuntimeCapabilities(
+  val adapterId: String? = null,
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val actionCapabilities: Map<RouterDeviceCapability, RouterDeviceActionCapability> = emptyMap(),
+  val readback: RouterDeviceReadback = RouterDeviceReadback(),
+  val message: String = "Device capability probe not run."
+)
+
 data class DhcpLease(
   val ip: String,
   val mac: String,
@@ -104,10 +146,15 @@ interface RouterApi {
   suspend fun detect(info: RouterConnectionInfo): RouterInfo
   suspend fun getCapabilities(): Set<RouterCapability>
   suspend fun getRuntimeCapabilities(): RouterRuntimeCapabilities
+  suspend fun getDeviceRuntimeCapabilities(device: RouterManagedDevice): RouterDeviceRuntimeCapabilities
   suspend fun testConnection(): RouterActionResult
   suspend fun validateCredentials(): RouterActionResult
   suspend fun getDhcpLeases(): Result<List<DhcpLease>>
   suspend fun setDhcpLeaseName(macOrIp: String, name: String): RouterActionResult
+  suspend fun setDeviceBlocked(device: RouterManagedDevice, blocked: Boolean): RouterActionResult
+  suspend fun setDevicePaused(device: RouterManagedDevice, paused: Boolean): RouterActionResult
+  suspend fun renameDevice(device: RouterManagedDevice, name: String): RouterActionResult
+  suspend fun prioritizeDevice(device: RouterManagedDevice): RouterActionResult
   suspend fun renewDhcp(): RouterActionResult
   suspend fun flushDns(): RouterActionResult
   suspend fun setDnsShieldEnabled(enabled: Boolean): RouterActionResult

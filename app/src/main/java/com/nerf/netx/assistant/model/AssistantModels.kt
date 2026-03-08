@@ -2,6 +2,7 @@ package com.nerf.netx.assistant.model
 
 import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceControlStatusSnapshot
 import com.nerf.netx.domain.MapLink
 import com.nerf.netx.domain.MapNode
 import com.nerf.netx.domain.RouterInfoResult
@@ -92,6 +93,7 @@ data class AssistantContextSnapshot(
   val topologyNodes: List<MapNode>,
   val topologyLinks: List<MapLink>,
   val analytics: AnalyticsSnapshot?,
+  val deviceControlStatus: DeviceControlStatusSnapshot?,
   val routerInfo: RouterInfoResult?,
   val routerStatus: RouterStatusSnapshot?,
   val capturedAtEpochMs: Long = System.currentTimeMillis()

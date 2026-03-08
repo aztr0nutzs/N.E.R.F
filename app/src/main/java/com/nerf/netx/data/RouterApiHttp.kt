@@ -115,6 +115,31 @@ class RouterApiHttp(
     return probed
   }
 
+  override suspend fun getDeviceRuntimeCapabilities(device: RouterManagedDevice): RouterDeviceRuntimeCapabilities {
+    val runtime = getRuntimeCapabilities()
+    val adapter = activeAdapter ?: resolveAdapter(ensureDetected())
+    if (!runtime.authenticated) {
+      return RouterDeviceRuntimeCapabilities(
+        adapterId = runtime.adapterId ?: adapter.id,
+        detected = runtime.detected,
+        authenticated = false,
+        readable = false,
+        writable = false,
+        message = "Router detected, but device control is unavailable until credentials are validated."
+      )
+    }
+    return runCatching { adapter.probeDevice(this, device, runtime) }.getOrElse { error ->
+      RouterDeviceRuntimeCapabilities(
+        adapterId = runtime.adapterId ?: adapter.id,
+        detected = runtime.detected,
+        authenticated = runtime.authenticated,
+        readable = false,
+        writable = false,
+        message = "Device capability probing failed: ${error.message ?: "Unknown error"}"
+      )
+    }
+  }
+
   override suspend fun testConnection(): RouterActionResult = withContext(Dispatchers.IO) {
     val base = ensureDetected().adminUrl
       ?: return@withContext RouterActionResult(
@@ -195,6 +220,38 @@ class RouterApiHttp(
 
   override suspend fun setDhcpLeaseName(macOrIp: String, name: String): RouterActionResult {
     return notSupported("DHCP lease naming is unsupported on the current router/backend.")
+  }
+
+  override suspend fun setDeviceBlocked(device: RouterManagedDevice, blocked: Boolean): RouterActionResult {
+    return performDeviceAction(
+      capability = RouterDeviceCapability.BLOCK,
+      label = if (blocked) "Block device" else "Unblock device",
+      device = device
+    ) { adapter -> adapter.setDeviceBlocked(this, device, blocked) }
+  }
+
+  override suspend fun setDevicePaused(device: RouterManagedDevice, paused: Boolean): RouterActionResult {
+    return performDeviceAction(
+      capability = RouterDeviceCapability.PAUSE,
+      label = if (paused) "Pause device" else "Resume device",
+      device = device
+    ) { adapter -> adapter.setDevicePaused(this, device, paused) }
+  }
+
+  override suspend fun renameDevice(device: RouterManagedDevice, name: String): RouterActionResult {
+    return performDeviceAction(
+      capability = RouterDeviceCapability.RENAME,
+      label = "Rename device",
+      device = device
+    ) { adapter -> adapter.renameDevice(this, device, name) }
+  }
+
+  override suspend fun prioritizeDevice(device: RouterManagedDevice): RouterActionResult {
+    return performDeviceAction(
+      capability = RouterDeviceCapability.PRIORITIZE,
+      label = "Prioritize device",
+      device = device
+    ) { adapter -> adapter.prioritizeDevice(this, device) }
   }
 
   override suspend fun flushDns(): RouterActionResult {
@@ -318,12 +375,63 @@ class RouterApiHttp(
     }
   }
 
+  override suspend fun submitForm(path: String, postData: Map<String, String>): RouterActionResult = withContext(Dispatchers.IO) {
+    val info = ensureDetected()
+    val base = info.adminUrl
+      ?: return@withContext RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Router endpoint not detected",
+        errorCode = "ROUTER_UNREACHABLE"
+      )
+    val encoded = postData.entries.joinToString("&") { (key, value) ->
+      "${URLEncoder.encode(key, Charsets.UTF_8.name())}=${URLEncoder.encode(value, Charsets.UTF_8.name())}"
+    }
+    val response = authenticatedRequest(
+      url = resolvePath(base, path),
+      method = "POST",
+      username = connectionInfo.username?.trim().orEmpty(),
+      password = connectionInfo.password.orEmpty(),
+      authType = info.detectedAuthType,
+      body = encoded.toByteArray(Charsets.UTF_8),
+      contentType = "application/x-www-form-urlencoded"
+    )
+    if (response.code in 200..299) {
+      runtimeCapabilities = null
+      RouterActionResult(
+        status = RouterActionStatus.OK,
+        message = "Router accepted the requested form change."
+      )
+    } else {
+      RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Router rejected the requested form change (HTTP ${response.code})",
+        errorCode = "HTTP_${response.code}"
+      )
+    }
+  }
+
   private suspend fun performAction(
     capability: RouterCapability,
     label: String,
     call: suspend (RouterVendorAdapter) -> RouterActionResult
   ): RouterActionResult {
     val runtime = getRuntimeCapabilities()
+    val actionCapability = runtime.actionCapabilities[capability]
+    if (actionCapability == null || !actionCapability.writable) {
+      return notSupported(actionCapability?.reason ?: "$label is unsupported on the current router/backend.")
+    }
+
+    val adapter = activeAdapter ?: resolveAdapter(ensureDetected())
+    return call(adapter)
+  }
+
+  private suspend fun performDeviceAction(
+    capability: RouterDeviceCapability,
+    label: String,
+    device: RouterManagedDevice,
+    call: suspend (RouterVendorAdapter) -> RouterActionResult
+  ): RouterActionResult {
+    val runtime = getDeviceRuntimeCapabilities(device)
     val actionCapability = runtime.actionCapabilities[capability]
     if (actionCapability == null || !actionCapability.writable) {
       return notSupported(actionCapability?.reason ?: "$label is unsupported on the current router/backend.")
@@ -445,6 +553,11 @@ class RouterApiHttp(
     conn.useCaches = false
     conn.instanceFollowRedirects = false
     return conn
+  }
+
+  private fun resolvePath(base: String, path: String): String {
+    val root = base.trimEnd('/')
+    return if (path.startsWith("/")) "$root$path" else "$root/$path"
   }
 
   private fun readSmallBody(conn: HttpURLConnection): String? {

@@ -144,7 +144,7 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
         val linkQuality = calculateLinkQuality(d)
         val running = runningActions[d.id] == true
         var details by remember(d.id) { mutableStateOf<DeviceDetails?>(null) }
-        LaunchedEffect(d.id) {
+        LaunchedEffect(d.id, d.isBlocked, d.isPaused, d.name, d.nickname) {
           details = deviceControl.deviceDetails(d.id)
         }
         val defaultSupport = remember {
@@ -212,7 +212,11 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
                 }
               )
               ActionButton(
-                label = if (blockSupport.supported) "Block" else "Block (Unsupported)",
+                label = when {
+                  !blockSupport.supported -> "Block (Unsupported)"
+                  d.isBlocked -> "Unblock"
+                  else -> "Block"
+                },
                 running = running,
                 enabled = !running && blockSupport.supported,
                 onClick = {
@@ -221,7 +225,9 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
                     runningActions = runningActions,
                     deviceId = d.id,
                     snackbarHost = snackbarHost
-                  ) { deviceControl.block(d.id) }
+                  ) {
+                    if (d.isBlocked) deviceControl.setBlocked(d.id, false) else deviceControl.block(d.id)
+                  }
                 }
               )
               ActionButton(

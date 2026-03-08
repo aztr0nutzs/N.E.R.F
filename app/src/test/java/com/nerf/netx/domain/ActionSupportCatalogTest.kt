@@ -66,4 +66,39 @@ class ActionSupportCatalogTest {
     assertEquals("QoS", support?.label)
     assertEquals("QoS state is readable, but write mapping is unverified.", support?.reason)
   }
+
+  @Test
+  fun `device action lookup requires stable mac even when backend supports the action`() {
+    val support = ActionSupportCatalog.deviceActionState(
+      actionId = AppActionId.DEVICE_BLOCK,
+      device = Device(
+        id = "device-1",
+        name = "Tablet",
+        ip = "192.168.1.50",
+        online = true,
+        mac = ""
+      ),
+      snapshot = DeviceControlStatusSnapshot(
+        status = ServiceStatus.OK,
+        message = "ASUS device control available.",
+        deviceCapabilities = mapOf(
+          AppActionId.DEVICE_BLOCK to DeviceCapabilityState(
+            actionId = AppActionId.DEVICE_BLOCK,
+            label = "Block device",
+            supported = true,
+            detected = true,
+            authenticated = true,
+            readable = true,
+            writable = true,
+            status = ServiceStatus.OK,
+            reason = "Per-device internet blocking is available."
+          )
+        )
+      )
+    )
+
+    assertFalse(support?.supported == true)
+    assertEquals("Block device", support?.label)
+    assertTrue(support?.reason?.contains("stable MAC address") == true)
+  }
 }

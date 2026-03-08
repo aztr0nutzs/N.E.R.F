@@ -9,7 +9,6 @@ import com.nerf.netx.assistant.model.AssistantDiagnosisFocus
 import com.nerf.netx.assistant.recommendation.RecommendationEngine
 import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AppActionId
-import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.networkdoctor.model.NetworkDoctorAction
 import com.nerf.netx.networkdoctor.state.NetworkDoctorLoadState
@@ -82,12 +81,17 @@ class NetworkDoctorViewModel(
           _uiState.update { it.copy(runningAction = null) }
         }
         is NetworkDoctorAction.BlockDevice -> {
-          val support = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())[AppActionId.DEVICE_BLOCK]
+          val details = services.deviceControl.deviceDetails(action.deviceId)
+          val support = details?.actionSupport?.get(AppActionId.DEVICE_BLOCK)
           if (support != null && !support.supported) {
             _uiState.update {
               it.copy(
                 runningAction = null,
-                actionMessage = ActionSupportCatalog.messageFor("Block device", support)
+                actionMessage = if (details.backend.detected && !details.backend.authenticated) {
+                  "Block device is unavailable. ${support.reason}"
+                } else {
+                  ActionSupportCatalog.messageFor("Block device", support)
+                }
               )
             }
           } else {

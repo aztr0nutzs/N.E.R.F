@@ -87,7 +87,7 @@ class DeviceTool(
   private fun mapActionResult(result: ActionResult, title: String): AssistantToolResult {
     val severity = when {
       result.ok -> AssistantSeverity.SUCCESS
-      result.status == ServiceStatus.NOT_SUPPORTED -> AssistantSeverity.WARNING
+      result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA -> AssistantSeverity.WARNING
       else -> AssistantSeverity.ERROR
     }
     return AssistantToolResult(
@@ -120,7 +120,7 @@ class DeviceTool(
   }
 
   private fun actionMessage(result: ActionResult, title: String): String {
-    return if (result.status == ServiceStatus.NOT_SUPPORTED) {
+    return if (result.status == ServiceStatus.NOT_SUPPORTED || result.status == ServiceStatus.NO_DATA) {
       ActionSupportCatalog.messageFor(title, ActionSupportState(false, result.errorReason ?: result.message))
     } else {
       buildString {

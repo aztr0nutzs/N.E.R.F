@@ -7,7 +7,6 @@ import com.nerf.netx.assistant.model.AssistantRecommendation
 import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AppActionId
-import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.networkdoctor.model.NetworkDoctorAction
 import com.nerf.netx.networkdoctor.model.NetworkDoctorActionItem
@@ -141,8 +140,11 @@ class NetworkDoctorStateMapper {
         actions += NetworkDoctorActionItem("Refresh Topology", NetworkDoctorAction.RefreshTopology, prominent = true)
       }
       AssistantDiagnosisType.UNKNOWN_DEVICE_RISK -> {
-        val blockSupport = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())[AppActionId.DEVICE_BLOCK]
         finding.targetDeviceId?.let { deviceId ->
+          val device = context.devices.firstOrNull { it.id == deviceId }
+          val blockSupport = device?.let {
+            ActionSupportCatalog.deviceActionState(AppActionId.DEVICE_BLOCK, it, context.deviceControlStatus)
+          }
           actions += NetworkDoctorActionItem(
             label = if (blockSupport?.supported == true) "Block Device" else "Block Device (Unsupported)",
             action = NetworkDoctorAction.BlockDevice(deviceId, "Suspicious device"),
@@ -248,11 +250,29 @@ class NetworkDoctorStateMapper {
       message = "RF channel and spectrum data are not available; congestion is inferred from symptoms only.",
       category = NetworkDoctorCategory.WIFI_ENVIRONMENT
     )
-    items += NetworkDoctorUnavailableUi(
-      title = "Device control actions unavailable",
-      message = "Block, pause/resume, rename, and prioritize controls are unsupported on the current backend/router.",
-      category = NetworkDoctorCategory.SECURITY
-    )
+    val deviceControlStatus = context.deviceControlStatus
+    val writableDeviceActions = deviceControlStatus?.deviceCapabilities?.values?.filter { it.writable }.orEmpty()
+    val unavailableDeviceActions = deviceControlStatus?.deviceCapabilities?.values?.filterNot { it.writable }.orEmpty()
+    if (deviceControlStatus == null || writableDeviceActions.isEmpty() || unavailableDeviceActions.isNotEmpty()) {
+      items += NetworkDoctorUnavailableUi(
+        title = if (writableDeviceActions.isNotEmpty()) {
+          "Some device control actions unavailable"
+        } else {
+          "Device control actions unavailable"
+        },
+        message = when {
+          deviceControlStatus == null -> "Block, pause/resume, rename, and prioritize controls are unsupported on the current backend/router."
+          writableDeviceActions.isNotEmpty() -> buildString {
+            append("Available actions are limited to ")
+            append(writableDeviceActions.map { it.label }.distinct().joinToString(", "))
+            append(". ")
+            append(unavailableDeviceActions.firstOrNull()?.reason ?: deviceControlStatus.message)
+          }
+          else -> deviceControlStatus.message
+        },
+        category = NetworkDoctorCategory.SECURITY
+      )
+    }
     val routerControlUnavailable = context.routerInfo == null ||
       context.routerInfo.status != ServiceStatus.OK ||
       context.routerStatus?.actionSupport?.values?.all { !it.supported } == true

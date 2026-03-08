@@ -3,6 +3,7 @@ package com.nerf.netx.data
 internal interface RouterHttpSession {
   suspend fun nvramGet(names: List<String>): Map<String, String>
   suspend fun applyApp(postData: Map<String, String>): RouterActionResult
+  suspend fun submitForm(path: String, postData: Map<String, String>): RouterActionResult
 }
 
 internal interface RouterVendorAdapter {
@@ -11,6 +12,37 @@ internal interface RouterVendorAdapter {
   fun matches(info: RouterInfo): Boolean
 
   suspend fun probe(session: RouterHttpSession): RouterRuntimeCapabilities
+
+  suspend fun probeDevice(
+    session: RouterHttpSession,
+    device: RouterManagedDevice,
+    routerRuntime: RouterRuntimeCapabilities
+  ): RouterDeviceRuntimeCapabilities {
+    return RouterDeviceRuntimeCapabilities(
+      adapterId = id,
+      detected = routerRuntime.detected,
+      authenticated = routerRuntime.authenticated,
+      readable = routerRuntime.readable,
+      writable = false,
+      message = "Device write control is not implemented for this router adapter."
+    )
+  }
+
+  suspend fun setDeviceBlocked(session: RouterHttpSession, device: RouterManagedDevice, blocked: Boolean): RouterActionResult {
+    return notSupported("Device block control is not implemented for this router adapter.")
+  }
+
+  suspend fun setDevicePaused(session: RouterHttpSession, device: RouterManagedDevice, paused: Boolean): RouterActionResult {
+    return notSupported("Device pause control is not implemented for this router adapter.")
+  }
+
+  suspend fun renameDevice(session: RouterHttpSession, device: RouterManagedDevice, name: String): RouterActionResult {
+    return notSupported("Device rename control is not implemented for this router adapter.")
+  }
+
+  suspend fun prioritizeDevice(session: RouterHttpSession, device: RouterManagedDevice): RouterActionResult {
+    return notSupported("Device prioritization is not implemented for this router adapter.")
+  }
 
   suspend fun setDnsShieldEnabled(session: RouterHttpSession, enabled: Boolean): RouterActionResult {
     return notSupported("DNS Shield write control is not implemented for this router adapter.")
@@ -77,6 +109,13 @@ internal class AsusRouterAdapter : RouterVendorAdapter {
   private val source = "Verified from ASUSWRT httpApi.js via appGet.cgi/applyapp.cgi"
   private val guestKeys = listOf("wl0.1_bss_enabled", "wl1.1_bss_enabled")
   private val vpnKeys = listOf("vpn_serverx_eas", "vpn_serverx_start")
+  private val customClientListKey = "custom_clientlist"
+  private val multiFilterAllKey = "MULTIFILTER_ALL"
+  private val multiFilterEnableKey = "MULTIFILTER_ENABLE"
+  private val multiFilterMacKey = "MULTIFILTER_MAC"
+  private val multiFilterDeviceNameKey = "MULTIFILTER_DEVICENAME"
+  private val multiFilterDaytimeKey = "MULTIFILTER_MACFILTER_DAYTIME"
+  private val multiFilterDaytimeV2Key = "MULTIFILTER_MACFILTER_DAYTIME_V2"
 
   override fun matches(info: RouterInfo): Boolean {
     val vendor = info.vendorName.orEmpty()
@@ -253,6 +292,218 @@ internal class AsusRouterAdapter : RouterVendorAdapter {
     )
   }
 
+  override suspend fun probeDevice(
+    session: RouterHttpSession,
+    device: RouterManagedDevice,
+    routerRuntime: RouterRuntimeCapabilities
+  ): RouterDeviceRuntimeCapabilities {
+    val normalizedMac = normalizeMac(device.macAddress)
+      ?: return deviceIdRequired(routerRuntime, "Router-backed device control requires a stable MAC address.")
+
+    val nvram = session.nvramGet(
+      listOf(
+        customClientListKey,
+        multiFilterEnableKey,
+        multiFilterMacKey,
+        multiFilterDeviceNameKey
+      )
+    )
+    val nickname = parseCustomClientList(nvram[customClientListKey]).nicknameForMac(normalizedMac)
+    val filterState = parseMultiFilterState(
+      enableRaw = nvram[multiFilterEnableKey],
+      macRaw = nvram[multiFilterMacKey],
+      deviceNameRaw = nvram[multiFilterDeviceNameKey]
+    )
+    val blocked = filterState.ruleForMac(normalizedMac)?.enable == "2"
+
+    val actionCapabilities = linkedMapOf(
+      RouterDeviceCapability.BLOCK to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.BLOCK,
+        supported = true,
+        readable = true,
+        writable = true,
+        reason = "Per-device internet blocking maps to MULTIFILTER_* on ASUSWRT.",
+        source = source
+      ),
+      RouterDeviceCapability.RENAME to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.RENAME,
+        supported = true,
+        readable = true,
+        writable = true,
+        reason = "Device rename maps to custom_clientlist on ASUSWRT.",
+        source = source
+      ),
+      RouterDeviceCapability.PAUSE to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.PAUSE,
+        supported = false,
+        readable = false,
+        writable = false,
+        reason = "ASUSWRT exposes scheduled parental-control rules, but NERF pause/resume semantics are not verified.",
+        source = source
+      ),
+      RouterDeviceCapability.PRIORITIZE to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.PRIORITIZE,
+        supported = false,
+        readable = false,
+        writable = false,
+        reason = "No verified ASUSWRT per-device QoS tagging endpoint was found in the vendor integration sources.",
+        source = source
+      )
+    )
+
+    return RouterDeviceRuntimeCapabilities(
+      adapterId = id,
+      detected = routerRuntime.detected,
+      authenticated = routerRuntime.authenticated,
+      readable = true,
+      writable = actionCapabilities.values.any { it.writable },
+      actionCapabilities = actionCapabilities,
+      readback = RouterDeviceReadback(
+        blocked = blocked,
+        paused = null,
+        nickname = nickname,
+        prioritized = null
+      ),
+      message = "ASUSWRT device capabilities verified through custom_clientlist and MULTIFILTER_*."
+    )
+  }
+
+  override suspend fun setDeviceBlocked(session: RouterHttpSession, device: RouterManagedDevice, blocked: Boolean): RouterActionResult {
+    val normalizedMac = normalizeMac(device.macAddress)
+      ?: return RouterActionResult(
+        status = RouterActionStatus.NOT_SUPPORTED,
+        message = "Router-backed device control requires a stable MAC address.",
+        errorCode = "DEVICE_ID_UNSUPPORTED"
+      )
+
+    val nvram = session.nvramGet(
+      listOf(
+        multiFilterAllKey,
+        multiFilterEnableKey,
+        multiFilterMacKey,
+        multiFilterDeviceNameKey,
+        multiFilterDaytimeKey,
+        multiFilterDaytimeV2Key,
+        customClientListKey
+      )
+    )
+    val customNames = parseCustomClientList(nvram[customClientListKey])
+    val preferredName = sanitizeRuleText(
+      device.displayName
+        ?: customNames.nicknameForMac(normalizedMac)
+        ?: normalizedMac
+    )
+    val filterState = parseMultiFilterState(
+      enableRaw = nvram[multiFilterEnableKey],
+      macRaw = nvram[multiFilterMacKey],
+      deviceNameRaw = nvram[multiFilterDeviceNameKey],
+      daytimeRaw = nvram[multiFilterDaytimeKey],
+      daytimeV2Raw = nvram[multiFilterDaytimeV2Key],
+      allRaw = nvram[multiFilterAllKey]
+    )
+    val updatedState = filterState.withBlocked(normalizedMac, preferredName, blocked)
+    val form = linkedMapOf(
+      "modified" to "0",
+      "flag" to "background",
+      "action_mode" to "apply",
+      "action_script" to "restart_firewall",
+      "action_wait" to "1",
+      multiFilterAllKey to updatedState.allValue,
+      multiFilterEnableKey to updatedState.enable.joinToString(">"),
+      multiFilterMacKey to updatedState.macs.joinToString(">"),
+      multiFilterDeviceNameKey to updatedState.deviceNames.joinToString(">"),
+      multiFilterDaytimeKey to updatedState.daytime.joinToString(">"),
+      multiFilterDaytimeV2Key to updatedState.daytimeV2.joinToString(">")
+    )
+
+    val result = session.submitForm("/start_apply2.htm", form)
+    if (result.status != RouterActionStatus.OK) {
+      return result
+    }
+
+    val readback = probeDevice(
+      session = session,
+      device = device.copy(displayName = preferredName, macAddress = normalizedMac),
+      routerRuntime = RouterRuntimeCapabilities(
+        adapterId = id,
+        detected = true,
+        authenticated = true,
+        readable = true,
+        writable = true
+      )
+    )
+    return when (readback.readback.blocked) {
+      blocked -> RouterActionResult(
+        status = RouterActionStatus.OK,
+        message = if (blocked) {
+          "Device internet block enabled."
+        } else {
+          "Device internet block disabled."
+        }
+      )
+      null -> RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Device block write submitted but readback was unavailable.",
+        errorCode = "READBACK_UNAVAILABLE"
+      )
+      else -> RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Device block write was rejected by router readback.",
+        errorCode = "READBACK_MISMATCH"
+      )
+    }
+  }
+
+  override suspend fun renameDevice(session: RouterHttpSession, device: RouterManagedDevice, name: String): RouterActionResult {
+    val normalizedMac = normalizeMac(device.macAddress)
+      ?: return RouterActionResult(
+        status = RouterActionStatus.NOT_SUPPORTED,
+        message = "Router-backed device rename requires a stable MAC address.",
+        errorCode = "DEVICE_ID_UNSUPPORTED"
+      )
+    val sanitizedName = validateRename(name)
+      ?: return RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Device name is invalid.",
+        errorCode = "INVALID_NAME"
+      )
+
+    val nvram = session.nvramGet(listOf(customClientListKey))
+    val customNames = parseCustomClientList(nvram[customClientListKey]).withNickname(
+      mac = normalizedMac,
+      nickname = sanitizedName
+    )
+    val result = session.submitForm(
+      path = "/start_apply2.htm",
+      postData = linkedMapOf(
+        "modified" to "0",
+        "flag" to "background",
+        "action_mode" to "apply",
+        "action_script" to "saveNvram",
+        "action_wait" to "1",
+        customClientListKey to customNames.serialize()
+      )
+    )
+    if (result.status != RouterActionStatus.OK) {
+      return result
+    }
+
+    val readback = session.nvramGet(listOf(customClientListKey))[customClientListKey]
+    val nickname = parseCustomClientList(readback).nicknameForMac(normalizedMac)
+    return if (nickname == sanitizedName) {
+      RouterActionResult(
+        status = RouterActionStatus.OK,
+        message = "Device name updated."
+      )
+    } else {
+      RouterActionResult(
+        status = RouterActionStatus.ERROR,
+        message = "Device rename write was rejected by router readback.",
+        errorCode = "READBACK_MISMATCH"
+      )
+    }
+  }
+
   override suspend fun setGuestWifiEnabled(session: RouterHttpSession, enabled: Boolean): RouterActionResult {
     val nvram = session.nvramGet(guestKeys)
     val guestKey = guestKeys.firstOrNull { !nvram[it].isNullOrBlank() }
@@ -413,4 +664,194 @@ internal class AsusRouterAdapter : RouterVendorAdapter {
   }
 
   private fun boolValue(enabled: Boolean): String = if (enabled) "1" else "0"
+
+  private fun deviceIdRequired(
+    runtime: RouterRuntimeCapabilities,
+    reason: String
+  ): RouterDeviceRuntimeCapabilities {
+    val unsupported = linkedMapOf(
+      RouterDeviceCapability.BLOCK to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.BLOCK,
+        reason = reason,
+        source = source
+      ),
+      RouterDeviceCapability.PAUSE to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.PAUSE,
+        reason = reason,
+        source = source
+      ),
+      RouterDeviceCapability.RENAME to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.RENAME,
+        reason = reason,
+        source = source
+      ),
+      RouterDeviceCapability.PRIORITIZE to RouterDeviceActionCapability(
+        capability = RouterDeviceCapability.PRIORITIZE,
+        reason = reason,
+        source = source
+      )
+    )
+    return RouterDeviceRuntimeCapabilities(
+      adapterId = id,
+      detected = runtime.detected,
+      authenticated = runtime.authenticated,
+      readable = false,
+      writable = false,
+      actionCapabilities = unsupported,
+      message = reason
+    )
+  }
+
+  private fun normalizeMac(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    val compact = raw.uppercase().replace("-", ":").trim()
+    return if (Regex("^([0-9A-F]{2}:){5}[0-9A-F]{2}$").matches(compact)) compact else null
+  }
+
+  private fun validateRename(raw: String): String? {
+    val trimmed = raw.trim()
+    if (trimmed.isBlank()) return null
+    if (trimmed.contains('<') || trimmed.contains('>')) return null
+    if (trimmed.toByteArray(Charsets.UTF_8).size > 32) return null
+    return trimmed
+  }
+
+  private fun sanitizeRuleText(raw: String): String {
+    return raw.trim().replace("<", "").replace(">", "").takeIf { it.isNotBlank() } ?: "Unknown"
+  }
+
+  private fun parseCustomClientList(raw: String?): AsusCustomClientList {
+    val entries = raw.orEmpty()
+      .split('<')
+      .mapNotNull { row ->
+        if (row.isBlank()) return@mapNotNull null
+        val cols = row.split('>')
+        val mac = normalizeMac(cols.getOrNull(1))
+        if (mac == null) return@mapNotNull null
+        AsusCustomClientEntry(
+          nickname = cols.getOrNull(0).orEmpty(),
+          mac = mac,
+          type = cols.getOrNull(3).orEmpty()
+        )
+      }
+      .toMutableList()
+    return AsusCustomClientList(entries)
+  }
+
+  private fun parseMultiFilterState(
+    enableRaw: String?,
+    macRaw: String?,
+    deviceNameRaw: String?,
+    daytimeRaw: String? = null,
+    daytimeV2Raw: String? = null,
+    allRaw: String? = null
+  ): AsusMultiFilterState {
+    val enable = splitDelimited(enableRaw)
+    val macs = splitDelimited(macRaw)
+    val names = splitDelimited(deviceNameRaw)
+    val daytime = splitDelimited(daytimeRaw)
+    val daytimeV2 = splitDelimited(daytimeV2Raw)
+    val size = listOf(enable.size, macs.size, names.size, daytime.size, daytimeV2.size).maxOrNull() ?: 0
+    return AsusMultiFilterState(
+      allValue = allRaw?.takeIf { it.isNotBlank() } ?: "0",
+      enable = MutableList(size) { idx -> enable.getOrElse(idx) { "0" } },
+      macs = MutableList(size) { idx -> normalizeMac(macs.getOrNull(idx)) ?: "" },
+      deviceNames = MutableList(size) { idx -> names.getOrElse(idx) { "" } },
+      daytime = MutableList(size) { idx -> daytime.getOrElse(idx) { "" } },
+      daytimeV2 = MutableList(size) { idx -> daytimeV2.getOrElse(idx) { "" } }
+    ).normalized()
+  }
+
+  private fun splitDelimited(raw: String?): List<String> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return raw.split('>').map { it.trim() }
+  }
+
+  private data class AsusCustomClientEntry(
+    val nickname: String,
+    val mac: String,
+    val type: String
+  )
+
+  private data class AsusCustomClientList(
+    val entries: MutableList<AsusCustomClientEntry>
+  ) {
+    fun nicknameForMac(mac: String): String? {
+      return entries.firstOrNull { it.mac == mac }?.nickname?.takeIf { it.isNotBlank() }
+    }
+
+    fun withNickname(mac: String, nickname: String): AsusCustomClientList {
+      val filtered = entries.filterNot { it.mac == mac }.toMutableList()
+      filtered += AsusCustomClientEntry(
+        nickname = nickname,
+        mac = mac,
+        type = entries.firstOrNull { it.mac == mac }?.type.orEmpty()
+      )
+      return copy(entries = filtered)
+    }
+
+    fun serialize(): String {
+      return entries.joinToString("<") { entry ->
+        listOf(entry.nickname, entry.mac, "0", entry.type, "", "").joinToString(">")
+      }
+    }
+  }
+
+  private data class AsusMultiFilterRule(
+    val enable: String,
+    val mac: String,
+    val deviceName: String
+  )
+
+  private data class AsusMultiFilterState(
+    val allValue: String,
+    val enable: MutableList<String>,
+    val macs: MutableList<String>,
+    val deviceNames: MutableList<String>,
+    val daytime: MutableList<String>,
+    val daytimeV2: MutableList<String>
+  ) {
+    fun normalized(): AsusMultiFilterState {
+      val indices = macs.indices.filter { macs[it].isNotBlank() }
+      return AsusMultiFilterState(
+        allValue = allValue,
+        enable = indices.map { enable.getOrElse(it) { "0" } }.toMutableList(),
+        macs = indices.map { macs[it] }.toMutableList(),
+        deviceNames = indices.map { deviceNames.getOrElse(it) { "" } }.toMutableList(),
+        daytime = indices.map { daytime.getOrElse(it) { "" } }.toMutableList(),
+        daytimeV2 = indices.map { daytimeV2.getOrElse(it) { "" } }.toMutableList()
+      )
+    }
+
+    fun ruleForMac(mac: String): AsusMultiFilterRule? {
+      val index = macs.indexOf(mac)
+      if (index < 0) return null
+      return AsusMultiFilterRule(
+        enable = enable.getOrElse(index) { "0" },
+        mac = mac,
+        deviceName = deviceNames.getOrElse(index) { "" }
+      )
+    }
+
+    fun withBlocked(mac: String, deviceName: String, blocked: Boolean): AsusMultiFilterState {
+      val normalized = normalized()
+      val index = normalized.macs.indexOf(mac)
+      if (index >= 0) {
+        normalized.enable[index] = if (blocked) "2" else "0"
+        if (deviceName.isNotBlank()) {
+          normalized.deviceNames[index] = deviceName
+        }
+      } else if (blocked) {
+        normalized.enable += "2"
+        normalized.macs += mac
+        normalized.deviceNames += deviceName
+        normalized.daytime += "<"
+        normalized.daytimeV2 += "W03E21000700<W04122000800"
+      }
+
+      return normalized.copy(
+        allValue = if (blocked && normalized.allValue == "0") "1" else normalized.allValue
+      )
+    }
+  }
 }

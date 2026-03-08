@@ -127,6 +127,8 @@ interface DevicesService {
 }
 
 interface DeviceControlService {
+  val status: StateFlow<DeviceControlStatusSnapshot>
+  suspend fun refreshStatus(): DeviceControlStatusSnapshot
   suspend fun ping(deviceId: String): ActionResult
   suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult
   suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult
@@ -179,12 +181,47 @@ data class DeviceActionSupport(
   val canPrioritize: Boolean = false
 )
 
+data class DeviceControlBackendState(
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val vendorName: String? = null,
+  val modelName: String? = null,
+  val firmwareVersion: String? = null,
+  val adapterId: String? = null,
+  val message: String? = null
+)
+
+data class DeviceCapabilityState(
+  val actionId: String,
+  val label: String,
+  val supported: Boolean = false,
+  val detected: Boolean = false,
+  val authenticated: Boolean = false,
+  val readable: Boolean = false,
+  val writable: Boolean = false,
+  val status: ServiceStatus = if (supported) ServiceStatus.OK else ServiceStatus.NOT_SUPPORTED,
+  val reason: String,
+  val source: String? = null
+)
+
+data class DeviceControlStatusSnapshot(
+  val status: ServiceStatus,
+  val message: String,
+  val backend: DeviceControlBackendState = DeviceControlBackendState(),
+  val deviceCapabilities: Map<String, DeviceCapabilityState> = emptyMap(),
+  val lastUpdatedEpochMs: Long = System.currentTimeMillis()
+)
+
 data class DeviceDetails(
   val device: Device,
   val pingMs: Int? = null,
   val notes: String = "",
   val support: DeviceActionSupport = DeviceActionSupport(),
   val actionSupport: Map<String, ActionSupportState> = emptyMap(),
+  val backend: DeviceControlBackendState = DeviceControlBackendState(),
+  val deviceCapabilities: Map<String, DeviceCapabilityState> = emptyMap(),
   val trafficMessage: String? = null
 )
 

@@ -7,6 +7,8 @@ class BuildAssistantContextUseCase(
   private val services: AppServices
 ) {
   suspend operator fun invoke(): AssistantContextSnapshot {
+    val deviceControlStatus = runCatching { services.deviceControl.refreshStatus() }.getOrNull()
+      ?: services.deviceControl.status.value
     val routerStatus = runCatching { services.routerControl.refreshStatus() }.getOrNull()
       ?: services.routerControl.status.value
     val routerInfo = runCatching { services.routerControl.info() }.getOrNull()
@@ -18,6 +20,7 @@ class BuildAssistantContextUseCase(
       topologyNodes = services.topology.nodes.value,
       topologyLinks = services.topology.links.value,
       analytics = services.analytics.snapshot.value,
+      deviceControlStatus = deviceControlStatus,
       routerInfo = routerInfo,
       routerStatus = routerStatus
     )

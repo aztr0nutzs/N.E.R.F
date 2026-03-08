@@ -8,6 +8,7 @@ import com.nerf.netx.domain.AnalyticsService
 import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceControlStatusSnapshot
 import com.nerf.netx.domain.DeviceControlService
 import com.nerf.netx.domain.DeviceDetails
 import com.nerf.netx.domain.DevicesService
@@ -120,6 +121,13 @@ class NetworkDoctorViewModelTest {
     }
 
     override val deviceControl: DeviceControlService = object : DeviceControlService {
+      override val status: StateFlow<DeviceControlStatusSnapshot> = MutableStateFlow(
+        DeviceControlStatusSnapshot(
+          status = ServiceStatus.NOT_SUPPORTED,
+          message = "Device control unsupported."
+        )
+      ).asStateFlow()
+      override suspend fun refreshStatus(): DeviceControlStatusSnapshot = status.value
       override suspend fun ping(deviceId: String): ActionResult = ActionResult(true, ServiceStatus.OK, "OK", "Pinged")
       override suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Block unsupported")
       override suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult = ActionResult(false, ServiceStatus.NOT_SUPPORTED, "NOT_SUPPORTED", "Pause unsupported")

@@ -28,7 +28,6 @@ import com.nerf.netx.domain.ActionSupportState
 import com.nerf.netx.domain.AppActionId
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.Device
-import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.MapLink
 import com.nerf.netx.domain.MapNode
 import com.nerf.netx.domain.QosMode
@@ -162,6 +161,7 @@ class NerfWebBridge(private val services: AppServices) {
 
     scope.launch {
       services.devices.devices.collectLatest { devices ->
+        runCatching { services.deviceControl.refreshStatus() }
         emit(
           "devices.update",
           JSONObject().put("devices", devicesJson(devices)).toString()
@@ -293,6 +293,7 @@ class NerfWebBridge(private val services: AppServices) {
           .toString()
       }
       "devices.list" -> {
+        runCatching { services.deviceControl.refreshStatus() }
         JSONObject()
           .put("ok", true)
           .put("status", ServiceStatus.OK.name)
@@ -314,6 +315,8 @@ class NerfWebBridge(private val services: AppServices) {
               .put("notes", details.notes)
               .put("trafficMessage", details.trafficMessage)
               .put("actionSupport", actionSupportJson(details.actionSupport))
+              .put("backend", deviceBackendJson(details.backend))
+              .put("deviceCapabilities", deviceCapabilitiesJson(details.deviceCapabilities))
               .put("device", deviceJson(details.device))
           )
           .toString()
@@ -494,7 +497,10 @@ class NerfWebBridge(private val services: AppServices) {
         analytics = services.analytics.snapshot.value,
         routerStatus = services.routerControl.status.value
       ).toString()
-      "security.summary" -> securitySummaryJson(services.devices.devices.value).toString()
+      "security.summary" -> {
+        runCatching { services.deviceControl.refreshStatus() }
+        securitySummaryJson(services.devices.devices.value).toString()
+      }
       "analytics.snapshot" -> {
         services.analytics.refresh()
         analyticsJson(services.analytics.snapshot.value, code = "ANALYTICS_SNAPSHOT").toString()
@@ -631,14 +637,29 @@ class NerfWebBridge(private val services: AppServices) {
     deviceId: String,
     action: suspend () -> ActionResult
   ): String {
-    val support = resolveDeviceActionSupport(actionId, deviceId)
+    val details = services.deviceControl.deviceDetails(deviceId)
+    val support = details?.actionSupport?.get(actionId)
+      ?: details?.support?.let { ActionSupportCatalog.deviceActionState(actionId, it) }
+      ?: ActionSupportCatalog.deviceActionState(actionId)
     if (support != null && !support.supported) {
       return actionResultJson(
         ActionResult(
           ok = false,
-          status = ServiceStatus.NOT_SUPPORTED,
-          code = "NOT_SUPPORTED",
-          message = "${support.label ?: "Device action"} is unsupported on the current backend/router.",
+          status = if (details?.backend?.detected == true && details.backend.authenticated.not()) {
+            ServiceStatus.NO_DATA
+          } else {
+            ServiceStatus.NOT_SUPPORTED
+          },
+          code = if (details?.backend?.detected == true && details.backend.authenticated.not()) {
+            "DEVICE_CONTROL_UNAVAILABLE"
+          } else {
+            "NOT_SUPPORTED"
+          },
+          message = if (details?.backend?.detected == true && details.backend.authenticated.not()) {
+            "${support.label ?: "Device action"} is unavailable."
+          } else {
+            "${support.label ?: "Device action"} is unsupported on the current backend/router."
+          },
           errorReason = support.reason
         )
       )
@@ -662,16 +683,6 @@ class NerfWebBridge(private val services: AppServices) {
       return actionResultJson(result)
     }
     return actionResultJson(action())
-  }
-
-  private suspend fun resolveDeviceActionSupport(
-    actionId: String,
-    deviceId: String
-  ): ActionSupportState? {
-    val details = services.deviceControl.deviceDetails(deviceId)
-    return details?.actionSupport?.get(actionId)
-      ?: details?.support?.let { ActionSupportCatalog.deviceActionState(actionId, it) }
-      ?: ActionSupportCatalog.deviceActionState(actionId)
   }
 
   private fun actionResultJson(result: ActionResult): String {
@@ -851,6 +862,68 @@ class NerfWebBridge(private val services: AppServices) {
     return json
   }
 
+  private fun deviceBackendJson(backend: com.nerf.netx.domain.DeviceControlBackendState): JSONObject {
+    return JSONObject()
+      .put("detected", backend.detected)
+      .put("authenticated", backend.authenticated)
+      .put("readable", backend.readable)
+      .put("writable", backend.writable)
+      .put("vendorName", backend.vendorName)
+      .put("modelName", backend.modelName)
+      .put("firmwareVersion", backend.firmwareVersion)
+      .put("adapterId", backend.adapterId)
+      .put("message", backend.message)
+  }
+
+  private fun deviceCapabilitiesJson(states: Map<String, com.nerf.netx.domain.DeviceCapabilityState>): JSONObject {
+    val json = JSONObject()
+    states.forEach { (key, value) ->
+      json.put(
+        key,
+        JSONObject()
+          .put("label", value.label)
+          .put("supported", value.supported)
+          .put("detected", value.detected)
+          .put("authenticated", value.authenticated)
+          .put("readable", value.readable)
+          .put("writable", value.writable)
+          .put("status", value.status.name)
+          .put("reason", value.reason)
+          .put("source", value.source)
+      )
+    }
+    return json
+  }
+
+  private fun globalDeviceActionSupport(): Map<String, ActionSupportState> {
+    val capabilities = services.deviceControl.status.value.deviceCapabilities
+    return linkedMapOf(
+      AppActionId.DEVICE_BLOCK to capabilitySupport(capabilities, AppActionId.DEVICE_BLOCK, "Block device"),
+      AppActionId.DEVICE_UNBLOCK to capabilitySupport(capabilities, AppActionId.DEVICE_BLOCK, "Unblock device"),
+      AppActionId.DEVICE_PAUSE to capabilitySupport(capabilities, AppActionId.DEVICE_PAUSE, "Pause device"),
+      AppActionId.DEVICE_RESUME to capabilitySupport(capabilities, AppActionId.DEVICE_PAUSE, "Resume device"),
+      AppActionId.DEVICE_RENAME to capabilitySupport(capabilities, AppActionId.DEVICE_RENAME, "Rename device"),
+      AppActionId.DEVICE_PRIORITIZE to capabilitySupport(capabilities, AppActionId.DEVICE_PRIORITIZE, "Prioritize device")
+    )
+  }
+
+  private fun capabilitySupport(
+    capabilities: Map<String, com.nerf.netx.domain.DeviceCapabilityState>,
+    actionId: String,
+    label: String
+  ): ActionSupportState {
+    val capability = capabilities[actionId]
+    return if (capability == null) {
+      ActionSupportState(false, "$label is unsupported on the current backend/router.", label)
+    } else {
+      ActionSupportState(
+        supported = capability.writable,
+        reason = if (capability.writable) "$label is available." else capability.reason,
+        label = label
+      )
+    }
+  }
+
   private fun wifiEnvironmentJson(
     devices: List<Device>,
     analytics: AnalyticsSnapshot,
@@ -894,11 +967,12 @@ class NerfWebBridge(private val services: AppServices) {
       .put("ssid", routerStatus.ssid)
       .put("linkSpeedMbps", routerStatus.linkSpeedMbps)
       .put("inferred", true)
-    }
   }
 
   private fun securitySummaryJson(devices: List<Device>): JSONObject {
-    val deviceSupport = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())
+    val deviceSupport = services.deviceControl.status.value.deviceCapabilities
+    val blockedSupported = deviceSupport[AppActionId.DEVICE_BLOCK]?.writable == true
+    val pausedSupported = deviceSupport[AppActionId.DEVICE_PAUSE]?.writable == true
     val unknownCount = devices.count {
       it.vendor.isBlank() || it.name.isBlank() || it.name.equals("Unknown", ignoreCase = true)
     }
@@ -916,12 +990,11 @@ class NerfWebBridge(private val services: AppServices) {
       .put("message", message)
       .put("riskDeviceCount", riskyCount)
       .put("unknownDeviceCount", unknownCount)
-      .put("blockedSupported", deviceSupport["device.block"]?.supported == true)
-      .put("pausedSupported", deviceSupport["device.pause"]?.supported == true)
-      .put("blockedStateAuthoritative", false)
+      .put("blockedSupported", blockedSupported)
+      .put("pausedSupported", pausedSupported)
+      .put("blockedStateAuthoritative", blockedSupported)
       .put("pausedStateAuthoritative", false)
-      .put("actionSupport", actionSupportJson(deviceSupport))
-    }
+      .put("actionSupport", actionSupportJson(globalDeviceActionSupport()))
   }
 
   private fun devicesJson(devices: List<Device>): JSONArray {
@@ -932,7 +1005,7 @@ class NerfWebBridge(private val services: AppServices) {
 
   private fun deviceJson(device: Device): JSONObject {
     val quality = device.rssiDbm?.let { (it + 100).coerceIn(5, 99) } ?: latencyToQuality(device.latencyMs)
-    val actionSupport = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())
+    val actionSupport = ActionSupportCatalog.deviceActionSupport(device, services.deviceControl.status.value)
     return JSONObject()
       .put("id", device.id)
       .put("name", device.name)

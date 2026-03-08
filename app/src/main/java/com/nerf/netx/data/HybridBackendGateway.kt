@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import com.nerf.netx.domain.ActionResult
 import com.nerf.netx.domain.ActionSupportCatalog
+import com.nerf.netx.domain.ActionSupportState
 import com.nerf.netx.domain.AnalyticsService
 import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.AppActionId
@@ -13,7 +14,10 @@ import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.DeviceControlAction
 import com.nerf.netx.domain.Device
 import com.nerf.netx.domain.DeviceActionSupport
+import com.nerf.netx.domain.DeviceCapabilityState
+import com.nerf.netx.domain.DeviceControlBackendState
 import com.nerf.netx.domain.DeviceControlService
+import com.nerf.netx.domain.DeviceControlStatusSnapshot
 import com.nerf.netx.domain.DeviceDetails
 import com.nerf.netx.domain.DevicesService
 import com.nerf.netx.domain.MapLayoutMode
@@ -89,7 +93,7 @@ class HybridBackendGateway(
   override val speedtest: SpeedtestService = HybridSpeedtest(context, scope)
   override val scan: ScanService = HybridScanService(scope, lanScanner, sharedDevices)
   override val devices: DevicesService = HybridDevicesService(sharedDevices, scan)
-  override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner)
+  override val deviceControl: DeviceControlService = HybridDeviceControl(sharedDevices, lanScanner, credentialsStore)
   override val map: MapService = HybridMapService(sharedDevices, selectedNodeId)
   override val topology: MapTopologyService = HybridTopologyService(sharedDevices, selectedNodeId)
   override val analytics: AnalyticsService = HybridAnalytics(context, speedtest, sharedDevices, scan)
@@ -991,8 +995,33 @@ private class HybridDevicesService(
 
 private class HybridDeviceControl(
   private val sharedDevices: MutableStateFlow<List<Device>>,
-  private val lanScanner: RealLanScanner
+  private val lanScanner: RealLanScanner,
+  private val credentialsStore: RouterCredentialsStore
 ) : DeviceControlService {
+  private val _status = MutableStateFlow(
+    DeviceControlStatusSnapshot(
+      status = ServiceStatus.NO_DATA,
+      message = "Router-backed device control is not configured."
+    )
+  )
+  override val status: StateFlow<DeviceControlStatusSnapshot> = _status.asStateFlow()
+
+  override suspend fun refreshStatus(): DeviceControlStatusSnapshot {
+    return runCatching { refreshDeviceStatus() }.getOrElse { error ->
+      DeviceControlStatusSnapshot(
+        status = ServiceStatus.ERROR,
+        message = error.message ?: "Device control status refresh failed.",
+        backend = DeviceControlBackendState(
+          detected = false,
+          authenticated = false,
+          readable = false,
+          writable = false,
+          message = error.message ?: "Device control status refresh failed."
+        )
+      ).also { _status.value = it }
+    }
+  }
+
   override suspend fun ping(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(
@@ -1035,60 +1064,436 @@ private class HybridDeviceControl(
   }
 
   override suspend fun setBlocked(deviceId: String, blocked: Boolean): ActionResult {
-    val deviceLabel = sharedDevices.value.firstOrNull { it.id == deviceId }?.name
-    return if (blocked) {
-      DeviceControlAction.BLOCK.unsupportedResult(deviceLabel)
-    } else {
-      DeviceControlAction.UNBLOCK.unsupportedResult(deviceLabel)
+    val device = sharedDevices.value.firstOrNull { it.id == deviceId }
+      ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    val routerDevice = routerDevice(device)
+    val api = buildRouterApi()
+      ?: return deviceUnavailable(
+        action = if (blocked) DeviceControlAction.BLOCK else DeviceControlAction.UNBLOCK,
+        device = device,
+        reason = "Router credentials are not configured or validated."
+      )
+    val capability = getDeviceCapabilityState(device)
+    val actionId = if (blocked) AppActionId.DEVICE_BLOCK else AppActionId.DEVICE_UNBLOCK
+    val support = capability.actionSupport[actionId]
+    if (support == null || !support.supported) {
+      return deviceSupportResult(
+        action = if (blocked) DeviceControlAction.BLOCK else DeviceControlAction.UNBLOCK,
+        device = device,
+        backend = capability.backend,
+        reason = support?.reason ?: capability.message
+      )
     }
+
+    val result = api.setDeviceBlocked(routerDevice, blocked)
+    val mapped = mapDeviceActionResult(
+      result = result,
+      action = if (blocked) DeviceControlAction.BLOCK else DeviceControlAction.UNBLOCK,
+      okCode = if (blocked) "DEVICE_BLOCKED" else "DEVICE_UNBLOCKED",
+      device = device
+    )
+    if (mapped.ok) {
+      refreshDeviceState(deviceId)
+    } else {
+      refreshDeviceStatus()
+    }
+    return mapped
   }
 
   override suspend fun setPaused(deviceId: String, paused: Boolean): ActionResult {
-    val deviceLabel = sharedDevices.value.firstOrNull { it.id == deviceId }?.name
-    return if (paused) {
-      DeviceControlAction.PAUSE.unsupportedResult(deviceLabel)
-    } else {
-      DeviceControlAction.RESUME.unsupportedResult(deviceLabel)
-    }
+    val device = sharedDevices.value.firstOrNull { it.id == deviceId }
+      ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    val capability = getDeviceCapabilityState(device)
+    val actionId = if (paused) AppActionId.DEVICE_PAUSE else AppActionId.DEVICE_RESUME
+    val support = capability.actionSupport[actionId]
+    return deviceSupportResult(
+      action = if (paused) DeviceControlAction.PAUSE else DeviceControlAction.RESUME,
+      device = device,
+      backend = capability.backend,
+      reason = support?.reason ?: capability.message
+    )
   }
 
   override suspend fun rename(deviceId: String, name: String): ActionResult {
-    val deviceLabel = sharedDevices.value.firstOrNull { it.id == deviceId }?.name
-    return DeviceControlAction.RENAME.unsupportedResult(deviceLabel)
+    val device = sharedDevices.value.firstOrNull { it.id == deviceId }
+      ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
+    val api = buildRouterApi()
+      ?: return deviceUnavailable(
+        action = DeviceControlAction.RENAME,
+        device = device,
+        reason = "Router credentials are not configured or validated."
+      )
+    val capability = getDeviceCapabilityState(device)
+    val support = capability.actionSupport[AppActionId.DEVICE_RENAME]
+    if (support == null || !support.supported) {
+      return deviceSupportResult(
+        action = DeviceControlAction.RENAME,
+        device = device,
+        backend = capability.backend,
+        reason = support?.reason ?: capability.message
+      )
+    }
+    val result = api.renameDevice(routerDevice(device), name)
+    val mapped = mapDeviceActionResult(
+      result = result,
+      action = DeviceControlAction.RENAME,
+      okCode = "DEVICE_RENAMED",
+      device = device
+    )
+    if (mapped.ok) {
+      refreshDeviceState(deviceId)
+    } else {
+      refreshDeviceStatus()
+    }
+    return mapped
   }
 
   override suspend fun block(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
-    return DeviceControlAction.BLOCK.unsupportedResult(d.name)
+    return setBlocked(d.id, true)
   }
 
   override suspend fun prioritize(deviceId: String): ActionResult {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId }
       ?: return ActionResult(false, ServiceStatus.ERROR, "DEVICE_NOT_FOUND", "Device not found")
-    return DeviceControlAction.PRIORITIZE.unsupportedResult(d.name)
+    val capability = getDeviceCapabilityState(d)
+    return deviceSupportResult(
+      action = DeviceControlAction.PRIORITIZE,
+      device = d,
+      backend = capability.backend,
+      reason = capability.actionSupport[AppActionId.DEVICE_PRIORITIZE]?.reason ?: capability.message
+    )
   }
 
   override suspend fun deviceDetails(deviceId: String): DeviceDetails? {
     val d = sharedDevices.value.firstOrNull { it.id == deviceId } ?: return null
     val probe = lanScanner.probeReachability(d.ip)
-    val support = DeviceActionSupport(
-      canBlock = false,
-      canUnblock = false,
-      canPause = false,
-      canResume = false,
-      canRename = false,
-      canPrioritize = false
-    )
+    val capability = getDeviceCapabilityState(d)
+    val support = capability.toSupport()
     return DeviceDetails(
-      device = d,
+      device = capability.device,
       pingMs = probe.latencyMs,
       notes = if (probe.reachable) "Reachable via ${probe.methodUsed}" else "Reachability unavailable",
       support = support,
-      actionSupport = ActionSupportCatalog.deviceActionSupport(support),
+      actionSupport = capability.actionSupport,
+      backend = capability.backend,
+      deviceCapabilities = capability.capabilities,
       trafficMessage = "Per-device traffic telemetry is unavailable from the current backend."
     )
   }
+
+  private suspend fun getDeviceCapabilityState(device: Device): DeviceCapabilitySnapshot {
+    val api = buildRouterApi()
+    if (api == null) {
+      val snapshot = DeviceControlStatusSnapshot(
+        status = ServiceStatus.NO_DATA,
+        message = "Router credentials are not configured.",
+        backend = DeviceControlBackendState(
+          detected = false,
+          authenticated = false,
+          readable = false,
+          writable = false,
+          message = "Router credentials are not configured."
+        )
+      )
+      _status.value = snapshot
+      val actionSupport = ActionSupportCatalog.deviceActionSupport(device, snapshot)
+      return DeviceCapabilitySnapshot(device, snapshot.backend, emptyMap(), actionSupport, snapshot.message)
+    }
+
+    val statusSnapshot = refreshStatus()
+    val routerDevice = routerDevice(device)
+    val runtime = api.getDeviceRuntimeCapabilities(routerDevice)
+    val backend = statusSnapshot.backend
+    val capabilities = runtime.actionCapabilities.values.associate { capability ->
+      deviceActionIdFor(capability.capability) to DeviceCapabilityState(
+        actionId = deviceActionIdFor(capability.capability),
+        label = deviceActionLabel(capability.capability),
+        supported = capability.supported,
+        detected = runtime.detected,
+        authenticated = runtime.authenticated,
+        readable = capability.readable,
+        writable = capability.writable,
+        status = when {
+          capability.writable -> ServiceStatus.OK
+          capability.readable -> ServiceStatus.NO_DATA
+          capability.supported -> ServiceStatus.NO_DATA
+          else -> ServiceStatus.NOT_SUPPORTED
+        },
+        reason = capability.reason,
+        source = capability.source
+      )
+    }
+    val currentDevice = applyReadback(device, runtime.readback)
+    if (currentDevice != device) {
+      updateSharedDevice(currentDevice)
+    }
+    val actionSupport = ActionSupportCatalog.deviceActionSupport(currentDevice, statusSnapshot.copy(deviceCapabilities = capabilities))
+    return DeviceCapabilitySnapshot(
+      device = currentDevice,
+      backend = backend,
+      capabilities = capabilities,
+      actionSupport = actionSupport,
+      message = runtime.message
+    )
+  }
+
+  private suspend fun refreshDeviceStatus(api: RouterApi? = buildRouterApi()): DeviceControlStatusSnapshot {
+    val resolvedApi = api ?: return DeviceControlStatusSnapshot(
+      status = ServiceStatus.NO_DATA,
+      message = "Router credentials are not configured.",
+      backend = DeviceControlBackendState(
+        detected = false,
+        authenticated = false,
+        readable = false,
+        writable = false,
+        message = "Router credentials are not configured."
+      )
+    ).also { _status.value = it }
+    val runtime = resolvedApi.getRuntimeCapabilities()
+    val detected = resolvedApi.detect(connectionInfoFromStore())
+    val capabilityStates = linkedMapOf(
+      AppActionId.DEVICE_BLOCK to deviceCapabilityState(runtime, AppActionId.DEVICE_BLOCK, RouterDeviceCapability.BLOCK, DeviceControlAction.BLOCK.label),
+      AppActionId.DEVICE_UNBLOCK to deviceCapabilityState(runtime, AppActionId.DEVICE_UNBLOCK, RouterDeviceCapability.BLOCK, DeviceControlAction.UNBLOCK.label),
+      AppActionId.DEVICE_PAUSE to deviceCapabilityState(runtime, AppActionId.DEVICE_PAUSE, RouterDeviceCapability.PAUSE, DeviceControlAction.PAUSE.label),
+      AppActionId.DEVICE_RESUME to deviceCapabilityState(runtime, AppActionId.DEVICE_RESUME, RouterDeviceCapability.PAUSE, DeviceControlAction.RESUME.label),
+      AppActionId.DEVICE_RENAME to deviceCapabilityState(runtime, AppActionId.DEVICE_RENAME, RouterDeviceCapability.RENAME, DeviceControlAction.RENAME.label),
+      AppActionId.DEVICE_PRIORITIZE to deviceCapabilityState(runtime, AppActionId.DEVICE_PRIORITIZE, RouterDeviceCapability.PRIORITIZE, DeviceControlAction.PRIORITIZE.label)
+    )
+    val snapshot = DeviceControlStatusSnapshot(
+      status = when {
+        runtime.authenticated && runtime.readable -> ServiceStatus.OK
+        runtime.detected -> ServiceStatus.NO_DATA
+        else -> ServiceStatus.ERROR
+      },
+      message = runtime.message,
+      backend = DeviceControlBackendState(
+        detected = runtime.detected,
+        authenticated = runtime.authenticated,
+        readable = runtime.readable,
+        writable = capabilityStates.values.any { it.writable },
+        vendorName = detected.vendorName,
+        modelName = detected.modelName,
+        firmwareVersion = detected.firmwareVersion,
+        adapterId = runtime.adapterId,
+        message = runtime.message
+      ),
+      deviceCapabilities = capabilityStates
+    )
+    _status.value = snapshot
+    return snapshot
+  }
+
+  private suspend fun refreshDeviceState(deviceId: String) {
+    val device = sharedDevices.value.firstOrNull { it.id == deviceId } ?: return
+    val capability = getDeviceCapabilityState(device)
+    updateSharedDevice(capability.device)
+  }
+
+  private fun buildRouterApi(): RouterApi? {
+    val creds = credentialsStore.read()
+    val profile = credentialsStore.readProfile()
+    val ip = (profile.routerIp ?: creds.host).trim()
+    if (ip.isBlank()) return null
+    return RouterApiHttp(connectionInfoFromStore())
+  }
+
+  private fun connectionInfoFromStore(): RouterConnectionInfo {
+    val creds = credentialsStore.read()
+    val profile = credentialsStore.readProfile()
+    return RouterConnectionInfo(
+      routerIp = profile.routerIp ?: creds.host,
+      adminUrl = profile.adminUrl ?: creds.adminUrl,
+      username = creds.username.ifBlank { null },
+      password = creds.token.ifBlank { null },
+      preferredAuthType = profile.authType
+    )
+  }
+
+  private fun routerDevice(device: Device): RouterManagedDevice {
+    return RouterManagedDevice(
+      deviceId = device.id,
+      macAddress = device.macAddress ?: device.mac,
+      ipAddress = device.ip,
+      hostName = device.hostName ?: device.hostname,
+      displayName = device.nickname ?: device.name
+    )
+  }
+
+  private fun deviceCapabilityState(
+    runtime: RouterRuntimeCapabilities,
+    actionId: String,
+    capability: RouterDeviceCapability,
+    label: String
+  ): DeviceCapabilityState {
+    val asusDeviceSupport = runtime.adapterId == "asuswrt-app" && runtime.authenticated && runtime.readable
+    val authUnavailable = runtime.detected && !runtime.authenticated
+    val reason = when (capability) {
+      RouterDeviceCapability.BLOCK -> if (authUnavailable) {
+        "Router detected, but authenticated device control is unavailable until credentials are validated."
+      } else if (asusDeviceSupport) {
+        "Per-device internet blocking is available for supported ASUSWRT devices with a stable MAC address."
+      } else {
+        "Per-device internet blocking is unsupported on the current backend/router."
+      }
+      RouterDeviceCapability.PAUSE -> if (authUnavailable) {
+        "Router detected, but authenticated device control is unavailable until credentials are validated."
+      } else {
+        "Pause/resume is unsupported on the current backend/router."
+      }
+      RouterDeviceCapability.RENAME -> if (authUnavailable) {
+        "Router detected, but authenticated device control is unavailable until credentials are validated."
+      } else if (asusDeviceSupport) {
+        "Device rename is available for supported ASUSWRT devices with a stable MAC address."
+      } else {
+        "Device rename is unsupported on the current backend/router."
+      }
+      RouterDeviceCapability.PRIORITIZE -> if (authUnavailable) {
+        "Router detected, but authenticated device control is unavailable until credentials are validated."
+      } else {
+        "Device prioritization is unsupported on the current backend/router."
+      }
+    }
+    val writable = when (capability) {
+      RouterDeviceCapability.BLOCK, RouterDeviceCapability.RENAME -> asusDeviceSupport
+      RouterDeviceCapability.PAUSE, RouterDeviceCapability.PRIORITIZE -> false
+    }
+    val readable = when (capability) {
+      RouterDeviceCapability.BLOCK, RouterDeviceCapability.RENAME -> runtime.readable
+      RouterDeviceCapability.PAUSE, RouterDeviceCapability.PRIORITIZE -> false
+    }
+    return DeviceCapabilityState(
+      actionId = actionId,
+      label = label,
+      supported = writable,
+      detected = runtime.detected,
+      authenticated = runtime.authenticated,
+      readable = readable,
+      writable = writable,
+      status = when {
+        writable -> ServiceStatus.OK
+        authUnavailable -> ServiceStatus.NO_DATA
+        else -> ServiceStatus.NOT_SUPPORTED
+      },
+      reason = reason,
+      source = runtime.adapterId
+    )
+  }
+
+  private fun deviceActionIdFor(capability: RouterDeviceCapability): String {
+    return when (capability) {
+      RouterDeviceCapability.BLOCK -> AppActionId.DEVICE_BLOCK
+      RouterDeviceCapability.PAUSE -> AppActionId.DEVICE_PAUSE
+      RouterDeviceCapability.RENAME -> AppActionId.DEVICE_RENAME
+      RouterDeviceCapability.PRIORITIZE -> AppActionId.DEVICE_PRIORITIZE
+    }
+  }
+
+  private fun deviceActionLabel(capability: RouterDeviceCapability): String {
+    return when (capability) {
+      RouterDeviceCapability.BLOCK -> DeviceControlAction.BLOCK.label
+      RouterDeviceCapability.PAUSE -> DeviceControlAction.PAUSE.label
+      RouterDeviceCapability.RENAME -> DeviceControlAction.RENAME.label
+      RouterDeviceCapability.PRIORITIZE -> DeviceControlAction.PRIORITIZE.label
+    }
+  }
+
+  private fun applyReadback(device: Device, readback: RouterDeviceReadback): Device {
+    val renamed = readback.nickname?.takeIf { it.isNotBlank() }
+    return device.copy(
+      name = renamed ?: device.name,
+      nickname = renamed ?: device.nickname,
+      isBlocked = readback.blocked ?: device.isBlocked,
+      isPaused = readback.paused ?: device.isPaused
+    )
+  }
+
+  private fun updateSharedDevice(updated: Device) {
+    sharedDevices.value = sharedDevices.value.map { device ->
+      if (device.id == updated.id) updated else device
+    }
+  }
+
+  private fun mapDeviceActionResult(
+    result: RouterActionResult,
+    action: DeviceControlAction,
+    okCode: String,
+    device: Device
+  ): ActionResult {
+    return when (result.status) {
+      RouterActionStatus.OK -> ActionResult(
+        ok = true,
+        status = ServiceStatus.OK,
+        code = okCode,
+        message = result.message,
+        details = mapOf("device" to device.name.ifBlank { device.ip })
+      )
+      RouterActionStatus.NOT_SUPPORTED -> deviceUnsupported(action, device, result.message)
+      RouterActionStatus.ERROR -> ActionResult(
+        ok = false,
+        status = ServiceStatus.ERROR,
+        code = result.errorCode ?: "DEVICE_ACTION_ERROR",
+        message = result.message,
+        details = mapOf("device" to device.name.ifBlank { device.ip }),
+        errorReason = result.message
+      )
+    }
+  }
+
+  private fun deviceUnsupported(action: DeviceControlAction, device: Device, reason: String): ActionResult {
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NOT_SUPPORTED,
+      code = "NOT_SUPPORTED",
+      message = "${action.label} is unsupported on the current backend/router.",
+      details = mapOf("device" to device.name.ifBlank { device.ip }),
+      errorReason = reason
+    )
+  }
+
+  private fun deviceUnavailable(action: DeviceControlAction, device: Device, reason: String): ActionResult {
+    return ActionResult(
+      ok = false,
+      status = ServiceStatus.NO_DATA,
+      code = "DEVICE_CONTROL_UNAVAILABLE",
+      message = "${action.label} is unavailable.",
+      details = mapOf("device" to device.name.ifBlank { device.ip }),
+      errorReason = reason
+    )
+  }
+
+  private fun deviceSupportResult(
+    action: DeviceControlAction,
+    device: Device,
+    backend: DeviceControlBackendState,
+    reason: String
+  ): ActionResult {
+    return if (backend.detected && !backend.authenticated) {
+      deviceUnavailable(action, device, reason)
+    } else {
+      deviceUnsupported(action, device, reason)
+    }
+  }
+
+  private fun DeviceCapabilitySnapshot.toSupport(): DeviceActionSupport {
+    return DeviceActionSupport(
+      canBlock = actionSupport[AppActionId.DEVICE_BLOCK]?.supported == true,
+      canUnblock = actionSupport[AppActionId.DEVICE_UNBLOCK]?.supported == true,
+      canPause = actionSupport[AppActionId.DEVICE_PAUSE]?.supported == true,
+      canResume = actionSupport[AppActionId.DEVICE_RESUME]?.supported == true,
+      canRename = actionSupport[AppActionId.DEVICE_RENAME]?.supported == true,
+      canPrioritize = actionSupport[AppActionId.DEVICE_PRIORITIZE]?.supported == true
+    )
+  }
+
+  private data class DeviceCapabilitySnapshot(
+    val device: Device,
+    val backend: DeviceControlBackendState,
+    val capabilities: Map<String, DeviceCapabilityState>,
+    val actionSupport: Map<String, ActionSupportState>,
+    val message: String
+  )
 }
 
 private class HybridMapService(

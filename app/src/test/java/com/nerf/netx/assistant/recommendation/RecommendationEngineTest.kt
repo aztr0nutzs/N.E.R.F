@@ -7,6 +7,8 @@ import com.nerf.netx.assistant.model.AssistantDiagnosisReport
 import com.nerf.netx.assistant.model.AssistantDiagnosisType
 import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.domain.Device
+import com.nerf.netx.domain.DeviceControlStatusSnapshot
+import com.nerf.netx.domain.ServiceStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,6 +62,10 @@ class RecommendationEngineTest {
         topologyNodes = emptyList(),
         topologyLinks = emptyList(),
         analytics = null,
+        deviceControlStatus = DeviceControlStatusSnapshot(
+          status = ServiceStatus.NOT_SUPPORTED,
+          message = "Device control unsupported."
+        ),
         routerInfo = null
       ),
       targetDevice = target

@@ -14,7 +14,6 @@ import com.nerf.netx.assistant.state.AssistantSessionMemory
 import com.nerf.netx.assistant.tools.AssistantToolRegistry
 import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AppActionId
-import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.Device
 
 class AssistantOrchestrator(
@@ -186,7 +185,18 @@ class AssistantOrchestrator(
       else -> null
     }
     if (deviceAction != null) {
-      val support = ActionSupportCatalog.deviceActionSupport(DeviceActionSupport())[deviceAction.second]
+      val context = contextUseCase()
+      val resolvedDevice = entityResolver.resolveDevice(
+        query = intent.targetDeviceQuery,
+        devices = context.devices,
+        lastDiscussedDeviceId = sessionMemory.lastDiscussedDeviceId,
+        allowContextFallback = true
+      )
+      val support = (resolvedDevice as? AssistantEntityResolution.Resolved)
+        ?.candidate
+        ?.id
+        ?.let { deviceId -> context.devices.firstOrNull { it.id == deviceId } }
+        ?.let { device -> ActionSupportCatalog.deviceActionState(deviceAction.second, device, context.deviceControlStatus) }
       if (support != null && !support.supported) {
         return responseComposer.unsupportedAction(deviceAction.first, support)
       }

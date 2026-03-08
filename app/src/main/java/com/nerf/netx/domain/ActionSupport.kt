@@ -144,6 +144,53 @@ object ActionSupportCatalog {
       "$label is unsupported on the current backend/router. $reason"
     }
   }
+
+  fun deviceActionState(
+    actionId: String,
+    device: Device,
+    snapshot: DeviceControlStatusSnapshot?
+  ): ActionSupportState? {
+    val base = deviceActionState(actionId) ?: return null
+    val capabilityKey = when (actionId) {
+      AppActionId.DEVICE_UNBLOCK -> AppActionId.DEVICE_BLOCK
+      AppActionId.DEVICE_RESUME -> AppActionId.DEVICE_PAUSE
+      else -> actionId
+    }
+    val capability = snapshot?.deviceCapabilities?.get(capabilityKey) ?: return base
+    if (!capability.writable) {
+      return ActionSupportState(
+        supported = false,
+        reason = capability.reason,
+        label = capability.label
+      )
+    }
+    if (!deviceHasStableRouterId(device)) {
+      return ActionSupportState(
+        supported = false,
+        reason = "Router-backed device control requires a stable MAC address for this device.",
+        label = capability.label
+      )
+    }
+    return ActionSupportState(
+      supported = true,
+      reason = "${capability.label} is available.",
+      label = capability.label
+    )
+  }
+
+  fun deviceActionSupport(
+    device: Device,
+    snapshot: DeviceControlStatusSnapshot?
+  ): Map<String, ActionSupportState> {
+    return linkedMapOf(
+      AppActionId.DEVICE_BLOCK to requireNotNull(deviceActionState(AppActionId.DEVICE_BLOCK, device, snapshot)),
+      AppActionId.DEVICE_UNBLOCK to requireNotNull(deviceActionState(AppActionId.DEVICE_UNBLOCK, device, snapshot)),
+      AppActionId.DEVICE_PAUSE to requireNotNull(deviceActionState(AppActionId.DEVICE_PAUSE, device, snapshot)),
+      AppActionId.DEVICE_RESUME to requireNotNull(deviceActionState(AppActionId.DEVICE_RESUME, device, snapshot)),
+      AppActionId.DEVICE_RENAME to requireNotNull(deviceActionState(AppActionId.DEVICE_RENAME, device, snapshot)),
+      AppActionId.DEVICE_PRIORITIZE to requireNotNull(deviceActionState(AppActionId.DEVICE_PRIORITIZE, device, snapshot))
+    )
+  }
 }
 
 fun DeviceActionSupport.availability(action: DeviceControlAction): ActionAvailability {
@@ -163,6 +210,11 @@ fun DeviceActionSupport.availability(action: DeviceControlAction): ActionAvailab
 }
 
 fun defaultDeviceActionSupport(): DeviceActionSupport = DeviceActionSupport()
+
+fun deviceHasStableRouterId(device: Device): Boolean {
+  val mac = device.macAddress ?: device.mac
+  return Regex("^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$").matches(mac.trim())
+}
 
 fun defaultDeviceActionAvailability(action: DeviceControlAction): ActionAvailability {
   return defaultDeviceActionSupport().availability(action)
