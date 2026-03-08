@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,7 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nerf.netx.domain.SpeedtestHistoryEntry
 import com.nerf.netx.domain.SpeedtestPhase
+import com.nerf.netx.domain.SpeedtestServerScope
 import com.nerf.netx.domain.SpeedtestService
+import com.nerf.netx.domain.SpeedtestTargetMode
 import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.ln
@@ -56,6 +59,8 @@ fun SpeedtestScreen(service: SpeedtestService) {
 
   var serverMenuExpanded by remember { mutableStateOf(false) }
   var selectedHistoryId by remember { mutableStateOf<String?>(null) }
+  var localServerName by remember(config.privateServerName) { mutableStateOf(config.privateServerName) }
+  var localServerBaseUrl by remember(config.privateServerBaseUrl) { mutableStateOf(config.privateServerBaseUrl.orEmpty()) }
 
   LazyColumn(
     modifier = Modifier
@@ -76,6 +81,10 @@ fun SpeedtestScreen(service: SpeedtestService) {
           verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
           Text("Live Gauge", style = MaterialTheme.typography.titleMedium)
+          Text(
+            "Mode ${targetModeLabel(ui.targetMode)} | ${serverScopeLabel(ui.activeServerScope)}",
+            style = MaterialTheme.typography.bodySmall
+          )
           SpeedGauge(
             mbps = ui.currentMbps ?: when (ui.phaseEnum) {
               SpeedtestPhase.DOWNLOAD -> ui.downMbps
@@ -124,6 +133,110 @@ fun SpeedtestScreen(service: SpeedtestService) {
             .padding(14.dp),
           verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+          Text("Test Path", style = MaterialTheme.typography.titleMedium)
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+              onClick = {
+                scope.launch {
+                  service.updateConfig(config.copy(targetMode = SpeedtestTargetMode.PUBLIC_INTERNET))
+                }
+              }
+            ) {
+              Text(if (config.targetMode == SpeedtestTargetMode.PUBLIC_INTERNET) "PUBLIC INTERNET ON" else "PUBLIC INTERNET")
+            }
+            OutlinedButton(
+              onClick = {
+                scope.launch {
+                  service.updateConfig(config.copy(targetMode = SpeedtestTargetMode.PRIVATE_LOCAL))
+                }
+              }
+            ) {
+              Text(if (config.targetMode == SpeedtestTargetMode.PRIVATE_LOCAL) "PRIVATE/LAN ON" else "PRIVATE/LAN")
+            }
+          }
+          Text(
+            when (config.targetMode) {
+              SpeedtestTargetMode.PUBLIC_INTERNET -> "Public internet mode uses external LibreSpeed-compatible servers. This is not local-only."
+              SpeedtestTargetMode.PRIVATE_LOCAL -> if (config.privateServerBaseUrl.isNullOrBlank()) {
+                "Private/LAN mode is selected, but no local LibreSpeed-compatible server is configured yet."
+              } else {
+                "Private/LAN mode targets your configured local LibreSpeed-compatible server."
+              }
+            },
+            style = MaterialTheme.typography.bodySmall
+          )
+        }
+      }
+    }
+
+    item {
+      ElevatedCard {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          Text("Private/LAN Server", style = MaterialTheme.typography.titleMedium)
+          OutlinedTextField(
+            value = localServerName,
+            onValueChange = { localServerName = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Server name") },
+            singleLine = true
+          )
+          OutlinedTextField(
+            value = localServerBaseUrl,
+            onValueChange = { localServerBaseUrl = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Base URL") },
+            placeholder = { Text("http://192.168.1.10:8989/backend") },
+            singleLine = true
+          )
+          Text(
+            "Expected endpoint shape: LibreSpeed-compatible base URL with /empty.php and /garbage.php paths. If this is blank, public internet mode remains the working fallback.",
+            style = MaterialTheme.typography.bodySmall
+          )
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = {
+                scope.launch {
+                  service.updateConfig(
+                    config.copy(
+                      privateServerName = localServerName.trim().ifBlank { "Private LibreSpeed" },
+                      privateServerBaseUrl = localServerBaseUrl.trim().ifBlank { null }
+                    )
+                  )
+                }
+              }
+            ) { Text("Save Local Server") }
+            OutlinedButton(
+              onClick = {
+                localServerName = "Private LibreSpeed"
+                localServerBaseUrl = ""
+                scope.launch {
+                  service.updateConfig(
+                    config.copy(
+                      privateServerName = "Private LibreSpeed",
+                      privateServerBaseUrl = null
+                    )
+                  )
+                }
+              }
+            ) { Text("Clear") }
+          }
+        }
+      }
+    }
+
+    item {
+      ElevatedCard {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
           Text("Server Selection", style = MaterialTheme.typography.titleMedium)
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
@@ -137,7 +250,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
             }
             OutlinedButton(
               onClick = {
-                val defaultServerId = config.selectedServerId ?: servers.firstOrNull()?.id
+                val defaultServerId = config.selectedServerId ?: visibleServers(config, servers).firstOrNull()?.id
                 scope.launch {
                   service.updateConfig(config.copy(serverMode = "MANUAL", selectedServerId = defaultServerId))
                 }
@@ -150,16 +263,16 @@ fun SpeedtestScreen(service: SpeedtestService) {
           if (config.serverMode == "MANUAL") {
             Box {
               OutlinedButton(onClick = { serverMenuExpanded = true }) {
-                val selected = servers.firstOrNull { it.id == config.selectedServerId }
+                val selected = visibleServers(config, servers).firstOrNull { it.id == config.selectedServerId }
                 Text(selected?.name ?: "Select Server")
               }
               androidx.compose.material3.DropdownMenu(
                 expanded = serverMenuExpanded,
                 onDismissRequest = { serverMenuExpanded = false }
               ) {
-                servers.forEach { server ->
+                visibleServers(config, servers).forEach { server ->
                   androidx.compose.material3.DropdownMenuItem(
-                    text = { Text(server.name) },
+                    text = { Text("${server.name} (${serverScopeLabel(server.scope)})") },
                     onClick = {
                       serverMenuExpanded = false
                       scope.launch {
@@ -175,6 +288,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
           val activeServerName = ui.activeServerName
             ?: servers.firstOrNull { it.id == config.selectedServerId }?.name
           Text("Active server: ${activeServerName ?: "AUTO (latency-based)"}")
+          Text("Selection mode: ${config.serverMode} | Current path: ${targetModeLabel(config.targetMode)}", style = MaterialTheme.typography.bodySmall)
           Text(
             "Threads ${config.threads} | Duration ${config.durationMs}ms | Timeout ${config.timeoutMs}ms",
             style = MaterialTheme.typography.bodySmall
@@ -250,6 +364,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
           ) {
             Text("Latest Result", style = MaterialTheme.typography.titleMedium)
             Text("Server ${it.serverName ?: "N/A"}")
+            Text("Mode ${targetModeLabel(it.targetMode)} | ${serverScopeLabel(it.serverScope)}", style = MaterialTheme.typography.bodySmall)
             Text("Ping ${it.pingMs?.format1() ?: "N/A"} ms | Jitter ${it.jitterMs?.format1() ?: "N/A"} ms | Loss ${it.packetLossPct?.format2() ?: "N/A"}%")
             Text("Down ${it.downloadMbps?.format1() ?: "N/A"} Mbps | Up ${it.uploadMbps?.format1() ?: "N/A"} Mbps")
             if (!it.error.isNullOrBlank()) {
@@ -397,6 +512,7 @@ private fun HistoryList(
         verticalArrangement = Arrangement.spacedBy(3.dp)
       ) {
         Text("${entry.serverName ?: "Unknown Server"}  |  ${entry.timestamp}")
+        Text("${targetModeLabel(entry.targetMode)}  |  ${serverScopeLabel(entry.serverScope)}", style = MaterialTheme.typography.bodySmall)
         Text("Ping ${entry.pingMs?.format1() ?: "N/A"} ms  Down ${entry.downMbps?.format1() ?: "N/A"} Mbps  Up ${entry.upMbps?.format1() ?: "N/A"} Mbps")
         if (selected) {
           Text("Jitter ${entry.jitterMs?.format1() ?: "N/A"} ms  Loss ${entry.lossPct?.format2() ?: "N/A"}%", style = MaterialTheme.typography.bodySmall)

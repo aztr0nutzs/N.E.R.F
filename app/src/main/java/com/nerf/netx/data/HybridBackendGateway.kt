@@ -43,8 +43,10 @@ import com.nerf.netx.domain.SpeedtestConfig
 import com.nerf.netx.domain.SpeedtestHistoryEntry
 import com.nerf.netx.domain.SpeedtestPhase
 import com.nerf.netx.domain.SpeedtestResult
+import com.nerf.netx.domain.SpeedtestServerScope
 import com.nerf.netx.domain.SpeedtestService
 import com.nerf.netx.domain.SpeedtestServer
+import com.nerf.netx.domain.SpeedtestTargetMode
 import com.nerf.netx.domain.ThroughputSample
 import com.nerf.netx.domain.SpeedtestUiState
 import kotlinx.coroutines.CancellationException
@@ -107,14 +109,15 @@ private class HybridSpeedtest(
   private val appContext = context.applicationContext
   private val prefs = appContext.getSharedPreferences("nerf_speedtest_prefs", Context.MODE_PRIVATE)
   private val historyKey = "speedtest_history_json"
+  private val configKey = "speedtest_config_json"
   private val uiMutex = Mutex()
   private val activeConnections = linkedSetOf<HttpURLConnection>()
   private val connectionMutex = Mutex()
 
-  private val _servers = MutableStateFlow(defaultServers())
+  private val _config = MutableStateFlow(loadConfig())
+  private val _servers = MutableStateFlow(buildServers(_config.value))
   override val servers: StateFlow<List<SpeedtestServer>> = _servers.asStateFlow()
 
-  private val _config = MutableStateFlow(defaultConfig())
   override val config: StateFlow<SpeedtestConfig> = _config.asStateFlow()
 
   private val _history = MutableStateFlow(loadHistory())
@@ -176,6 +179,7 @@ private class HybridSpeedtest(
         latencyMs = null,
         phase = SpeedtestPhase.IDLE.name,
         phaseEnum = SpeedtestPhase.IDLE,
+        targetMode = _config.value.targetMode,
         mode = MeasurementMode.NOT_AVAILABLE,
         status = ServiceStatus.IDLE,
         message = "Ready"
@@ -185,7 +189,17 @@ private class HybridSpeedtest(
   }
 
   override suspend fun updateConfig(config: SpeedtestConfig) {
-    _config.value = config.sanitize()
+    val sanitized = config.sanitize()
+    _config.value = sanitized
+    _servers.value = buildServers(sanitized)
+    persistConfig(sanitized)
+    uiMutex.withLock {
+      _ui.value = _ui.value.copy(
+        targetMode = sanitized.targetMode,
+        message = modeSummary(sanitized),
+        reason = modeReason(sanitized)
+      )
+    }
   }
 
   override suspend fun clearHistory() {
@@ -214,9 +228,13 @@ private class HybridSpeedtest(
         jitterMs = null,
         packetLossPct = null,
         latencyMs = null,
+        activeServerId = null,
+        activeServerName = null,
+        activeServerScope = null,
+        targetMode = cfg.targetMode,
         mode = MeasurementMode.REAL,
         status = ServiceStatus.RUNNING,
-        message = "Selecting server and measuring ping...",
+        message = selectingServerMessage(cfg),
         reason = null
       )
     }
@@ -224,14 +242,17 @@ private class HybridSpeedtest(
     try {
       val selected = selectServer(cfg)
       if (selected == null) {
-        val message = if (_servers.value.isEmpty()) {
-          "NOT_CONFIGURED: Add valid speedtest servers with ping/download/upload endpoints."
+        val message = if (cfg.targetMode == SpeedtestTargetMode.PRIVATE_LOCAL && cfg.privateServerBaseUrl.isNullOrBlank()) {
+          "Private/LAN speedtest is selected, but no local LibreSpeed server is configured."
+        } else if (_servers.value.isEmpty()) {
+          "No valid speedtest servers are configured."
         } else {
-          "No reachable speedtest server found."
+          "No reachable ${targetLabel(cfg.targetMode).lowercase(Locale.US)} speedtest server found."
         }
         reasons["server"] = message
         completeWithError(
           startedAt = startedAt,
+          targetMode = cfg.targetMode,
           message = message,
           reasons = reasons
         )
@@ -249,11 +270,12 @@ private class HybridSpeedtest(
           phaseEnum = SpeedtestPhase.DOWNLOAD,
           activeServerId = server.id,
           activeServerName = server.name,
+          activeServerScope = server.scope,
           pingMs = pingStats.medianMs,
           jitterMs = pingStats.jitterMs,
           packetLossPct = pingStats.packetLossPct,
           latencyMs = pingStats.medianMs?.toInt(),
-          message = "Running download throughput..."
+          message = "Running ${targetLabel(cfg.targetMode).lowercase(Locale.US)} download throughput..."
         )
       }
 
@@ -274,7 +296,7 @@ private class HybridSpeedtest(
           phase = SpeedtestPhase.UPLOAD.name,
           phaseEnum = SpeedtestPhase.UPLOAD,
           downMbps = downOutcome.mbps,
-          message = "Running upload throughput..."
+          message = "Running ${targetLabel(cfg.targetMode).lowercase(Locale.US)} upload throughput..."
         )
       }
 
@@ -294,6 +316,8 @@ private class HybridSpeedtest(
         phase = SpeedtestPhase.DONE,
         serverId = server.id,
         serverName = server.name,
+        targetMode = cfg.targetMode,
+        serverScope = server.scope,
         pingMs = pingStats.medianMs,
         jitterMs = pingStats.jitterMs,
         packetLossPct = pingStats.packetLossPct,
@@ -322,9 +346,11 @@ private class HybridSpeedtest(
           packetLossPct = pingStats.packetLossPct,
           currentMbps = null,
           samples = allSamples.toList(),
+          activeServerScope = server.scope,
+          targetMode = cfg.targetMode,
           mode = MeasurementMode.REAL,
           status = ServiceStatus.OK,
-          message = "Speedtest completed."
+          message = "${targetLabel(cfg.targetMode)} speedtest completed."
         )
       }
     } catch (ce: CancellationException) {
@@ -333,6 +359,8 @@ private class HybridSpeedtest(
         phase = SpeedtestPhase.ABORTED,
         serverId = _ui.value.activeServerId,
         serverName = _ui.value.activeServerName,
+        targetMode = _ui.value.targetMode,
+        serverScope = _ui.value.activeServerScope,
         pingMs = _ui.value.pingMs,
         jitterMs = _ui.value.jitterMs,
         packetLossPct = _ui.value.packetLossPct,
@@ -357,6 +385,7 @@ private class HybridSpeedtest(
       reasons["error"] = t.message ?: "Unhandled speedtest error"
       completeWithError(
         startedAt = startedAt,
+        targetMode = cfg.targetMode,
         message = t.message ?: "Speedtest failed.",
         reasons = reasons
       )
@@ -365,6 +394,7 @@ private class HybridSpeedtest(
 
   private suspend fun completeWithError(
     startedAt: Long,
+    targetMode: SpeedtestTargetMode,
     message: String,
     reasons: Map<String, String>
   ) {
@@ -373,6 +403,8 @@ private class HybridSpeedtest(
       phase = SpeedtestPhase.ERROR,
       serverId = _ui.value.activeServerId,
       serverName = _ui.value.activeServerName,
+      targetMode = targetMode,
+      serverScope = _ui.value.activeServerScope,
       pingMs = _ui.value.pingMs,
       jitterMs = _ui.value.jitterMs,
       packetLossPct = _ui.value.packetLossPct,
@@ -390,6 +422,7 @@ private class HybridSpeedtest(
         running = false,
         phase = SpeedtestPhase.ERROR.name,
         phaseEnum = SpeedtestPhase.ERROR,
+        targetMode = targetMode,
         status = ServiceStatus.ERROR,
         message = message,
         reason = reasons.entries.joinToString(" | ") { "${it.key}:${it.value}" }
@@ -415,7 +448,9 @@ private class HybridSpeedtest(
   }
 
   private suspend fun selectServer(config: SpeedtestConfig): SelectedServer? = coroutineScope {
-    val available = _servers.value.filter { it.baseUrl.isNotBlank() && it.pingUrl.isNotBlank() }
+    val available = _servers.value
+      .filter { it.scope == config.targetMode.toServerScope() }
+      .filter { it.baseUrl.isNotBlank() && it.pingUrl.isNotBlank() }
     if (available.isEmpty()) return@coroutineScope null
 
     if (config.serverMode.uppercase(Locale.US) == "MANUAL") {
@@ -687,6 +722,8 @@ private class HybridSpeedtest(
       id = UUID.randomUUID().toString(),
       timestamp = result.finishedAt,
       serverName = result.serverName,
+      targetMode = result.targetMode,
+      serverScope = result.serverScope,
       pingMs = result.pingMs,
       downMbps = result.downloadMbps,
       upMbps = result.uploadMbps,
@@ -708,6 +745,12 @@ private class HybridSpeedtest(
           id = obj.optString("id"),
           timestamp = obj.optLong("timestamp"),
           serverName = obj.optString("serverName").ifBlank { null },
+          targetMode = obj.optString("targetMode").takeIf { it.isNotBlank() }?.let {
+            runCatching { SpeedtestTargetMode.valueOf(it) }.getOrDefault(SpeedtestTargetMode.PUBLIC_INTERNET)
+          } ?: SpeedtestTargetMode.PUBLIC_INTERNET,
+          serverScope = obj.optString("serverScope").takeIf { it.isNotBlank() }?.let {
+            runCatching { SpeedtestServerScope.valueOf(it) }.getOrNull()
+          },
           pingMs = obj.optDoubleOrNull("pingMs"),
           downMbps = obj.optDoubleOrNull("downMbps"),
           upMbps = obj.optDoubleOrNull("upMbps"),
@@ -726,6 +769,8 @@ private class HybridSpeedtest(
           .put("id", entry.id)
           .put("timestamp", entry.timestamp)
           .put("serverName", entry.serverName)
+          .put("targetMode", entry.targetMode.name)
+          .put("serverScope", entry.serverScope?.name)
           .put("pingMs", entry.pingMs)
           .put("downMbps", entry.downMbps)
           .put("upMbps", entry.upMbps)
@@ -736,19 +781,9 @@ private class HybridSpeedtest(
     prefs.edit().putString(historyKey, arr.toString()).apply()
   }
 
-  private fun defaultConfig(): SpeedtestConfig {
-    return SpeedtestConfig(
-      serverMode = "AUTO",
-      selectedServerId = null,
-      downloadSizesBytes = listOf(5_000_000, 20_000_000),
-      uploadSizesBytes = listOf(2_000_000, 10_000_000),
-      threads = 4,
-      durationMs = 8_000,
-      timeoutMs = 5_000
-    )
-  }
+  private fun defaultConfig(): SpeedtestConfig = SpeedtestConfig()
 
-  private fun defaultServers(): List<SpeedtestServer> {
+  private fun defaultPublicServers(): List<SpeedtestServer> {
     return listOf(
       SpeedtestServer(
         id = "librespeed_org",
@@ -759,7 +794,8 @@ private class HybridSpeedtest(
           5_000_000 to "/garbage.php?ckSize=5000",
           20_000_000 to "/garbage.php?ckSize=20000"
         ),
-        uploadUrl = "/empty.php"
+        uploadUrl = "/empty.php",
+        scope = SpeedtestServerScope.PUBLIC_INTERNET
       ),
       SpeedtestServer(
         id = "librespeed_backup",
@@ -770,19 +806,144 @@ private class HybridSpeedtest(
           5_000_000 to "/garbage.php?ckSize=5000",
           20_000_000 to "/garbage.php?ckSize=20000"
         ),
-        uploadUrl = "/empty.php"
+        uploadUrl = "/empty.php",
+        scope = SpeedtestServerScope.PUBLIC_INTERNET
       )
     )
   }
 
+  private fun buildServers(config: SpeedtestConfig): List<SpeedtestServer> {
+    return buildList {
+      addAll(defaultPublicServers())
+      configuredPrivateServer(config)?.let { add(it) }
+    }
+  }
+
+  private fun configuredPrivateServer(config: SpeedtestConfig): SpeedtestServer? {
+    val baseUrl = config.privateServerBaseUrl?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return SpeedtestServer(
+      id = "private_librespeed",
+      name = config.privateServerName.ifBlank { "Private LibreSpeed" },
+      baseUrl = baseUrl,
+      pingUrl = config.privatePingPath,
+      downloadPaths = mapOf(
+        5_000_000 to config.privateDownloadSmallPath,
+        20_000_000 to config.privateDownloadLargePath
+      ),
+      uploadUrl = config.privateUploadPath,
+      scope = SpeedtestServerScope.PRIVATE_LOCAL,
+      isCustom = true
+    )
+  }
+
+  private fun loadConfig(): SpeedtestConfig {
+    val raw = prefs.getString(configKey, null) ?: return defaultConfig()
+    return runCatching {
+      val obj = JSONObject(raw)
+      SpeedtestConfig(
+        targetMode = obj.optString("targetMode").takeIf { it.isNotBlank() }?.let {
+          runCatching { SpeedtestTargetMode.valueOf(it) }.getOrDefault(SpeedtestTargetMode.PUBLIC_INTERNET)
+        } ?: SpeedtestTargetMode.PUBLIC_INTERNET,
+        serverMode = obj.optString("serverMode").ifBlank { "AUTO" },
+        selectedServerId = obj.optString("selectedServerId").ifBlank { null },
+        downloadSizesBytes = obj.optJSONArray("downloadSizesBytes")?.toIntList() ?: defaultConfig().downloadSizesBytes,
+        uploadSizesBytes = obj.optJSONArray("uploadSizesBytes")?.toIntList() ?: defaultConfig().uploadSizesBytes,
+        threads = obj.optInt("threads", defaultConfig().threads),
+        durationMs = obj.optLong("durationMs", defaultConfig().durationMs),
+        timeoutMs = obj.optLong("timeoutMs", defaultConfig().timeoutMs),
+        privateServerName = obj.optString("privateServerName").ifBlank { defaultConfig().privateServerName },
+        privateServerBaseUrl = obj.optString("privateServerBaseUrl").ifBlank { null },
+        privatePingPath = obj.optString("privatePingPath").ifBlank { defaultConfig().privatePingPath },
+        privateDownloadSmallPath = obj.optString("privateDownloadSmallPath").ifBlank { defaultConfig().privateDownloadSmallPath },
+        privateDownloadLargePath = obj.optString("privateDownloadLargePath").ifBlank { defaultConfig().privateDownloadLargePath },
+        privateUploadPath = obj.optString("privateUploadPath").ifBlank { defaultConfig().privateUploadPath }
+      ).sanitize()
+    }.getOrDefault(defaultConfig())
+  }
+
+  private fun persistConfig(config: SpeedtestConfig) {
+    val obj = JSONObject()
+      .put("targetMode", config.targetMode.name)
+      .put("serverMode", config.serverMode)
+      .put("selectedServerId", config.selectedServerId)
+      .put("downloadSizesBytes", JSONArray(config.downloadSizesBytes))
+      .put("uploadSizesBytes", JSONArray(config.uploadSizesBytes))
+      .put("threads", config.threads)
+      .put("durationMs", config.durationMs)
+      .put("timeoutMs", config.timeoutMs)
+      .put("privateServerName", config.privateServerName)
+      .put("privateServerBaseUrl", config.privateServerBaseUrl)
+      .put("privatePingPath", config.privatePingPath)
+      .put("privateDownloadSmallPath", config.privateDownloadSmallPath)
+      .put("privateDownloadLargePath", config.privateDownloadLargePath)
+      .put("privateUploadPath", config.privateUploadPath)
+    prefs.edit().putString(configKey, obj.toString()).apply()
+  }
+
+  private fun modeSummary(config: SpeedtestConfig): String {
+    return when (config.targetMode) {
+      SpeedtestTargetMode.PUBLIC_INTERNET -> "Configured for public internet speedtest against external servers."
+      SpeedtestTargetMode.PRIVATE_LOCAL -> if (config.privateServerBaseUrl.isNullOrBlank()) {
+        "Configured for private/LAN speedtest, but no local server endpoint is set."
+      } else {
+        "Configured for private/LAN speedtest using ${config.privateServerName}."
+      }
+    }
+  }
+
+  private fun modeReason(config: SpeedtestConfig): String? {
+    return when (config.targetMode) {
+      SpeedtestTargetMode.PUBLIC_INTERNET -> "Current fallback uses public LibreSpeed-compatible servers when no private/LAN server is selected."
+      SpeedtestTargetMode.PRIVATE_LOCAL -> if (config.privateServerBaseUrl.isNullOrBlank()) {
+        "Add a private LibreSpeed-compatible base URL to run LAN/local tests."
+      } else {
+        "Private/LAN mode targets the configured local LibreSpeed-compatible endpoint."
+      }
+    }
+  }
+
+  private fun selectingServerMessage(config: SpeedtestConfig): String {
+    return when (config.targetMode) {
+      SpeedtestTargetMode.PUBLIC_INTERNET -> "Selecting public internet speedtest server and measuring ping..."
+      SpeedtestTargetMode.PRIVATE_LOCAL -> "Selecting private/LAN speedtest server and measuring ping..."
+    }
+  }
+
+  private fun targetLabel(targetMode: SpeedtestTargetMode): String {
+    return when (targetMode) {
+      SpeedtestTargetMode.PUBLIC_INTERNET -> "Public internet"
+      SpeedtestTargetMode.PRIVATE_LOCAL -> "Private/LAN"
+    }
+  }
+
+  private fun SpeedtestTargetMode.toServerScope(): SpeedtestServerScope {
+    return when (this) {
+      SpeedtestTargetMode.PUBLIC_INTERNET -> SpeedtestServerScope.PUBLIC_INTERNET
+      SpeedtestTargetMode.PRIVATE_LOCAL -> SpeedtestServerScope.PRIVATE_LOCAL
+    }
+  }
+
+  private fun normalizePath(value: String, fallback: String): String {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) return fallback
+    return if (trimmed.startsWith("/")) trimmed else "/$trimmed"
+  }
+
   private fun SpeedtestConfig.sanitize(): SpeedtestConfig {
     return copy(
+      targetMode = targetMode,
       serverMode = if (serverMode.uppercase(Locale.US) == "MANUAL") "MANUAL" else "AUTO",
       threads = threads.coerceIn(1, 8),
       durationMs = durationMs.coerceIn(2_000L, 30_000L),
       timeoutMs = timeoutMs.coerceIn(1_000L, 20_000L),
       downloadSizesBytes = downloadSizesBytes.filter { it > 0 }.ifEmpty { listOf(5_000_000, 20_000_000) },
-      uploadSizesBytes = uploadSizesBytes.filter { it > 0 }.ifEmpty { listOf(2_000_000, 10_000_000) }
+      uploadSizesBytes = uploadSizesBytes.filter { it > 0 }.ifEmpty { listOf(2_000_000, 10_000_000) },
+      privateServerName = privateServerName.ifBlank { "Private LibreSpeed" },
+      privateServerBaseUrl = privateServerBaseUrl?.trim()?.ifBlank { null },
+      privatePingPath = normalizePath(privatePingPath, "/empty.php"),
+      privateDownloadSmallPath = normalizePath(privateDownloadSmallPath, "/garbage.php?ckSize=5000"),
+      privateDownloadLargePath = normalizePath(privateDownloadLargePath, "/garbage.php?ckSize=20000"),
+      privateUploadPath = normalizePath(privateUploadPath, "/empty.php")
     )
   }
 
@@ -802,6 +963,10 @@ private class HybridSpeedtest(
   private fun JSONObject.optDoubleOrNull(name: String): Double? {
     if (!has(name) || isNull(name)) return null
     return optDouble(name)
+  }
+
+  private fun JSONArray.toIntList(): List<Int> {
+    return (0 until length()).map { idx -> optInt(idx) }.filter { it > 0 }
   }
 
   private suspend fun trackConnection(connection: HttpURLConnection) {

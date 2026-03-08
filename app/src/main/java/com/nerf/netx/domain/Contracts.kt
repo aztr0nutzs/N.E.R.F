@@ -19,6 +19,8 @@ interface SpeedtestService {
 enum class ServiceStatus { OK, NO_DATA, NOT_SUPPORTED, ERROR, RUNNING, IDLE }
 enum class MeasurementMode { REAL, SIMULATED, NOT_AVAILABLE }
 enum class SpeedtestPhase { IDLE, PING, DOWNLOAD, UPLOAD, DONE, ERROR, ABORTED }
+enum class SpeedtestTargetMode { PUBLIC_INTERNET, PRIVATE_LOCAL }
+enum class SpeedtestServerScope { PUBLIC_INTERNET, PRIVATE_LOCAL }
 
 data class SpeedtestServer(
   val id: String,
@@ -26,17 +28,26 @@ data class SpeedtestServer(
   val baseUrl: String,
   val pingUrl: String,
   val downloadPaths: Map<Int, String>,
-  val uploadUrl: String
+  val uploadUrl: String,
+  val scope: SpeedtestServerScope = SpeedtestServerScope.PUBLIC_INTERNET,
+  val isCustom: Boolean = false
 )
 
 data class SpeedtestConfig(
+  val targetMode: SpeedtestTargetMode = SpeedtestTargetMode.PUBLIC_INTERNET,
   val serverMode: String = "AUTO",
   val selectedServerId: String? = null,
   val downloadSizesBytes: List<Int> = listOf(5_000_000, 20_000_000),
   val uploadSizesBytes: List<Int> = listOf(2_000_000, 10_000_000),
   val threads: Int = 4,
   val durationMs: Long = 8_000,
-  val timeoutMs: Long = 5_000
+  val timeoutMs: Long = 5_000,
+  val privateServerName: String = "Private LibreSpeed",
+  val privateServerBaseUrl: String? = null,
+  val privatePingPath: String = "/empty.php",
+  val privateDownloadSmallPath: String = "/garbage.php?ckSize=5000",
+  val privateDownloadLargePath: String = "/garbage.php?ckSize=20000",
+  val privateUploadPath: String = "/empty.php"
 )
 
 data class ThroughputSample(
@@ -49,6 +60,8 @@ data class SpeedtestResult(
   val phase: SpeedtestPhase,
   val serverId: String?,
   val serverName: String?,
+  val targetMode: SpeedtestTargetMode = SpeedtestTargetMode.PUBLIC_INTERNET,
+  val serverScope: SpeedtestServerScope? = null,
   val pingMs: Double?,
   val jitterMs: Double?,
   val packetLossPct: Double?,
@@ -65,6 +78,8 @@ data class SpeedtestHistoryEntry(
   val id: String,
   val timestamp: Long,
   val serverName: String?,
+  val targetMode: SpeedtestTargetMode = SpeedtestTargetMode.PUBLIC_INTERNET,
+  val serverScope: SpeedtestServerScope? = null,
   val pingMs: Double?,
   val downMbps: Double?,
   val upMbps: Double?,
@@ -87,6 +102,8 @@ data class SpeedtestUiState(
   val packetLossPct: Double? = null,
   val activeServerId: String? = null,
   val activeServerName: String? = null,
+  val activeServerScope: SpeedtestServerScope? = null,
+  val targetMode: SpeedtestTargetMode = SpeedtestTargetMode.PUBLIC_INTERNET,
   val mode: MeasurementMode = MeasurementMode.NOT_AVAILABLE,
   val status: ServiceStatus = ServiceStatus.IDLE,
   val message: String? = null,
