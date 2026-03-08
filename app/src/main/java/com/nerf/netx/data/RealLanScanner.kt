@@ -119,7 +119,7 @@ class RealLanScanner(
             }
 
             val finalHostname = hostname
-            val type = inferDeviceTypeFromHostname(finalHostname)
+            val type = inferDeviceType(finalHostname, vendor)
             val method = probe.methodUsed
             if (method == null && probe.reason != null) {
               unresolved["methodUsed"] = probe.reason
@@ -267,7 +267,7 @@ class RealLanScanner(
   fun lookupVendor(mac: String): String? {
     overrides?.lookupVendor?.let { return it(mac) }
     val normalized = normalizeMac(mac) ?: return null
-    return OuiLookup.lookup(normalized)
+    return OuiLookup.lookup(normalized, context)
   }
 
   private suspend fun measureLatencyMedian(host: String, probe: ReachabilityResult): Pair<Int?, String?> {
@@ -449,8 +449,8 @@ class RealLanScanner(
     return "Device ${ip.substringAfterLast('.', "0")}"
   }
 
-  private fun inferDeviceTypeFromHostname(hostname: String?): String {
-    return BackendMath.inferDeviceType(hostname)
+  private fun inferDeviceType(hostname: String?, vendor: String?): String {
+    return BackendMath.inferDeviceType(hostname, vendor)
   }
 
   private fun probeIcmp(host: String, timeoutMs: Int): ReachabilityResult {

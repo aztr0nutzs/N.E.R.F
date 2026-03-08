@@ -7,8 +7,23 @@ import org.junit.Test
 class OuiLookupTest {
   @Test
   fun `returns known vendor for known OUI`() {
-    assertEquals("Apple, Inc.", OuiLookup.lookup("28:CF:E9:00:11:22"))
-    assertEquals("Google, Inc.", OuiLookup.lookup("3c:5a:b4:AA:BB:CC"))
+    assertEquals("Apple", OuiLookup.lookup("28:CF:E9:00:11:22"))
+    assertEquals("Google", OuiLookup.lookup("3c:5a:b4:AA:BB:CC"))
+  }
+
+  @Test
+  fun `parses bundled tsv rows safely`() {
+    val parsed = OuiLookup.parseTsv(
+      sequenceOf(
+        "28CFE9\tApple, Inc.",
+        "3C:5A:B4\tGoogle, Inc.",
+        "# comment",
+        "bad-row"
+      )
+    )
+
+    assertEquals("Apple", parsed["28:CF:E9"])
+    assertEquals("Google", parsed["3C:5A:B4"])
   }
 
   @Test
@@ -18,4 +33,3 @@ class OuiLookupTest {
     assertNull(OuiLookup.lookup(null))
   }
 }
-

@@ -1055,7 +1055,7 @@ private class HybridScanService(
             val enriched = device.copy(
               online = true,
               reachable = true,
-              deviceType = inferDeviceType(device.hostName),
+              deviceType = inferDeviceType(device.hostName, device.vendor.ifBlank { null }, device.deviceType),
               lastSeenEpochMs = now,
               lastSeen = now
             )
@@ -1133,19 +1133,9 @@ private class HybridScanService(
     _scanState.value = ScanState(ScanPhase.IDLE, 0, 0, "Stopped")
   }
 
-  private fun inferDeviceType(hostname: String?): String {
-    if (hostname.isNullOrBlank()) return "UNKNOWN"
-    val h = hostname.lowercase()
-    return when {
-      h.contains("iphone") || h.contains("ipad") -> "PHONE"
-      h.contains("android") || h.contains("pixel") || h.contains("samsung") -> "PHONE"
-      h.contains("macbook") || h.contains("imac") -> "COMPUTER"
-      h.contains("windows") || h.contains("desktop") || h.contains("laptop") -> "COMPUTER"
-      h.contains("tv") || h.contains("roku") || h.contains("chromecast") -> "MEDIA"
-      h.contains("printer") -> "PRINTER"
-      h.contains("cam") || h.contains("camera") -> "CAMERA"
-      else -> "UNKNOWN"
-    }
+  private fun inferDeviceType(hostname: String?, vendor: String?, currentType: String): String {
+    if (!currentType.equals("UNKNOWN", ignoreCase = true)) return currentType
+    return BackendMath.inferDeviceType(hostname, vendor)
   }
 }
 

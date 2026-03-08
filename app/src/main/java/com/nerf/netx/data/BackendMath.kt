@@ -3,9 +3,34 @@ package com.nerf.netx.data
 import kotlin.math.abs
 
 object BackendMath {
-  fun inferDeviceType(hostname: String?): String {
-    if (hostname.isNullOrBlank()) return "UNKNOWN"
-    val h = hostname.lowercase()
+  fun inferDeviceType(hostname: String?, vendor: String? = null): String {
+    val h = hostname?.lowercase().orEmpty()
+    val v = vendor?.lowercase().orEmpty()
+
+    if (h.isNotBlank()) {
+      val fromHostname = inferFromTokenSet(h)
+      if (fromHostname != "UNKNOWN") return fromHostname
+    }
+
+    if (v.isNotBlank()) {
+      val fromVendor = when {
+        containsAny(v, "apple") -> "PHONE"
+        containsAny(v, "samsung", "google", "google nest", "oneplus", "motorola", "xiaomi", "huawei") -> "PHONE"
+        containsAny(v, "dell", "lenovo", "intel", "microsoft", "vmware") -> "COMPUTER"
+        containsAny(v, "roku", "sonos", "lg", "sony playstation", "nintendo") -> "MEDIA"
+        containsAny(v, "canon", "brother", "epson", "hp") -> "PRINTER"
+        containsAny(v, "arlo", "wyze", "ring") -> "CAMERA"
+        containsAny(v, "philips hue", "belkin", "ecobee", "eero", "amazon", "espressif") -> "IOT"
+        containsAny(v, "cisco", "ubiquiti", "asus", "tp-link") -> "ROUTER"
+        else -> "UNKNOWN"
+      }
+      if (fromVendor != "UNKNOWN") return fromVendor
+    }
+
+    return "UNKNOWN"
+  }
+
+  private fun inferFromTokenSet(h: String): String {
     return when {
       h.contains("iphone") || h.contains("ipad") -> "PHONE"
       h.contains("android") || h.contains("pixel") || h.contains("samsung") -> "PHONE"
@@ -16,6 +41,10 @@ object BackendMath {
       h.contains("cam") || h.contains("camera") -> "CAMERA"
       else -> "UNKNOWN"
     }
+  }
+
+  private fun containsAny(value: String, vararg needles: String): Boolean {
+    return needles.any { value.contains(it) }
   }
 
   fun median(values: List<Int>): Double? {
@@ -50,4 +79,3 @@ object BackendMath {
     return if (abs(den) < 1e-9) 0.0 else num / den
   }
 }
-

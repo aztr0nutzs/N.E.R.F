@@ -104,7 +104,7 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
       onValueChange = { query = it },
       modifier = Modifier.fillMaxWidth(),
       label = { Text("Search devices") },
-      placeholder = { Text("Name, IP, or MAC") },
+      placeholder = { Text("Name, vendor, IP, or MAC") },
       singleLine = true
     )
 
@@ -383,6 +383,10 @@ private fun applyDeviceFilters(
       append(d.ip.lowercase())
       append(' ')
       append(d.mac.lowercase())
+      append(' ')
+      append(d.vendor.lowercase())
+      append(' ')
+      append(d.deviceType.lowercase())
     }.contains(q)
     typeMatches && searchMatches
   }

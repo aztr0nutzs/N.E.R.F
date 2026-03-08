@@ -15,5 +15,12 @@ class DeviceTypeInferenceTest {
     assertEquals("UNKNOWN", BackendMath.inferDeviceType("mystery-host"))
     assertEquals("UNKNOWN", BackendMath.inferDeviceType(null))
   }
-}
 
+  @Test
+  fun `falls back to vendor hints when hostname is weak`() {
+    assertEquals("MEDIA", BackendMath.inferDeviceType("living-room", "Roku"))
+    assertEquals("PRINTER", BackendMath.inferDeviceType(null, "Canon"))
+    assertEquals("ROUTER", BackendMath.inferDeviceType("node-a", "Ubiquiti"))
+    assertEquals("IOT", BackendMath.inferDeviceType("sensor-node", "Philips Hue"))
+  }
+}
