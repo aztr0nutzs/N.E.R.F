@@ -164,3 +164,69 @@ interface RouterApi {
   suspend fun setGuestWifiEnabled(enabled: Boolean): RouterActionResult
   suspend fun reboot(): RouterActionResult
 }
+
+internal val routerWriteCapabilities: List<RouterCapability> = listOf(
+  RouterCapability.GUEST_WIFI_TOGGLE,
+  RouterCapability.DNS_SHIELD_TOGGLE,
+  RouterCapability.FIREWALL_TOGGLE,
+  RouterCapability.VPN_TOGGLE,
+  RouterCapability.QOS_CONFIG,
+  RouterCapability.REBOOT,
+  RouterCapability.DNS_FLUSH,
+  RouterCapability.DHCP_LEASES_WRITE
+)
+
+internal val routerFeatureCapabilities: List<RouterCapability> = listOf(
+  RouterCapability.GUEST_WIFI_TOGGLE,
+  RouterCapability.DNS_SHIELD_TOGGLE,
+  RouterCapability.FIREWALL_TOGGLE,
+  RouterCapability.VPN_TOGGLE
+)
+
+internal fun routerCapabilityLabel(capability: RouterCapability): String {
+  return when (capability) {
+    RouterCapability.GUEST_WIFI_TOGGLE -> "Guest Wi-Fi"
+    RouterCapability.DNS_SHIELD_TOGGLE -> "DNS Shield"
+    RouterCapability.FIREWALL_TOGGLE -> "Firewall"
+    RouterCapability.VPN_TOGGLE -> "VPN"
+    RouterCapability.QOS_CONFIG -> "QoS"
+    RouterCapability.REBOOT -> "Router reboot"
+    RouterCapability.DNS_FLUSH -> "Flush DNS"
+    RouterCapability.DHCP_LEASES_WRITE -> "Renew DHCP"
+    RouterCapability.DHCP_LEASES_READ -> "DHCP lease read"
+    RouterCapability.READ_INFO -> "Router info"
+  }
+}
+
+internal fun unsupportedRouterActionCapabilities(
+  source: String? = null,
+  reasonFor: (RouterCapability) -> String
+): Map<RouterCapability, RouterActionCapability> {
+  return routerWriteCapabilities.associateWith { capability ->
+    RouterActionCapability(
+      capability = capability,
+      supported = false,
+      readable = false,
+      writable = false,
+      reason = reasonFor(capability),
+      source = source
+    )
+  }
+}
+
+internal fun unsupportedRouterFeatureReadback(
+  source: String? = null,
+  messageFor: (RouterCapability) -> String
+): Map<RouterCapability, RouterFeatureReadback> {
+  return routerFeatureCapabilities.associateWith { capability ->
+    RouterFeatureReadback(
+      capability = capability,
+      supported = false,
+      readable = false,
+      writable = false,
+      enabled = null,
+      message = messageFor(capability),
+      source = source
+    )
+  }
+}

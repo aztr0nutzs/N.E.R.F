@@ -2878,9 +2878,12 @@ private class HybridRouterControl(
     val runtime = api.getRuntimeCapabilities()
     val capabilityState = capabilityStates(runtime)[actionIdFor(capability)]
     if (capabilityState == null || !capabilityState.writable) {
-      return action.unsupportedResult(
-        capabilityState?.reason ?: "No verified API endpoint exists for this router action."
-      )
+      val reason = capabilityState?.reason ?: runtime.message
+      return if (capabilityState?.detected == true && !capabilityState.authenticated) {
+        action.unavailableResult(reason)
+      } else {
+        action.unsupportedResult(reason)
+      }
     }
     val result = call(api)
     val mapped = mapRouterActionResult(result, action, code)
@@ -2930,6 +2933,7 @@ private class HybridRouterControl(
         status = when {
           readback.readable -> ServiceStatus.OK
           readback.supported -> ServiceStatus.NO_DATA
+          runtime.detected && !runtime.authenticated -> ServiceStatus.NO_DATA
           else -> ServiceStatus.NOT_SUPPORTED
         },
         message = readback.message ?: unavailableMessage
@@ -2960,6 +2964,7 @@ private class HybridRouterControl(
           capability.writable -> ServiceStatus.OK
           capability.readable -> ServiceStatus.NO_DATA
           capability.supported -> ServiceStatus.NO_DATA
+          runtime.detected && !runtime.authenticated -> ServiceStatus.NO_DATA
           else -> ServiceStatus.NOT_SUPPORTED
         },
         reason = capability.reason,

@@ -81,6 +81,12 @@ class RouterApiHttp(
         readable = false,
         writable = false,
         capabilities = setOf(RouterCapability.READ_INFO),
+        actionCapabilities = unsupportedRouterActionCapabilities { capability ->
+          "${routerCapabilityLabel(capability)} is unavailable because no reachable router admin endpoint was detected."
+        },
+        featureReadback = unsupportedRouterFeatureReadback { capability ->
+          "${routerCapabilityLabel(capability)} state is unavailable because no reachable router admin endpoint was detected."
+        },
         message = baseMessage
       ).also { runtimeCapabilities = it }
     }
@@ -96,11 +102,18 @@ class RouterApiHttp(
         readable = false,
         writable = false,
         capabilities = setOf(RouterCapability.READ_INFO),
+        actionCapabilities = unsupportedRouterActionCapabilities(source = adapter.id) { capability ->
+          "${routerCapabilityLabel(capability)} is unavailable until router credentials are validated. ${authResult.message}"
+        },
+        featureReadback = unsupportedRouterFeatureReadback(source = adapter.id) { capability ->
+          "${routerCapabilityLabel(capability)} state is unavailable until router credentials are validated. ${authResult.message}"
+        },
         message = "Router detected, but authenticated read/write access is unavailable. ${authResult.message}"
       ).also { runtimeCapabilities = it }
     }
 
     val probed = runCatching { adapter.probe(this) }.getOrElse { error ->
+      val reason = "Authenticated capability probing failed: ${error.message ?: "Unknown error"}"
       RouterRuntimeCapabilities(
         adapterId = adapter.id,
         detected = true,
@@ -108,7 +121,13 @@ class RouterApiHttp(
         readable = false,
         writable = false,
         capabilities = setOf(RouterCapability.READ_INFO),
-        message = "Authenticated, but capability probing failed: ${error.message ?: "Unknown error"}"
+        actionCapabilities = unsupportedRouterActionCapabilities(source = adapter.id) { capability ->
+          "${routerCapabilityLabel(capability)} is unavailable. $reason"
+        },
+        featureReadback = unsupportedRouterFeatureReadback(source = adapter.id) { capability ->
+          "${routerCapabilityLabel(capability)} state is unavailable. $reason"
+        },
+        message = reason
       )
     }
     runtimeCapabilities = probed
@@ -418,7 +437,16 @@ class RouterApiHttp(
     val runtime = getRuntimeCapabilities()
     val actionCapability = runtime.actionCapabilities[capability]
     if (actionCapability == null || !actionCapability.writable) {
-      return notSupported(actionCapability?.reason ?: "$label is unsupported on the current router/backend.")
+      val reason = actionCapability?.reason ?: when {
+        !runtime.detected -> "$label is unavailable because the router backend could not be detected."
+        !runtime.authenticated -> "$label is unavailable until router credentials are validated. ${runtime.message}"
+        else -> "$label is unsupported on the current router/backend."
+      }
+      return when {
+        !runtime.detected -> unavailable(reason, "ROUTER_UNAVAILABLE")
+        !runtime.authenticated -> unavailable(reason, "AUTH_REQUIRED")
+        else -> notSupported(reason)
+      }
     }
 
     val adapter = activeAdapter ?: resolveAdapter(ensureDetected())
@@ -434,7 +462,16 @@ class RouterApiHttp(
     val runtime = getDeviceRuntimeCapabilities(device)
     val actionCapability = runtime.actionCapabilities[capability]
     if (actionCapability == null || !actionCapability.writable) {
-      return notSupported(actionCapability?.reason ?: "$label is unsupported on the current router/backend.")
+      val reason = actionCapability?.reason ?: when {
+        !runtime.detected -> "$label is unavailable because the router backend could not be detected."
+        !runtime.authenticated -> "$label is unavailable until router credentials are validated. ${runtime.message}"
+        else -> "$label is unsupported on the current router/backend."
+      }
+      return when {
+        !runtime.detected -> unavailable(reason, "ROUTER_UNAVAILABLE")
+        !runtime.authenticated -> unavailable(reason, "AUTH_REQUIRED")
+        else -> notSupported(reason)
+      }
     }
 
     val adapter = activeAdapter ?: resolveAdapter(ensureDetected())
@@ -454,6 +491,14 @@ class RouterApiHttp(
       status = RouterActionStatus.NOT_SUPPORTED,
       message = reason,
       errorCode = "NOT_SUPPORTED"
+    )
+  }
+
+  private fun unavailable(reason: String, errorCode: String): RouterActionResult {
+    return RouterActionResult(
+      status = RouterActionStatus.ERROR,
+      message = reason,
+      errorCode = errorCode
     )
   }
 

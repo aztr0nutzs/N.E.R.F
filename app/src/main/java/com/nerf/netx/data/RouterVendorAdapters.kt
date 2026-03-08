@@ -87,10 +87,12 @@ internal interface RouterVendorAdapter {
 
 internal class GenericReadOnlyRouterAdapter : RouterVendorAdapter {
   override val id: String = "generic-read-only"
+  private val source = "Generic router fallback without verified write integration"
 
   override fun matches(info: RouterInfo): Boolean = true
 
   override suspend fun probe(session: RouterHttpSession): RouterRuntimeCapabilities {
+    val reason = "No verified write integration exists for this router vendor/model."
     return RouterRuntimeCapabilities(
       adapterId = id,
       detected = true,
@@ -98,6 +100,12 @@ internal class GenericReadOnlyRouterAdapter : RouterVendorAdapter {
       readable = true,
       writable = false,
       capabilities = setOf(RouterCapability.READ_INFO),
+      actionCapabilities = unsupportedRouterActionCapabilities(source = source) { capability ->
+        "${routerCapabilityLabel(capability)} is unsupported on this router backend. $reason"
+      },
+      featureReadback = unsupportedRouterFeatureReadback(source = source) { capability ->
+        "${routerCapabilityLabel(capability)} state is unavailable on this router backend. $reason"
+      },
       message = "Router detected, but no verified write integration exists for this vendor/model."
     )
   }
