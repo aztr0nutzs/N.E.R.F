@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nerf.netx.domain.ActionResult
+import com.nerf.netx.domain.ActionSupportState
 import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.AppActionId
 import com.nerf.netx.domain.Device
@@ -50,6 +51,7 @@ import com.nerf.netx.domain.DeviceActionSupport
 import com.nerf.netx.domain.DeviceControlService
 import com.nerf.netx.domain.DeviceDetails
 import com.nerf.netx.domain.DevicesService
+import com.nerf.netx.domain.ServiceStatus
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -153,6 +155,8 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
         val actionSupport = details?.actionSupport ?: defaultSupport
         val blockSupport = actionSupport[AppActionId.DEVICE_BLOCK] ?: defaultSupport.getValue(AppActionId.DEVICE_BLOCK)
         val prioritizeSupport = actionSupport[AppActionId.DEVICE_PRIORITIZE] ?: defaultSupport.getValue(AppActionId.DEVICE_PRIORITIZE)
+        val blockStatus = actionStatus(details, AppActionId.DEVICE_BLOCK, blockSupport)
+        val prioritizeStatus = actionStatus(details, AppActionId.DEVICE_PRIORITIZE, prioritizeSupport)
 
         ElevatedCard {
           Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -213,7 +217,7 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
               )
               ActionButton(
                 label = when {
-                  !blockSupport.supported -> "Block (Unsupported)"
+                  !blockSupport.supported -> unavailableLabel("Block", blockStatus)
                   d.isBlocked -> "Unblock"
                   else -> "Block"
                 },
@@ -231,7 +235,7 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
                 }
               )
               ActionButton(
-                label = if (prioritizeSupport.supported) "Prioritize" else "Prioritize (Unsupported)",
+                label = if (prioritizeSupport.supported) "Prioritize" else unavailableLabel("Prioritize", prioritizeStatus),
                 running = running,
                 enabled = !running && prioritizeSupport.supported,
                 onClick = {
@@ -252,9 +256,10 @@ fun DevicesScreen(service: DevicesService, deviceControl: DeviceControlService) 
 
             if (!blockSupport.supported || !prioritizeSupport.supported) {
               Text(
-                "Unavailable: " + listOfNotNull(
-                  blockSupport.reason?.takeIf { !blockSupport.supported },
-                  prioritizeSupport.reason?.takeIf { !prioritizeSupport.supported && it != blockSupport.reason }
+                listOfNotNull(
+                  actionReasonSummary("Block/unblock", blockSupport, blockStatus),
+                  actionReasonSummary("Prioritize", prioritizeSupport, prioritizeStatus)
+                    ?.takeIf { it != actionReasonSummary("Block/unblock", blockSupport, blockStatus) }
                 ).joinToString(" "),
                 style = MaterialTheme.typography.bodySmall
               )
@@ -314,6 +319,39 @@ private fun runDeviceAction(
     }
     snackbarHost.showSnackbar(message)
   }
+}
+
+private fun actionStatus(
+  details: DeviceDetails?,
+  actionId: String,
+  support: ActionSupportState
+): ServiceStatus {
+  if (support.supported) return ServiceStatus.OK
+  val capability = details?.deviceCapabilities?.get(
+    when (actionId) {
+      AppActionId.DEVICE_UNBLOCK -> AppActionId.DEVICE_BLOCK
+      AppActionId.DEVICE_RESUME -> AppActionId.DEVICE_PAUSE
+      else -> actionId
+    }
+  )
+  return if (capability != null && !capability.writable) capability.status else ServiceStatus.NOT_SUPPORTED
+}
+
+private fun unavailableLabel(base: String, status: ServiceStatus): String {
+  return when (status) {
+    ServiceStatus.NO_DATA -> "$base (Unavailable)"
+    else -> "$base (Unsupported)"
+  }
+}
+
+private fun actionReasonSummary(
+  label: String,
+  support: ActionSupportState,
+  status: ServiceStatus
+): String? {
+  if (support.supported) return null
+  val prefix = if (status == ServiceStatus.NO_DATA) "$label unavailable" else "$label unsupported"
+  return "$prefix: ${support.reason}"
 }
 
 @Composable

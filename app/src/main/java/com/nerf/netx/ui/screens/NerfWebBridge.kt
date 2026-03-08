@@ -314,7 +314,13 @@ class NerfWebBridge(private val services: AppServices) {
               .put("pingMs", details.pingMs)
               .put("notes", details.notes)
               .put("trafficMessage", details.trafficMessage)
-              .put("actionSupport", actionSupportJson(details.actionSupport))
+              .put(
+                "actionSupport",
+                actionSupportJson(
+                  details.actionSupport,
+                  deviceActionSupportMetadata(details.actionSupport, details.deviceCapabilities)
+                )
+              )
               .put("backend", deviceBackendJson(details.backend))
               .put("deviceCapabilities", deviceCapabilitiesJson(details.deviceCapabilities))
               .put("device", deviceJson(details.device))
@@ -807,7 +813,7 @@ class NerfWebBridge(private val services: AppServices) {
       .put("vpn", featureStateJson(snapshot.vpn))
       .put("qosMode", snapshot.qosMode)
       .put("routerCapabilities", routerCapabilitiesJson(snapshot))
-      .put("actionSupport", actionSupportJson(snapshot.actionSupport))
+      .put("actionSupport", actionSupportJson(snapshot.actionSupport, routerActionSupportMetadata(snapshot.routerCapabilities)))
       .put("lastUpdatedEpochMs", snapshot.lastUpdatedEpochMs)
   }
 
@@ -854,15 +860,27 @@ class NerfWebBridge(private val services: AppServices) {
     return json
   }
 
-  private fun actionSupportJson(states: Map<String, ActionSupportState>): JSONObject {
+  private fun actionSupportJson(
+    states: Map<String, ActionSupportState>,
+    metadata: Map<String, ActionSupportMetadata> = emptyMap()
+  ): JSONObject {
     val json = JSONObject()
     states.forEach { (key, value) ->
+      val supportMetadata = metadata[key] ?: defaultActionSupportMetadata(value)
       json.put(
         key,
         JSONObject()
           .put("supported", value.supported)
+          .put("availableNow", supportMetadata.availableNow)
+          .put("availability", supportMetadata.availability)
+          .put("status", supportMetadata.status.name)
           .put("label", value.label)
           .put("reason", value.reason)
+          .put("detected", supportMetadata.detected)
+          .put("authenticated", supportMetadata.authenticated)
+          .put("readable", supportMetadata.readable)
+          .put("writable", supportMetadata.writable)
+          .put("source", supportMetadata.source)
       )
     }
     return json
@@ -1000,7 +1018,16 @@ class NerfWebBridge(private val services: AppServices) {
       .put("pausedSupported", pausedSupported)
       .put("blockedStateAuthoritative", blockedSupported)
       .put("pausedStateAuthoritative", false)
-      .put("actionSupport", actionSupportJson(globalDeviceActionSupport()))
+      .put(
+        "actionSupport",
+        actionSupportJson(
+          globalDeviceActionSupport(),
+          deviceActionSupportMetadata(
+            globalDeviceActionSupport(),
+            deviceSupport
+          )
+        )
+      )
   }
 
   private fun devicesJson(devices: List<Device>): JSONArray {
@@ -1012,6 +1039,10 @@ class NerfWebBridge(private val services: AppServices) {
   private fun deviceJson(device: Device): JSONObject {
     val quality = device.rssiDbm?.let { (it + 100).coerceIn(5, 99) } ?: latencyToQuality(device.latencyMs)
     val actionSupport = ActionSupportCatalog.deviceActionSupport(device, services.deviceControl.status.value)
+    val capabilityMetadata = deviceActionSupportMetadata(
+      actionSupport,
+      services.deviceControl.status.value.deviceCapabilities
+    )
     return JSONObject()
       .put("id", device.id)
       .put("name", device.name)
@@ -1035,8 +1066,85 @@ class NerfWebBridge(private val services: AppServices) {
       .put("downMbps", device.downMbps)
       .put("upMbps", device.upMbps)
       .put("trafficStatus", device.trafficStatus.name)
-      .put("actionSupport", actionSupportJson(actionSupport))
+      .put("actionSupport", actionSupportJson(actionSupport, capabilityMetadata))
   }
+
+  private fun routerActionSupportMetadata(
+    capabilities: Map<String, com.nerf.netx.domain.RouterCapabilityState>
+  ): Map<String, ActionSupportMetadata> {
+    return capabilities.mapValues { (_, capability) ->
+      ActionSupportMetadata(
+        availableNow = capability.writable && capability.status == ServiceStatus.OK,
+        availability = availabilityLabel(capability.writable && capability.status == ServiceStatus.OK, capability.status),
+        status = capability.status,
+        detected = capability.detected,
+        authenticated = capability.authenticated,
+        readable = capability.readable,
+        writable = capability.writable,
+        source = capability.source
+      )
+    }
+  }
+
+  private fun deviceActionSupportMetadata(
+    states: Map<String, ActionSupportState>,
+    capabilities: Map<String, com.nerf.netx.domain.DeviceCapabilityState>
+  ): Map<String, ActionSupportMetadata> {
+    return states.mapValues { (actionId, support) ->
+      val capability = capabilities[deviceCapabilityKey(actionId)]
+      val status = when {
+        support.supported -> ServiceStatus.OK
+        capability != null && !capability.writable -> capability.status
+        else -> ServiceStatus.NOT_SUPPORTED
+      }
+      ActionSupportMetadata(
+        availableNow = support.supported,
+        availability = availabilityLabel(support.supported, status),
+        status = status,
+        detected = capability?.detected == true,
+        authenticated = capability?.authenticated == true,
+        readable = capability?.readable == true,
+        writable = capability?.writable == true,
+        source = capability?.source
+      )
+    }
+  }
+
+  private fun defaultActionSupportMetadata(state: ActionSupportState): ActionSupportMetadata {
+    val status = if (state.supported) ServiceStatus.OK else ServiceStatus.NOT_SUPPORTED
+    return ActionSupportMetadata(
+      availableNow = state.supported,
+      availability = availabilityLabel(state.supported, status),
+      status = status
+    )
+  }
+
+  private fun availabilityLabel(availableNow: Boolean, status: ServiceStatus): String {
+    return when {
+      availableNow -> "available"
+      status == ServiceStatus.NO_DATA -> "unavailable"
+      else -> "unsupported"
+    }
+  }
+
+  private fun deviceCapabilityKey(actionId: String): String {
+    return when (actionId) {
+      AppActionId.DEVICE_UNBLOCK -> AppActionId.DEVICE_BLOCK
+      AppActionId.DEVICE_RESUME -> AppActionId.DEVICE_PAUSE
+      else -> actionId
+    }
+  }
+
+  private data class ActionSupportMetadata(
+    val availableNow: Boolean,
+    val availability: String,
+    val status: ServiceStatus,
+    val detected: Boolean = false,
+    val authenticated: Boolean = false,
+    val readable: Boolean = false,
+    val writable: Boolean = false,
+    val source: String? = null
+  )
 
   private fun assistantResponseJson(response: AssistantResponse): JSONObject {
     val suggestedActions = JSONArray()

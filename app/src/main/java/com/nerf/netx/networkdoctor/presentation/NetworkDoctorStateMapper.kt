@@ -273,29 +273,44 @@ class NetworkDoctorStateMapper {
         category = NetworkDoctorCategory.SECURITY
       )
     }
+    val routerCapabilities = context.routerStatus?.routerCapabilities.orEmpty()
+    val writableRouterActions = routerCapabilities.values.filter { it.writable }
+    val unavailableRouterActions = routerCapabilities.values.filterNot { it.writable }
     val routerControlUnavailable = context.routerInfo == null ||
       context.routerInfo.status != ServiceStatus.OK ||
-      context.routerStatus?.actionSupport?.values?.all { !it.supported } == true
+      routerCapabilities.isEmpty() ||
+      writableRouterActions.isEmpty() ||
+      unavailableRouterActions.isNotEmpty()
     if (routerControlUnavailable) {
-      val unsupportedRouterActions = context.routerStatus?.actionSupport
-        ?.values
-        ?.filterNot { it.supported }
-        ?.mapNotNull { it.label }
-        ?.distinct()
-        .orEmpty()
-      val unsupportedRouterReasons = context.routerStatus?.actionSupport
-        ?.values
-        ?.filterNot { it.supported }
-        ?.map { it.reason }
-        ?.filter { it.isNotBlank() }
-        ?.distinct()
-        .orEmpty()
+      val unsupportedRouterActions = unavailableRouterActions
+        .mapNotNull { it.label }
+        .distinct()
+      val unsupportedRouterReasons = unavailableRouterActions
+        .map { capability ->
+          if (capability.status == ServiceStatus.NO_DATA) {
+            "${capability.label} unavailable: ${capability.reason}"
+          } else {
+            "${capability.label} unsupported: ${capability.reason}"
+          }
+        }
+        .filter { it.isNotBlank() }
+        .distinct()
       items += NetworkDoctorUnavailableUi(
-        title = "Router control unsupported or unavailable",
+        title = if (writableRouterActions.isNotEmpty()) {
+          "Some router actions unavailable"
+        } else {
+          "Router control unsupported or unavailable"
+        },
         message = when {
+          writableRouterActions.isNotEmpty() -> buildString {
+            append("Available router actions are limited to ")
+            append(writableRouterActions.map { it.label }.distinct().joinToString(", "))
+            append(". ")
+            append(unavailableRouterReasons.firstOrNull() ?: context.routerStatus?.message.orEmpty())
+          }
           unsupportedRouterActions.isNotEmpty() -> buildString {
             append(unsupportedRouterActions.joinToString(", "))
-            append(" are unsupported on the current backend/router.")
+            append(" are unsupported or unavailable on the current backend/router.")
             unsupportedRouterReasons.firstOrNull()?.let {
               append(" ")
               append(it)
