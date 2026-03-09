@@ -10,6 +10,12 @@ class ThemeSelectionPolicy(
     if (savedId == "NEON_NERF" || savedId == "neon_nerf") {
       return fallbackTheme()
     }
+    if (savedId == "nerf_main_dash") {
+      return sanitizeSelection(ThemeId.NERF_MAIN_HUD_HTML)
+    }
+    if (savedId == "nerf_speed2" || savedId == "speedtest6") {
+      return fallbackTheme()
+    }
     return sanitizeSelection(ThemeId.fromId(savedId))
   }
 

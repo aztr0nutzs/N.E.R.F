@@ -17,10 +17,8 @@ data class ThemeAuditEntry(
 
 object ThemeOperationalAudit {
   val entries: List<ThemeAuditEntry> = mutableListOf<ThemeAuditEntry>().apply {
-    addSharedDashboardAudit(ThemeId.NERF_MAIN_DASH_HTML)
     addSharedDashboardAudit(ThemeId.NERF_HUD_ALT_HTML)
-    addSharedDashboardAudit(ThemeId.NERF_SPEED2_HTML)
-    addSharedDashboardAudit(ThemeId.SPEEDTEST6_HTML)
+    addSharedDashboardAudit(ThemeId.NERF_MAIN_HUD_HTML)
     add(
       ThemeAuditEntry(
         themeId = ThemeId.NERF_DASH_NEW_HTML,

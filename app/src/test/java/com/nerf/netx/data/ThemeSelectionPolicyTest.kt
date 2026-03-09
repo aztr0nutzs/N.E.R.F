@@ -10,10 +10,8 @@ class ThemeSelectionPolicyTest {
     defaultTheme = ThemeId.NERF_DASH_NEW_HTML,
     availableThemes = listOf(
       ThemeId.NERF_DASH_NEW_HTML,
-      ThemeId.NERF_MAIN_DASH_HTML,
       ThemeId.NERF_HUD_ALT_HTML,
-      ThemeId.NERF_SPEED2_HTML,
-      ThemeId.SPEEDTEST6_HTML
+      ThemeId.NERF_MAIN_HUD_HTML
     )
   )
 
@@ -24,7 +22,7 @@ class ThemeSelectionPolicyTest {
 
   @Test
   fun `preserves persisted registered theme`() {
-    assertEquals(ThemeId.SPEEDTEST6_HTML, policy.resolveSavedTheme("speedtest6"))
+    assertEquals(ThemeId.NERF_MAIN_HUD_HTML, policy.resolveSavedTheme("nerf_main_hud"))
   }
 
   @Test
@@ -36,5 +34,16 @@ class ThemeSelectionPolicyTest {
   fun `migrates deprecated neon ids to default`() {
     assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("NEON_NERF"))
     assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("neon_nerf"))
+  }
+
+  @Test
+  fun `migrates legacy main dash id to main hud`() {
+    assertEquals(ThemeId.NERF_MAIN_HUD_HTML, policy.resolveSavedTheme("nerf_main_dash"))
+  }
+
+  @Test
+  fun `falls back to default for removed themes`() {
+    assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("nerf_speed2"))
+    assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("speedtest6"))
   }
 }

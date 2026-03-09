@@ -84,10 +84,11 @@ fun SettingsScreen(
     previewTheme = themeId
   }
 
-  val detectedHtmlThemeFolders = remember {
-    runCatching {
-      context.assets.list("themes")?.toList()?.sorted().orEmpty()
-    }.getOrDefault(emptyList())
+  val detectedHtmlThemeFolders = remember(availableThemes) {
+    availableThemes
+      .filter { it.type == ThemeType.HTML }
+      .map { it.id }
+      .sorted()
   }
 
   val creds = remember { credentialsStore.read() }
@@ -104,17 +105,15 @@ fun SettingsScreen(
   val themeDescriptions = remember {
     mapOf(
       ThemeId.NERF_DASH_NEW_HTML to "Jarvis-styled command dashboard with live telemetry, assistant actions, and native bridge support.",
-      ThemeId.NERF_MAIN_DASH_HTML to "Default dashboard - High-contrast HUD, dense telemetry cards, orange/cyan emphasis.",
       ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard.",
-      ThemeId.NERF_SPEED2_HTML to "NERF Speed2 - stylized tactical dashboard with production backend wiring replacing demo actions.",
-      ThemeId.SPEEDTEST6_HTML to "Speedtest6 - holo diagnostic surface wired to live speedtest, topology, analytics, and explicit unsupported states."
+      ThemeId.NERF_MAIN_HUD_HTML to "Restored main HUD with live bridge-backed speedtest, overview, console, map, devices, and analytics shell."
     )
   }
   val screenshotAssetPath = remember {
     mapOf(
-      ThemeId.NERF_MAIN_DASH_HTML to "themes/nerf_main_dash/screenshot.png",
+      ThemeId.NERF_DASH_NEW_HTML to "themes/nerf_dash_new/screenshot.png",
       ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png",
-      ThemeId.NERF_DASH_NEW_HTML to "themes/nerf_dash_new/screenshot.png"
+      ThemeId.NERF_MAIN_HUD_HTML to "themes/nerf_main_hud/screenshot.png"
     )
   }
   val previewScreenshotPath = screenshotAssetPath[previewTheme]
@@ -532,14 +531,6 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
       text = Color(0xFFE9FCFF)
     )
 
-    ThemeId.NERF_MAIN_DASH_HTML -> ThemePalette(
-      primary = Color(0xFFFF6A00),
-      accent = Color(0xFF00C2FF),
-      highlight = Color(0xFFFFD400),
-      panel = Color(0xFF10151A),
-      text = Color(0xFFEAF2F8)
-    )
-
     ThemeId.NERF_HUD_ALT_HTML -> ThemePalette(
       primary = Color(0xFFFFE600),
       accent = Color(0xFF00A3FF),
@@ -548,20 +539,12 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
       text = Color(0xFFEAF2F8)
     )
 
-    ThemeId.NERF_SPEED2_HTML -> ThemePalette(
-      primary = Color(0xFFFFE600),
-      accent = Color(0xFF0099FF),
-      highlight = Color(0xFFFF6600),
-      panel = Color(0xFF121212),
-      text = Color(0xFFF7F7F7)
-    )
-
-    ThemeId.SPEEDTEST6_HTML -> ThemePalette(
-      primary = Color(0xFF00FFFF),
-      accent = Color(0xFF7000FF),
-      highlight = Color(0xFFFF4D00),
-      panel = Color(0xFF090C14),
-      text = Color(0xFFF2FAFF)
+    ThemeId.NERF_MAIN_HUD_HTML -> ThemePalette(
+      primary = Color(0xFFFF6A00),
+      accent = Color(0xFF00C2FF),
+      highlight = Color(0xFFFFD400),
+      panel = Color(0xFF10151A),
+      text = Color(0xFFEAF2F8)
     )
   }
 }

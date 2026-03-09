@@ -32,10 +32,8 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
 
   override fun htmlAssetUrl(themeId: ThemeId): String? = when (themeId) {
     ThemeId.NERF_DASH_NEW_HTML -> assetUrl("nerf_dash_new")
-    ThemeId.NERF_MAIN_DASH_HTML -> assetUrl("nerf_main_dash")
     ThemeId.NERF_HUD_ALT_HTML -> assetUrl("nerf_hud_alt")
-    ThemeId.NERF_SPEED2_HTML -> assetUrl("nerf_speed2")
-    ThemeId.SPEEDTEST6_HTML -> assetUrl("speedtest6")
+    ThemeId.NERF_MAIN_HUD_HTML -> assetUrl("nerf_main_hud")
   }
 
   private fun readTheme(): ThemeId {

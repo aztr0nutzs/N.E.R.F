@@ -24,10 +24,8 @@ class ThemeOperationalAuditTest {
   @Test
   fun `shared dashboard themes mark unsupported device controls honestly`() {
     val sharedThemes = listOf(
-      ThemeId.NERF_MAIN_DASH_HTML,
       ThemeId.NERF_HUD_ALT_HTML,
-      ThemeId.NERF_SPEED2_HTML,
-      ThemeId.SPEEDTEST6_HTML
+      ThemeId.NERF_MAIN_HUD_HTML
     )
 
     sharedThemes.forEach { themeId ->
