@@ -76,6 +76,58 @@ function renderTopologyState(payload){state.topology=payload||null;drawMap()}
 function disableRouterControls(reason){['btnDhcp','btnDns','btnFw','btnVpn','btnReboot','btnQos'].forEach(id=>{const el=$(id);if(el){el.disabled=true;el.title=reason;if(!el.dataset.baseLabel)el.dataset.baseLabel=el.textContent;el.textContent=disabledControlLabel(el.dataset.baseLabel,fallbackActionSupport(el.dataset.baseLabel,reason,'NO_DATA'))}});setRouterActionReason(reason);updateSelectedDeviceControls();$('statusOv').textContent=reason}
 window.startScan=startScan;window.stopScan=stopScan;window.renderDevices=renderDevices;window.updateScanProgress=updateScanProgress;window.openDeviceModal=openDeviceModalById;window.setRouterInfo=setRouterInfo;window.applyThemeVars=applyThemeVars;window.NERF=window.NERF||{};window.NERF.request=req;window.NERF.startScan=startScan;window.NERF.stopScan=stopScan;window.NERF.renderDevices=renderDevices;window.NERF.updateScanProgress=updateScanProgress;window.NERF.openDeviceModal=openDeviceModalById;window.NERF.setRouterInfo=setRouterInfo;window.NERF.applyThemeVars=applyThemeVars;
 window.NERF.onEvent=function(eventName,payload){const p=payload||{};if(eventName==='action.result'){if(p.code==='DEVICES_LIST'&&Array.isArray(p.devices))renderDevices(p.devices);if(p.code==='DEVICE_DETAILS'&&p.details)applyDeviceDetails(p.details);if(p.code==='MAP_STATE')renderTopologyState(p);if(p.code==='ROUTER_STATUS'||p.gatewayIp!=null||p.dnsServers!=null||p.ssid!=null)setRouterInfo(p);if(p.code==='WIFI_ENVIRONMENT')state.wifi=p;if(p.code==='SECURITY_SUMMARY')state.security=p;if(p.downMbps!=null||p.deviceCount!=null||p.latencyMs!=null)renderAnalytics(p);if(/^DEVICE_/.test(String(p.code||''))&&p.code!=='DEVICE_DETAILS'){req('devices.list',{});if(state.selectedDeviceId)req('device.details',{deviceId:state.selectedDeviceId})}if(/^ROUTER_/.test(String(p.code||''))&&p.code!=='ROUTER_STATUS')req('router.status',{});if((p.status==='NOT_SUPPORTED'||p.status==='NO_DATA')&&p.message)$('statusOv').textContent=p.errorReason||p.message;else if(p.message)$('statusOv').textContent=p.message;log('EVENT '+eventName);return;}if(eventName==='devices.update'){renderDevices(p.devices||[]);return;}if(eventName==='analytics.snapshot'){renderAnalytics(p);return;}if(eventName==='router.status'){setRouterInfo(p);return;}if(eventName==='wifi.environment'){state.wifi=p;return;}if(eventName==='security.summary'){state.security=p;return;}if(eventName==='scan.progress'||eventName==='scan_progress'){updateScanProgress(Object.assign({},p,{state:'SCANNING'}));return;}if(eventName==='scan.state'){const phase=String(p.phase||'').toUpperCase();if(phase==='RUNNING'||phase==='STARTED')updateScanProgress(Object.assign({},p,{state:'SCANNING'}));else if(phase==='COMPLETE')updateScanProgress(Object.assign({},p,{state:'DONE'}));else if(phase==='ERROR')updateScanProgress(Object.assign({},p,{state:'ERROR'}));else if(phase==='IDLE')updateScanProgress(Object.assign({},p,{state:'IDLE'}));return;}if(eventName==='scan.results'&&Array.isArray(p.devices)){renderDevices(p.devices);return;}if(eventName==='scan_done'){updateScanProgress(Object.assign({},p,{state:'DONE'}));req('devices.list',{});req('map.state',{});return;}if(eventName==='scan_error'){updateScanProgress(Object.assign({},p,{state:'ERROR'}));return;}if(eventName==='speedtest.ui'||eventName==='speedtest.result'){const phase=String(p.phase||'IDLE').toUpperCase();const mode=p.targetMode==='PRIVATE_LOCAL'?'PRIVATE/LAN':(p.targetMode==='PUBLIC_INTERNET'?'PUBLIC INTERNET':'CURRENT MODE');$('spPhase').textContent=phase+' · '+mode;$('spDown').textContent=(p.downMbps!=null?Number(p.downMbps).toFixed(1):0)+' Mbps';$('spUp').textContent=(p.upMbps!=null?Number(p.upMbps).toFixed(1):0)+' Mbps';$('spLat').textContent=(p.pingMs!=null?Number(p.pingMs).toFixed(1):(p.latencyMs!=null?Number(p.latencyMs).toFixed(1):0))+' ms';if(p.message)$('statusOv').textContent=p.message;return;}if(eventName==='topology.state'){renderTopologyState(p);return;}};
+window.NERF.onEvent=function(eventName,payload){
+const p=payload||{};
+const speedPayload=(source)=>{
+const data=source&&source.state&&typeof source.state==='object'?source.state:source||{};
+const phase=String(data.phase||'IDLE').toUpperCase();
+const mode=data.targetMode==='PRIVATE_LOCAL'?'PRIVATE/LAN':(data.targetMode==='PUBLIC_INTERNET'?'PUBLIC INTERNET':'CURRENT MODE');
+const down=data.downMbps!=null?Number(data.downMbps):Number(data.downloadMbps||0);
+const up=data.upMbps!=null?Number(data.upMbps):Number(data.uploadMbps||0);
+const latency=data.pingMs!=null?Number(data.pingMs):(data.latencyMs!=null?Number(data.latencyMs):0);
+$('spPhase').textContent=phase+' · '+mode;
+$('spDown').textContent=down.toFixed(1)+' Mbps';
+$('spUp').textContent=up.toFixed(1)+' Mbps';
+$('spLat').textContent=latency.toFixed(1)+' ms';
+if(data.message)$('statusOv').textContent=data.message;
+};
+const scanStatePayload=(source)=>{
+const phase=String(source&&source.phase||'').toUpperCase();
+if(phase==='RUNNING'||phase==='STARTED')updateScanProgress(Object.assign({},source,{state:'SCANNING'}));
+else if(phase==='COMPLETE')updateScanProgress(Object.assign({},source,{state:'DONE'}));
+else if(phase==='ERROR')updateScanProgress(Object.assign({},source,{state:'ERROR'}));
+else if(phase==='IDLE')updateScanProgress(Object.assign({},source,{state:'IDLE'}));
+};
+if(eventName==='action.result'){
+if(p.code==='DEVICES_LIST'&&Array.isArray(p.devices))renderDevices(p.devices);
+if(p.code==='DEVICE_DETAILS'&&p.details)applyDeviceDetails(p.details);
+if(p.code==='MAP_STATE')renderTopologyState(p);
+if(p.code==='SCAN_STATE')scanStatePayload(p);
+if(p.code==='SPEEDTEST_STATE')speedPayload(p);
+if(p.code==='ROUTER_STATUS'||p.gatewayIp!=null||p.dnsServers!=null||p.ssid!=null)setRouterInfo(p);
+if(p.code==='WIFI_ENVIRONMENT')state.wifi=p;
+if(p.code==='SECURITY_SUMMARY')state.security=p;
+if(p.downMbps!=null||p.deviceCount!=null||p.latencyMs!=null)renderAnalytics(p);
+if(/^DEVICE_/.test(String(p.code||''))&&p.code!=='DEVICE_DETAILS'){req('devices.list',{});if(state.selectedDeviceId)req('device.details',{deviceId:state.selectedDeviceId})}
+if(/^ROUTER_/.test(String(p.code||''))&&p.code!=='ROUTER_STATUS')req('router.status',{});
+if((p.status==='NOT_SUPPORTED'||p.status==='NO_DATA')&&p.message)$('statusOv').textContent=p.errorReason||p.message;else if(p.message)$('statusOv').textContent=p.message;
+log('EVENT '+eventName);
+return;
+}
+if(eventName==='devices.update'){if(Array.isArray(p.devices))renderDevices(p.devices);else if(p.device){mergeDevice(p.device);renderDevices()}return;}
+if(eventName==='analytics.snapshot'){renderAnalytics(p);return;}
+if(eventName==='router.status'){setRouterInfo(p);return;}
+if(eventName==='wifi.environment'){state.wifi=p;return;}
+if(eventName==='security.summary'){state.security=p;return;}
+if(eventName==='scan.progress'||eventName==='scan_progress'){updateScanProgress(Object.assign({},p,{state:'SCANNING'}));return;}
+if(eventName==='scan.state'){scanStatePayload(p);return;}
+if(eventName==='scan.results'&&Array.isArray(p.devices)){renderDevices(p.devices);return;}
+if(eventName==='scan.results'&&p.device){mergeDevice(p.device);renderDevices();if(state.selectedDeviceId===String(p.device.id||''))req('device.details',{deviceId:state.selectedDeviceId});return;}
+if(eventName==='scan_done'){updateScanProgress(Object.assign({},p,{state:'DONE'}));req('devices.list',{});req('map.state',{});return;}
+if(eventName==='scan_error'){updateScanProgress(Object.assign({},p,{state:'ERROR'}));return;}
+if(eventName==='speedtest.ui'||eventName==='speedtest.result'){speedPayload(p);return;}
+if(eventName==='topology.state'){renderTopologyState(p);return;}
+};
 setInterval(()=>{if(document.visibilityState!=='visible')return; if(state.scan.state==='SCANNING')updateScanProgress({state:'SCANNING'}); req('analytics.snapshot',{});req('devices.list',{})},4000);
 $('mapCanvas').addEventListener('click',ev=>{const r=$('mapCanvas').getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top;const hit=state.mapNodes.find(n=>Math.hypot(n.x-x,n.y-y)<=n.r+4);if(hit)openDeviceModal(hit.device)});
 $('dmClose').addEventListener('click',closeDeviceModal);$('deviceModal').addEventListener('click',ev=>{if(ev.target.id==='deviceModal')closeDeviceModal()});$('dmPing').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);if(device)req('device.ping',{deviceId:device.id})});$('dmCopyIp').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);if(device)copyText(device.ip,'IP')});$('dmCopyMac').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);if(device)copyText(device.mac,'MAC')});$('dmBlock').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);const support=deviceActionSupport(device,'device.block','Block device');if(!device){$('statusOv').textContent='Device not found.';return}if(!support.supported){$('statusOv').textContent=support.reason;updateSelectedDeviceControls();return}req('device.setBlocked',{deviceId:device.id,blocked:!device.isBlocked})});
