@@ -3301,6 +3301,16 @@ body[data-ui="hud"]{
 
     const rnd = (a,b)=> a + Math.random()*(b-a);
     const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
+    const nerfNativeAvailable = ()=> !!(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function');
+    function nerfNativeReq(action, payload){
+      if(!nerfNativeAvailable()) return false;
+      try{
+        window.NERF_NATIVE.request(action, JSON.stringify(payload || {}));
+        return true;
+      }catch(err){
+        return false;
+      }
+    }
 
     function stSetBars(level01){
       const bars = st.signalBars.children;
@@ -3377,6 +3387,16 @@ body[data-ui="hud"]{
     }
 
     function stScan(){
+      if(nerfNativeAvailable()){
+        stState.running = false;
+        stState.phase = "idle";
+        st.ssidMeta.textContent = "Refreshing native Wi-Fi telemetry...";
+        nerfNativeReq('wifi.environment', {});
+        nerfNativeReq('router.status', {});
+        nerfNativeReq('devices.list', {});
+        nerfNativeReq('speedtest.state', {});
+        return;
+      }
       stState.ssids = stGenerateNetworks();
       stState.current = stState.ssids[0] || null;
       st.ssidSelect.innerHTML = "";
@@ -3415,13 +3435,30 @@ body[data-ui="hud"]{
     }
 
     function stStart(){
+      if(nerfNativeAvailable()){
+        nerfNativeReq('speedtest.start', {});
+        return;
+      }
       if(stState.running) return;
       stState.running = true;
       stState.phase = "download";
       stState.t = 0;
     }
-    function stStop(){ stState.running = false; stState.phase = "idle"; }
+    function stStop(){
+      if(nerfNativeAvailable()){
+        nerfNativeReq('speedtest.stop', {});
+        return;
+      }
+      stState.running = false; stState.phase = "idle";
+    }
     function stReset(){
+      if(nerfNativeAvailable()){
+        stState.running = false;
+        stState.phase = "idle";
+        nerfNativeReq('speedtest.reset', {});
+        nerfNativeReq('speedtest.state', {});
+        return;
+      }
       stStop();
       stState.metrics.down = 0; stState.metrics.up = 0;
       stState.metrics.ping = null; stState.metrics.jitter = null;
@@ -3431,6 +3468,12 @@ body[data-ui="hud"]{
     }
 
     function stTick(){
+      if(nerfNativeAvailable()){
+        stUpdateMeta();
+        stUpdateNumbers();
+        requestAnimationFrame(stTick);
+        return;
+      }
       // idle drift RSSI
       if(stState.current){
         const target = stState.current.rssi + rnd(-3,3);
@@ -3611,6 +3654,10 @@ body[data-ui="hud"]{
     }
 
     function cTick(){
+      if(nerfNativeAvailable()){
+        cRender();
+        return;
+      }
       if(!cState.wanUp){
         cState.down = cClamp(cState.down + cRnd(-40,10), 0, 60);
         cState.up = cClamp(cState.up + cRnd(-8,2), 0, 12);
@@ -3744,6 +3791,16 @@ body[data-ui="hud"]{
     }
 
     function cDoScan(){
+      if(nerfNativeAvailable()){
+        cState.modalMode = 'scan';
+        cOpenModal();
+        cUi.scanMeta.textContent='REQUESTING NATIVE WIFI SUMMARY...';
+        cUi.scanMeta.className='text-[10px] font-mono text-white/70';
+        cUi.scanList.innerHTML='';
+        nerfNativeReq('wifi.environment', {});
+        nerfNativeReq('router.status', {});
+        return;
+      }
       cOpenModal();
       cUi.scanMeta.textContent='SCANNING…';
       cUi.scanMeta.className='text-[10px] font-mono';
@@ -3759,6 +3816,11 @@ body[data-ui="hud"]{
     }
 
     function cPing(){
+      if(nerfNativeAvailable()){
+        const target = cState.gatewayIP || cState.gateway || '192.168.1.1';
+        nerfNativeReq('console.execute', {command:'ping ' + target});
+        return;
+      }
       if(cState.isPinging) return;
       cState.isPinging=true;
       cAddAlert('WARN','PING START: GATEWAY');
@@ -3800,6 +3862,11 @@ body[data-ui="hud"]{
     }
 
     function cReconnect(){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('UNSUPPORTED', '--c-pink');
+        cLogAction('WARN', 'RECONNECT: unsupported on current backend');
+        return;
+      }
       if(cState.isReconnecting) return;
       cState.isReconnecting=true;
       cAddAlert('WARN','RECONNECT: RESETTING ASSOCIATION');
@@ -3820,6 +3887,11 @@ body[data-ui="hud"]{
     }
 
     function cToggleBand(){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('UNSUPPORTED', '--c-pink');
+        cLogAction('WARN', 'RADIO BAND SWITCH: unavailable from shared bridge');
+        return;
+      }
       const seq=['2.4GHz','5GHz','6GHz'];
       const idx=seq.indexOf(cState.band);
       const next=seq[(idx+1+seq.length)%seq.length];
@@ -3846,6 +3918,11 @@ body[data-ui="hud"]{
     cUi.btnBand.addEventListener('click', cToggleBand);
 
     function cBoot(){
+      if(nerfNativeAvailable()){
+        cAddAlert('WARN','CONSOLE BRIDGE ONLINE');
+        cRender();
+        return;
+      }
       cAddAlert('WARN','CONSOLE ONLINE');
       cAddAlert('WARN',`ASSOCIATED: ${cState.ssid} • ${cState.band} • CH ${cState.channel}`);
       cRender();
@@ -3942,6 +4019,11 @@ body[data-ui="hud"]{
     }
 
     function cRunPingHost(host){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('PINGING', '--c-pink');
+        nerfNativeReq('console.execute', {command:'ping ' + host});
+        return;
+      }
       cSetActionStatus('PINGING', '--c-pink');
       cLogAction('WARN', `PING: ${host}`);
       const samples = [];
@@ -3969,6 +4051,11 @@ body[data-ui="hud"]{
     }
 
     function cRunTraceHost(host){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('UNSUPPORTED', '--c-pink');
+        cLogAction('WARN', `TRACEROUTE: unsupported for ${host}`);
+        return;
+      }
       cSetActionStatus('TRACING', '--c-yellow');
       cLogAction('WARN', `TRACEROUTE: ${host}`);
       const hops = Math.round(cRnd(6, 12));
@@ -3988,6 +4075,11 @@ body[data-ui="hud"]{
     }
 
     function cRenewDhcp(){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('DHCP', '--c-blue');
+        nerfNativeReq('router.renewDhcp', {});
+        return;
+      }
       if(cState.isReconnecting) return;
       cSetActionStatus('DHCP', '--c-blue');
       cLogAction('WARN', 'WAN EVENT: DHCP RENEW (manual)');
@@ -4007,6 +4099,11 @@ body[data-ui="hud"]{
     }
 
     function cFlushDns(){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('DNS', '--c-primary');
+        nerfNativeReq('router.flushDns', {});
+        return;
+      }
       cSetActionStatus('DNS', '--c-primary');
       cLogAction('WARN', 'DNS: cache flush (local)');
       setTimeout(()=>{
@@ -4017,6 +4114,11 @@ body[data-ui="hud"]{
     }
 
     function cRebootRouter(){
+      if(nerfNativeAvailable()){
+        cSetActionStatus('REBOOT', '--c-pink');
+        nerfNativeReq('router.reboot', {});
+        return;
+      }
       if(cState.isReconnecting) return;
       cSetActionStatus('REBOOT', '--c-pink');
       cLogAction('WARN', 'ROUTER: reboot requested (simulated)');
@@ -4041,12 +4143,20 @@ body[data-ui="hud"]{
     }
 
     function cToggleFirewall(){
+      if(nerfNativeAvailable()){
+        nerfNativeReq('router.setFirewall', {enabled: !cState.firewallOn});
+        return;
+      }
       cState.firewallOn = !cState.firewallOn;
       cLogAction('WARN', `FIREWALL: ${cState.firewallOn ? 'ON' : 'OFF'}`);
       cRenderAdvanced();
     }
 
     function cToggleVpn(){
+      if(nerfNativeAvailable()){
+        nerfNativeReq('router.setVpn', {enabled: !cState.vpnOn});
+        return;
+      }
       cState.vpnOn = !cState.vpnOn;
       cLogAction('WARN', `VPN: ${cState.vpnOn ? 'CONNECTED' : 'DISCONNECTED'}`);
       cRenderAdvanced();
@@ -4649,6 +4759,16 @@ function hookNav(){
     if(!ov.refresh) return;
 
     ov.refresh.addEventListener('click', ()=>{
+      if(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function'){
+        window.NERF_NATIVE.request('analytics.snapshot', '{}');
+        window.NERF_NATIVE.request('router.status', '{}');
+        window.NERF_NATIVE.request('wifi.environment', '{}');
+        window.NERF_NATIVE.request('security.summary', '{}');
+        window.NERF_NATIVE.request('devices.list', '{}');
+        toast('Overview refreshed');
+        try{ logConsoleEvent && logConsoleEvent('Overview refresh'); }catch(e){}
+        return;
+      }
       jitterOverview(); renderOverview();
       toast('Overview refreshed');
       try{ logConsoleEvent && logConsoleEvent('Overview refresh'); }catch(e){}
@@ -4658,6 +4778,13 @@ function hookNav(){
     document.querySelectorAll('[data-ov-toggle]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const k = btn.getAttribute('data-ov-toggle');
+        if(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function'){
+          if(k === 'firewall') window.NERF_NATIVE.request('router.setFirewall', JSON.stringify({enabled: !(ovState.firewall)}));
+          if(k === 'vpn') window.NERF_NATIVE.request('router.setVpn', JSON.stringify({enabled: !(ovState.vpn)}));
+          if(k === 'guest') window.NERF_NATIVE.request('router.setGuest', JSON.stringify({enabled: !(ovState.guest)}));
+          if(k === 'qos') window.NERF_NATIVE.request('router.setQos', JSON.stringify({mode: ovState.qos ? 'BALANCED' : 'GAMING'}));
+          return;
+        }
         if(k === 'firewall') ovState.firewall = !ovState.firewall;
         if(k === 'vpn') ovState.vpn = !ovState.vpn;
         if(k === 'guest') ovState.guest = !ovState.guest;
@@ -4669,6 +4796,16 @@ function hookNav(){
     });
 
     ov.runHealthCheck.addEventListener('click', async ()=>{
+      if(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function'){
+        toast('Running health check...');
+        try{ logConsoleEvent && logConsoleEvent('Health check started'); }catch(e){}
+        window.NERF_NATIVE.request('analytics.snapshot', '{}');
+        window.NERF_NATIVE.request('router.status', '{}');
+        window.NERF_NATIVE.request('wifi.environment', '{}');
+        window.NERF_NATIVE.request('security.summary', '{}');
+        window.NERF_NATIVE.request('devices.list', '{}');
+        return;
+      }
       toast('Running health check…');
       try{ logConsoleEvent && logConsoleEvent('Health check started'); }catch(e){}
       await new Promise(r=>setTimeout(r, 550));
@@ -4689,6 +4826,12 @@ function hookNav(){
     });
 
     ov.renewDhcp.addEventListener('click', async ()=>{
+      if(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function'){
+        toast('Renewing WAN lease...');
+        try{ logConsoleEvent && logConsoleEvent('WAN lease renew requested'); }catch(e){}
+        window.NERF_NATIVE.request('router.renewDhcp', '{}');
+        return;
+      }
       toast('Renewing WAN lease…');
       try{ logConsoleEvent && logConsoleEvent('WAN lease renew requested'); }catch(e){}
       await new Promise(r=>setTimeout(r, 700));
@@ -4701,6 +4844,12 @@ function hookNav(){
     });
 
     ov.flushDns.addEventListener('click', async ()=>{
+      if(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function'){
+        toast('Flushing DNS cache...');
+        try{ logConsoleEvent && logConsoleEvent('DNS cache flush requested'); }catch(e){}
+        window.NERF_NATIVE.request('router.flushDns', '{}');
+        return;
+      }
       toast('Flushing DNS cache…');
       try{ logConsoleEvent && logConsoleEvent('DNS cache flush requested'); }catch(e){}
       await new Promise(r=>setTimeout(r, 450));
@@ -4747,5 +4896,883 @@ function hookNav(){
       }
     })();
   </script>
+<script id="nerfMainHudBridge">
+  (function(){
+    const nativeReady = !!(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function');
+    const $ = (id)=>document.getElementById(id);
+    const byId = (id)=>document.getElementById(id);
+
+    if(typeof bindOverviewActions === 'function' && !window.__NERF_MAIN_HUD_OV_BOUND){
+      window.__NERF_MAIN_HUD_OV_BOUND = true;
+      bindOverviewActions();
+    }
+    if(typeof renderOverview === 'function'){
+      renderOverview();
+    }
+    if(!nativeReady){
+      return;
+    }
+
+    window.__NERF_MAIN_HUD_NATIVE_MODE = true;
+    window.NERF = window.NERF || {};
+
+    const state = {
+      devices: [],
+      selectedDeviceId: null,
+      selectedDetails: null,
+      router: null,
+      analytics: null,
+      wifi: null,
+      security: null,
+      topology: null,
+      speed: null,
+      scan: null,
+      mapAutoTimer: null,
+      mapFilter: '',
+      mapHideLabels: false,
+      mapHideLinks: false,
+      mapSelection: null,
+    };
+
+    function req(action, payload){
+      try{
+        window.NERF_NATIVE.request(action, JSON.stringify(payload || {}));
+      }catch(err){
+        noteAction('BRIDGE ERROR: ' + (err && err.message ? err.message : action), true);
+      }
+    }
+
+    function nowStampSafe(){
+      const d = new Date();
+      const p = (n)=>String(n).padStart(2, '0');
+      return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+
+    function noteAction(message, warn){
+      if(typeof toast === 'function'){
+        try{ toast(message); }catch(err){}
+      }
+      if(typeof logConsoleEvent === 'function'){
+        try{ logConsoleEvent(message); }catch(err){}
+      }
+      if(byId('actionNote')){
+        byId('actionNote').textContent = message;
+        byId('actionNote').style.color = warn ? 'var(--c-pink)' : 'var(--c-yellow)';
+      }
+      if(byId('devMeta')){
+        byId('devMeta').textContent = message;
+      }
+    }
+
+    function statusText(value, fallback){
+      return value == null || value === '' ? fallback : String(value);
+    }
+
+    function supportFor(map, key, fallbackLabel){
+      const item = map && map[key];
+      if(item){
+        return {
+          supported: item.supported !== false,
+          reason: item.reason || (item.supported === false ? `${fallbackLabel} is unavailable.` : `${fallbackLabel} is available.`),
+          label: item.label || fallbackLabel
+        };
+      }
+      return {supported:false, reason:`${fallbackLabel} is unsupported on this backend.`, label:fallbackLabel};
+    }
+
+    function deviceSupportFor(device, key, fallbackLabel){
+      return supportFor(device && device.actionSupport, key, fallbackLabel);
+    }
+
+    function normalizeDevice(device){
+      return {
+        id: String(device.id || ''),
+        name: statusText(device.nickname || device.name || device.hostname, 'Unknown Device'),
+        hostname: statusText(device.hostname, '-'),
+        ip: statusText(device.ip, '-'),
+        vendor: statusText(device.vendor, 'Unknown'),
+        mac: statusText(device.mac, '-'),
+        deviceType: statusText(device.deviceType, 'UNKNOWN'),
+        riskScore: Number(device.riskScore || 0),
+        quality: Number(device.quality || 0),
+        latencyMs: device.latencyMs == null ? null : Number(device.latencyMs),
+        signalStrength: device.signalStrength == null ? null : Number(device.signalStrength),
+        lastSeen: device.lastSeen == null ? null : Number(device.lastSeen),
+        isGateway: !!device.isGateway,
+        online: device.online !== false,
+        reachable: device.reachable !== false,
+        isBlocked: !!device.isBlocked,
+        isPaused: !!device.isPaused,
+        downMbps: Number(device.downMbps || 0),
+        upMbps: Number(device.upMbps || 0),
+        trafficStatus: statusText(device.trafficStatus, 'UNKNOWN'),
+        actionSupport: device.actionSupport || {}
+      };
+    }
+
+    function normalizeDevices(devices){
+      return (devices || []).map(normalizeDevice);
+    }
+
+    function findDevice(deviceId){
+      return state.devices.find((device)=>device.id === String(deviceId)) || null;
+    }
+
+    function mergeDevice(device){
+      const next = normalizeDevice(device);
+      const index = state.devices.findIndex((item)=>item.id === next.id);
+      if(index >= 0){
+        state.devices[index] = Object.assign({}, state.devices[index], next);
+      }else{
+        state.devices.push(next);
+      }
+    }
+
+    function fmtAgo(epochMs){
+      if(!epochMs) return 'just now';
+      const delta = Math.max(0, Date.now() - epochMs);
+      if(delta < 60000) return `${Math.round(delta / 1000)}s ago`;
+      if(delta < 3600000) return `${Math.round(delta / 60000)}m ago`;
+      return `${Math.round(delta / 3600000)}h ago`;
+    }
+
+    function updateOverview(){
+      if(!window.ovState || typeof renderOverview !== 'function') return;
+      const analytics = state.analytics || {};
+      const router = state.router || {};
+      const wifi = state.wifi || {};
+      const security = state.security || {};
+      ovState.wanUp = router.status ? router.status === 'OK' : true;
+      ovState.wanIp = router.publicIp || router.gatewayIp || ovState.wanIp;
+      ovState.dns = Array.isArray(router.dnsServers) && router.dnsServers.length ? router.dnsServers.join(', ') : ovState.dns;
+      ovState.band = router.linkSpeedMbps != null && Number(router.linkSpeedMbps) < 150 ? '2.4GHz' : (router.ssid ? '5GHz' : ovState.band);
+      ovState.clients = analytics.deviceCount != null ? Number(analytics.deviceCount) : (wifi.connectedDeviceCount != null ? Number(wifi.connectedDeviceCount) : state.devices.length);
+      ovState.retry = wifi.congestionScore != null ? Number(wifi.congestionScore) / 10 : ovState.retry;
+      ovState.latency = analytics.latencyMs != null ? Number(analytics.latencyMs) : ovState.latency;
+      ovState.jitter = analytics.jitterMs != null ? Number(analytics.jitterMs) : ovState.jitter;
+      ovState.loss = analytics.packetLossPct != null ? Number(analytics.packetLossPct) : ovState.loss;
+      ovState.down = analytics.downMbps != null ? Number(analytics.downMbps) : ovState.down;
+      ovState.up = analytics.upMbps != null ? Number(analytics.upMbps) : ovState.up;
+      ovState.firewall = !!(router.firewall && router.firewall.enabled);
+      ovState.vpn = !!(router.vpn && router.vpn.enabled);
+      ovState.guest = !!(router.guestWifi && router.guestWifi.enabled);
+      ovState.qos = !!router.qosMode && String(router.qosMode).toUpperCase() !== 'DISABLED';
+      renderOverview();
+      if(byId('ov-gw')) byId('ov-gw').textContent = router.gatewayIp || '--';
+      if(byId('ov-lastUpdate')) byId('ov-lastUpdate').textContent = nowStampSafe();
+      if(byId('ov-cpu')){ byId('ov-cpu').textContent = 'N/A'; byId('ov-cpu').title = 'Router CPU telemetry is unavailable from the shared bridge.'; }
+      if(byId('ov-mem')){ byId('ov-mem').textContent = 'N/A'; byId('ov-mem').title = 'Router memory telemetry is unavailable from the shared bridge.'; }
+      if(byId('ov-uptime')){ byId('ov-uptime').textContent = 'N/A'; byId('ov-uptime').title = 'Router uptime telemetry is unavailable from the shared bridge.'; }
+
+      const controls = {
+        firewall: supportFor(router.actionSupport, 'router.firewall', 'Firewall'),
+        vpn: supportFor(router.actionSupport, 'router.vpn', 'VPN'),
+        guest: supportFor(router.actionSupport, 'router.guestWifi', 'Guest Wi-Fi'),
+        qos: supportFor(router.actionSupport, 'router.qos', 'QoS'),
+      };
+      document.querySelectorAll('[data-ov-toggle]').forEach((button)=>{
+        const key = button.getAttribute('data-ov-toggle');
+        const support = controls[key] || {supported:false, reason:'Unsupported on current backend.'};
+        button.disabled = !support.supported;
+        button.title = support.reason;
+        button.style.opacity = support.supported ? '' : '0.55';
+        button.style.cursor = support.supported ? '' : 'not-allowed';
+      });
+      if(byId('ov-renewDhcp')){
+        const support = supportFor(router.actionSupport, 'router.renewDhcp', 'Renew WAN Lease');
+        byId('ov-renewDhcp').disabled = !support.supported;
+        byId('ov-renewDhcp').title = support.reason;
+        byId('ov-renewDhcp').style.opacity = support.supported ? '' : '0.55';
+      }
+      if(byId('ov-flushDns')){
+        const support = supportFor(router.actionSupport, 'router.flushDns', 'Flush DNS Cache');
+        byId('ov-flushDns').disabled = !support.supported;
+        byId('ov-flushDns').title = support.reason;
+        byId('ov-flushDns').style.opacity = support.supported ? '' : '0.55';
+      }
+      const overviewNote = document.querySelector('#screen-overview .mt-2.text-\\[9px\\].font-mono.text-white\\/55');
+      if(overviewNote){
+        overviewNote.textContent = security.message || wifi.message || 'Backend-driven metrics are active.';
+      }
+      const quickControlsMeta = document.querySelector('#screen-overview .text-\\[10px\\].font-mono.text-white\\/65.mt-1');
+      if(quickControlsMeta){
+        quickControlsMeta.textContent = 'Router actions stay visible and are disabled when the backend reports unsupported capability.';
+      }
+    }
+
+    function ensureSpeedOption(){
+      if(!window.st || !window.stState || !st.ssidSelect) return;
+      const router = state.router || {};
+      const analytics = state.analytics || {};
+      const ssid = router.ssid || 'Current Link';
+      stState.ssids = [{
+        name: ssid,
+        band: router.linkSpeedMbps != null && Number(router.linkSpeedMbps) < 150 ? '2.4GHz' : '5GHz',
+        channel: router.channel || '--',
+        signal: 0.8,
+        rssi: state.devices.length ? (state.devices[0].signalStrength || -55) : -55,
+        encryption: 'WPA2/WPA3',
+        mesh: false,
+        devices: analytics.deviceCount != null ? Number(analytics.deviceCount) : state.devices.length
+      }];
+      stState.current = stState.ssids[0];
+      st.ssidSelect.innerHTML = '';
+      const option = document.createElement('option');
+      option.value = '0';
+      option.textContent = `${ssid} - ${stState.current.band}`;
+      st.ssidSelect.appendChild(option);
+      st.ssidSelect.value = '0';
+    }
+
+    function updateSpeed(source){
+      if(!window.st || !window.stState) return;
+      const data = source && source.state && typeof source.state === 'object' ? source.state : (source || {});
+      ensureSpeedOption();
+      stState.running = !!data.running;
+      stState.phase = String(data.phase || 'idle').toLowerCase();
+      stState.metrics.down = Number(data.downMbps != null ? data.downMbps : data.downloadMbps || 0);
+      stState.metrics.up = Number(data.upMbps != null ? data.upMbps : data.uploadMbps || 0);
+      stState.metrics.ping = data.pingMs != null ? Number(data.pingMs) : (data.latencyMs != null ? Number(data.latencyMs) : null);
+      stState.metrics.jitter = data.jitterMs != null ? Number(data.jitterMs) : null;
+      stState.metrics.rssi = state.devices.find((device)=>device.isGateway)?.signalStrength || stState.metrics.rssi || -55;
+      if(st.band && state.router && state.router.ssid){
+        st.band.textContent = stState.current ? stState.current.band : '5GHz';
+        st.channel.textContent = stState.current ? stState.current.channel : '--';
+        st.deviceCount.textContent = `${state.devices.length} Devices`;
+        st.meshLabel.textContent = state.wifi && state.wifi.congestionLabel ? `Wi-Fi ${state.wifi.congestionLabel}` : 'Live Telemetry';
+        st.encLabel.textContent = 'Encrypted';
+        st.lockIcon.textContent = 'security';
+        st.topology.textContent = state.topology && Array.isArray(state.topology.nodes) ? `${state.topology.nodes.length} Nodes` : 'Active';
+        st.ssidMeta.textContent = data.message || (state.wifi && state.wifi.message) || 'Native bridge linked.';
+      }
+      if(typeof stUpdateMeta === 'function') stUpdateMeta();
+      if(typeof stUpdateNumbers === 'function') stUpdateNumbers();
+      if(st.metricLabel){
+        st.metricLabel.textContent = stState.running && stState.phase === 'upload' ? 'Upload' : 'Download';
+      }
+    }
+
+    function updateConsole(){
+      if(!window.cState || !window.cRender || !window.cRenderAdvanced) return;
+      const router = state.router || {};
+      const analytics = state.analytics || {};
+      const wifi = state.wifi || {};
+      cState.ssid = router.ssid || cState.ssid;
+      cState.gatewayIP = router.gatewayIp || cState.gatewayIP;
+      cState.gateway = router.gatewayIp || cState.gateway || cState.gatewayIP;
+      cState.wanIp = router.publicIp || cState.wanIp;
+      cState.dnsIp = Array.isArray(router.dnsServers) && router.dnsServers.length ? router.dnsServers[0] : cState.dnsIp;
+      cState.band = router.linkSpeedMbps != null && Number(router.linkSpeedMbps) < 150 ? '2.4GHz' : '5GHz';
+      cState.clients = analytics.deviceCount != null ? Number(analytics.deviceCount) : state.devices.length;
+      cState.down = analytics.downMbps != null ? Number(analytics.downMbps) : cState.down;
+      cState.up = analytics.upMbps != null ? Number(analytics.upMbps) : cState.up;
+      cState.loss = analytics.packetLossPct != null ? Number(analytics.packetLossPct) : cState.loss;
+      cState.latency = analytics.latencyMs != null ? Number(analytics.latencyMs) : cState.latency;
+      cState.jitter = analytics.jitterMs != null ? Number(analytics.jitterMs) : cState.jitter;
+      cState.routerLocked = router.status === 'OK';
+      cState.wanUp = router.status !== 'ERROR';
+      cState.firewallOn = !!(router.firewall && router.firewall.enabled);
+      cState.vpnOn = !!(router.vpn && router.vpn.enabled);
+      cState.rssi = wifi.linkSpeedMbps != null ? Math.max(-85, -85 + Math.round(Number(wifi.linkSpeedMbps) / 10)) : cState.rssi;
+      cState.snr = wifi.congestionScore != null ? Math.max(8, 40 - Math.round(Number(wifi.congestionScore) / 4)) : cState.snr;
+      cRender();
+      cRenderAdvanced();
+      if(byId('c-btnReconnect')){
+        byId('c-btnReconnect').disabled = true;
+        byId('c-btnReconnect').title = 'Association reset is unsupported from the shared bridge.';
+        byId('c-btnReconnect').style.opacity = '0.55';
+      }
+      if(byId('c-btnBand')){
+        byId('c-btnBand').disabled = true;
+        byId('c-btnBand').title = 'Band steering is unsupported from the shared bridge.';
+        byId('c-btnBand').style.opacity = '0.55';
+      }
+      if(byId('c-btnTraceTarget')){
+        byId('c-btnTraceTarget').disabled = true;
+        byId('c-btnTraceTarget').title = 'Traceroute is unsupported from the shared bridge.';
+        byId('c-btnTraceTarget').style.opacity = '0.55';
+      }
+      renderSurveySummary();
+    }
+
+    function surveyRows(){
+      const rows = [];
+      if(state.router && state.router.ssid){
+        rows.push({
+          left:`SSID ${state.router.ssid}`,
+          right:`GW ${state.router.gatewayIp || '--'}`,
+          meta:(state.wifi && state.wifi.message) || 'Connected network summary'
+        });
+      }
+      if(state.security){
+        rows.push({
+          left:`Risk devices ${state.security.riskDeviceCount || 0}`,
+          right:`Unknown ${state.security.unknownDeviceCount || 0}`,
+          meta:state.security.message || 'Security summary'
+        });
+      }
+      if(state.analytics){
+        rows.push({
+          left:`Latency ${Number(state.analytics.latencyMs || 0).toFixed(1)} ms`,
+          right:`Loss ${Number(state.analytics.packetLossPct || 0).toFixed(1)} %`,
+          meta:`Down ${Number(state.analytics.downMbps || 0).toFixed(1)} Mbps / Up ${Number(state.analytics.upMbps || 0).toFixed(1)} Mbps`
+        });
+      }
+      if(!rows.length){
+        rows.push({
+          left:'No native Wi-Fi summary',
+          right:'Unsupported',
+          meta:'Per-SSID site survey is unavailable on the current backend.'
+        });
+      }
+      return rows;
+    }
+
+    function renderSurveySummary(){
+      if(!window.cUi || !cUi.scanList || cState.modalMode !== 'scan') return;
+      const rows = surveyRows();
+      cUi.scanList.innerHTML = '';
+      rows.forEach((item)=>{
+        const row = document.createElement('div');
+        row.className = 'w-full text-left px-3 py-3 mx-2 mb-2 btn-nerf border border-white/10';
+        row.innerHTML = `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <div class="col-span-5 text-xs font-mono text-white">${item.left}</div>
+            <div class="col-span-3 text-[10px] font-mono text-white/70">${item.right}</div>
+            <div class="col-span-4 text-[10px] font-mono text-white/55">${item.meta}</div>
+          </div>
+        `;
+        cUi.scanList.appendChild(row);
+      });
+      cUi.scanMeta.textContent = 'NATIVE SUMMARY ONLY - PER-AP SURVEY UNSUPPORTED';
+      cUi.scanMeta.className = 'text-[10px] font-mono text-white/70';
+      if(cUi.btnConnectBest){
+        cUi.btnConnectBest.disabled = true;
+        cUi.btnConnectBest.title = 'Connecting to discovered APs is unsupported from the shared bridge.';
+        cUi.btnConnectBest.style.opacity = '0.55';
+      }
+    }
+
+    function miniSeries(seed, spread){
+      const out = [];
+      let value = seed;
+      for(let i = 0; i < 24; i++){
+        value = Math.max(0, value + (Math.sin(i / 3) * spread) + (i % 5 === 0 ? spread / 2 : -spread / 5));
+        out.push(value);
+      }
+      return out;
+    }
+
+    function drawSeries(canvas, values, stroke){
+      if(!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const width = canvas.clientWidth || 260;
+      const height = canvas.clientHeight || 90;
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      values.forEach((value, index)=>{
+        const x = (index / Math.max(1, values.length - 1)) * width;
+        const y = height - ((value / Math.max(1, Math.max(...values))) * (height - 10)) - 5;
+        if(index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    function kvMarkup(items){
+      return items.map((item)=>`
+        <div class="kv">
+          <div class="k">${item.k}</div>
+          <div class="v ${item.cls || ''}">${item.v}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderDeviceDrawer(){
+      const device = findDevice(state.selectedDeviceId);
+      if(!device) return;
+      const details = state.selectedDetails || {};
+      const overview = [
+        {k:'IP', v:device.ip},
+        {k:'MAC', v:device.mac},
+        {k:'TYPE', v:device.deviceType},
+        {k:'STATUS', v:device.online ? 'ONLINE' : 'OFFLINE', cls:device.online ? 'blue' : 'orange'},
+        {k:'RISK', v:String(device.riskScore)},
+        {k:'LAST SEEN', v:fmtAgo(device.lastSeen)},
+      ];
+      const radio = [
+        {k:'SIGNAL', v:device.signalStrength == null ? 'N/A' : `${device.signalStrength} dBm`},
+        {k:'QUALITY', v:`${device.quality}%`},
+        {k:'LATENCY', v:device.latencyMs == null ? 'N/A' : `${device.latencyMs.toFixed(1)} ms`},
+        {k:'REACH', v:statusText(device.reachable ? 'REACHABLE' : 'LIMITED', 'UNKNOWN')},
+        {k:'VENDOR', v:device.vendor},
+        {k:'HOSTNAME', v:device.hostname},
+      ];
+      const traffic = [
+        {k:'DOWN', v:`${device.downMbps.toFixed(1)} Mbps`},
+        {k:'UP', v:`${device.upMbps.toFixed(1)} Mbps`},
+        {k:'FLOW', v:statusText(device.trafficStatus, 'UNKNOWN')},
+        {k:'PING', v:details.pingMs == null ? (device.latencyMs == null ? 'N/A' : `${device.latencyMs.toFixed(1)} ms`) : `${Number(details.pingMs).toFixed(1)} ms`},
+        {k:'NOTES', v:statusText(details.notes, 'No device notes available')},
+        {k:'TRAFFIC', v:statusText(details.trafficMessage, 'Traffic details unavailable')},
+      ];
+      if(byId('drawerName')) byId('drawerName').innerHTML = `<span>${device.name}</span>`;
+      if(byId('drawerSub')) byId('drawerSub').textContent = `${device.ip} - ${device.vendor} - ${device.mac}`;
+      if(byId('kvOverview')) byId('kvOverview').innerHTML = kvMarkup(overview);
+      if(byId('kvRadio')) byId('kvRadio').innerHTML = kvMarkup(radio);
+      if(byId('kvTraffic')) byId('kvTraffic').innerHTML = kvMarkup(traffic);
+      drawSeries(byId('chartLink'), miniSeries(Math.max(12, device.quality), 4), '#ffe600');
+      drawSeries(byId('chartSignal'), miniSeries(Math.max(8, Math.abs(device.signalStrength || -60)), 2), '#00d5ff');
+      drawSeries(byId('chartTraffic'), miniSeries(Math.max(6, device.downMbps + device.upMbps), 12), '#ff6b00');
+      const blockSupport = deviceSupportFor(device, device.isBlocked ? 'device.unblock' : 'device.block', device.isBlocked ? 'Unblock device' : 'Block device');
+      if(byId('actPing')){
+        byId('actPing').disabled = false;
+        byId('actPing').title = 'Ping this device through the native bridge.';
+      }
+      if(byId('actTrace')){
+        byId('actTrace').disabled = true;
+        byId('actTrace').title = 'Traceroute is unsupported from the shared bridge.';
+        byId('actTrace').style.opacity = '0.55';
+      }
+      if(byId('actLock')){
+        byId('actLock').disabled = true;
+        byId('actLock').title = 'Target locking is visual-only in this restored theme.';
+        byId('actLock').style.opacity = '0.55';
+      }
+      if(byId('actBlock')){
+        byId('actBlock').disabled = !blockSupport.supported;
+        byId('actBlock').title = blockSupport.reason;
+        byId('actBlock').style.opacity = blockSupport.supported ? '' : '0.55';
+        const label = byId('actBlock').querySelector('span:last-child');
+        if(label) label.textContent = device.isBlocked ? 'UNBLOCK' : 'BLOCK';
+      }
+    }
+
+    function openDrawer(deviceId){
+      state.selectedDeviceId = deviceId;
+      if(byId('drawer')) byId('drawer').classList.add('open');
+      renderDeviceDrawer();
+      req('device.details', {deviceId});
+    }
+
+    function renderDevices(){
+      const rowsWrap = byId('deviceRows');
+      if(!rowsWrap) return;
+      const query = ((byId('searchInput') && byId('searchInput').value) || '').trim().toLowerCase();
+      const rows = state.devices.filter((device)=>{
+        if(!query) return true;
+        return `${device.name} ${device.ip} ${device.mac} ${device.deviceType} ${device.vendor}`.toLowerCase().includes(query);
+      });
+      rowsWrap.innerHTML = rows.map((device)=>`
+        <button class="btn-nerf" data-device-row="${device.id}" style="width:100%;text-align:left;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div style="min-width:0;">
+              <div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${device.name}</div>
+              <div style="font-size:10px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.55);margin-top:4px;">${device.ip} - ${device.vendor} - ${device.deviceType}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:10px;font-family:'JetBrains Mono',monospace;color:${device.online ? 'var(--c-blue)' : 'var(--c-yellow)'};">${device.online ? 'ONLINE' : 'OFFLINE'}</div>
+              <div style="font-size:10px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.55);margin-top:4px;">${device.latencyMs == null ? 'N/A' : `${device.latencyMs.toFixed(1)} ms`}</div>
+            </div>
+          </div>
+        </button>
+      `).join('');
+      rowsWrap.querySelectorAll('[data-device-row]').forEach((button)=>{
+        button.addEventListener('click', ()=>openDrawer(button.getAttribute('data-device-row')));
+      });
+      if(byId('liveCount')) byId('liveCount').textContent = String(rows.length);
+      if(byId('lossBadge')) byId('lossBadge').textContent = `${Number((state.analytics && state.analytics.packetLossPct) || 0).toFixed(1)}%`;
+      if(byId('jitBadge')) byId('jitBadge').textContent = `${Number((state.analytics && state.analytics.jitterMs) || 0).toFixed(0)}ms`;
+      renderDeviceDrawer();
+    }
+
+    function renderMap(){
+      const list = byId('map2-list');
+      const nodes = byId('map2-nodes');
+      const svg = byId('map2-linksSvg');
+      if(!list || !nodes || !svg) return;
+      const query = (state.mapFilter || '').toLowerCase();
+      const devices = state.devices.filter((device)=>{
+        if(!query) return true;
+        return `${device.name} ${device.ip} ${device.vendor}`.toLowerCase().includes(query);
+      });
+      if(state.mapSelection && !devices.some((device)=>device.id === state.mapSelection)){
+        state.mapSelection = null;
+      }
+      list.innerHTML = devices.map((device)=>`
+        <div class="map2-row" data-map-device="${device.id}" style="${device.id === state.mapSelection ? 'background:rgba(234,255,0,0.06);' : ''}">
+          <div style="min-width:0;">
+            <div class="text-[11px] font-mono text-white/80" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;">${device.name}</div>
+            <div class="text-[10px] font-mono text-white/55">${device.ip} - ${device.vendor} - ${device.signalStrength == null ? 'N/A' : `${device.signalStrength} dBm`}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="map2-chip ${device.quality >= 70 ? 'good' : (device.quality < 40 ? 'bad' : '')}">${device.quality}%</span>
+          </div>
+        </div>
+      `).join('');
+      list.querySelectorAll('[data-map-device]').forEach((row)=>{
+        row.addEventListener('click', ()=>{
+          state.mapSelection = row.getAttribute('data-map-device');
+          renderMap();
+          openDrawer(state.mapSelection);
+        });
+      });
+      if(byId('map2-last')) byId('map2-last').textContent = nowStampSafe();
+      if(byId('map2-count')) byId('map2-count').textContent = String(devices.length);
+      if(byId('map2-ssid')) byId('map2-ssid').textContent = (state.router && state.router.ssid) || 'UNKNOWN';
+      if(byId('map2-gw')) byId('map2-gw').textContent = (state.router && state.router.gatewayIp) || '--';
+      if(byId('map2-hint')) byId('map2-hint').textContent = state.topology && Array.isArray(state.topology.links) && state.topology.links.length ? 'Native topology overlay active' : 'Live device discovery without topology links';
+
+      nodes.innerHTML = '';
+      svg.innerHTML = '';
+      const gw = document.createElement('div');
+      gw.className = 'map2-node gw';
+      gw.style.left = '50%';
+      gw.style.top = '45%';
+      nodes.appendChild(gw);
+      if(!state.mapHideLabels){
+        const label = document.createElement('div');
+        label.className = 'map2-label';
+        label.style.left = '50%';
+        label.style.top = '45%';
+        label.textContent = `GW ${(state.router && state.router.gatewayIp) || '--'}`;
+        nodes.appendChild(label);
+      }
+      const ring = Math.max(24, Math.min(34, 24 + Math.min(devices.length, 10)));
+      devices.forEach((device, index)=>{
+        const angle = (index / Math.max(1, devices.length)) * Math.PI * 2 - (Math.PI / 2);
+        const x = 50 + (Math.cos(angle) * ring);
+        const y = 45 + (Math.sin(angle) * ring);
+        const node = document.createElement('div');
+        node.className = 'map2-node' + (device.id === state.mapSelection ? ' sel' : '');
+        node.style.left = `${x}%`;
+        node.style.top = `${y}%`;
+        node.title = `${device.name} ${device.ip}`;
+        node.addEventListener('click', ()=>{
+          state.mapSelection = device.id;
+          renderMap();
+          openDrawer(device.id);
+        });
+        nodes.appendChild(node);
+        if(!state.mapHideLabels){
+          const label = document.createElement('div');
+          label.className = 'map2-label';
+          label.style.left = `${x}%`;
+          label.style.top = `${y}%`;
+          label.textContent = device.ip;
+          nodes.appendChild(label);
+        }
+        if(!state.mapHideLinks){
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', '50');
+          line.setAttribute('y1', '45');
+          line.setAttribute('x2', String(x));
+          line.setAttribute('y2', String(y));
+          if(device.id === state.mapSelection) line.setAttribute('class', 'sel');
+          svg.appendChild(line);
+        }
+      });
+    }
+
+    function renderAnalytics(){
+      const screen = byId('screen-analytics');
+      if(!screen || !state.analytics) return;
+      const message = screen.querySelector('.text-xs.text-white\\/60.font-mono');
+      if(message){
+        message.textContent = `Down ${Number(state.analytics.downMbps || 0).toFixed(1)} Mbps | Up ${Number(state.analytics.upMbps || 0).toFixed(1)} Mbps | Latency ${Number(state.analytics.latencyMs || 0).toFixed(1)} ms | Loss ${Number(state.analytics.packetLossPct || 0).toFixed(1)} %`;
+      }
+      const range = screen.querySelector('select');
+      if(range && !range.dataset.nativeBound){
+        range.dataset.nativeBound = '1';
+        range.addEventListener('change', ()=>req('analytics.snapshot', {}));
+        range.title = 'Range changes refresh the current analytics snapshot. Historical range filtering is unsupported in this restored theme.';
+      }
+    }
+
+    function applyRouterStatus(payload){
+      state.router = payload;
+      updateOverview();
+      updateConsole();
+      updateSpeed(state.speed || {});
+      renderMap();
+    }
+
+    function applyAnalytics(payload){
+      state.analytics = payload;
+      updateOverview();
+      updateConsole();
+      renderDevices();
+      renderAnalytics();
+    }
+
+    function applyWifi(payload){
+      state.wifi = payload;
+      updateOverview();
+      updateConsole();
+      updateSpeed(state.speed || {});
+    }
+
+    function applySecurity(payload){
+      state.security = payload;
+      updateOverview();
+      updateConsole();
+    }
+
+    function applyTopology(payload){
+      state.topology = payload;
+      renderMap();
+      updateSpeed(state.speed || {});
+    }
+
+    function applyDevices(devices){
+      state.devices = normalizeDevices(devices);
+      if(!state.mapSelection && state.devices.length){
+        state.mapSelection = (state.devices.find((device)=>device.isGateway) || state.devices[0]).id;
+      }
+      updateOverview();
+      updateConsole();
+      updateSpeed(state.speed || {});
+      renderDevices();
+      renderMap();
+    }
+
+    function applyDeviceDetails(details){
+      state.selectedDetails = details || null;
+      if(details && details.device){
+        mergeDevice(details.device);
+      }
+      renderDevices();
+      renderMap();
+    }
+
+    function applyScanState(payload){
+      state.scan = payload;
+      const phase = String(payload.phase || payload.state || 'IDLE').toUpperCase();
+      if(byId('devMeta')){
+        byId('devMeta').textContent = `DISCOVERY ${phase}`;
+      }
+      if(window.cUi && cUi.scanMeta && cState.modalMode === 'scan'){
+        cUi.scanMeta.textContent = `DISCOVERY ${phase}`;
+        cUi.scanMeta.className = 'text-[10px] font-mono text-white/70';
+      }
+    }
+
+    function handleActionResult(payload){
+      const code = String(payload.code || '');
+      if(code === 'DEVICES_LIST' && Array.isArray(payload.devices)) applyDevices(payload.devices);
+      if(code === 'DEVICE_DETAILS' && payload.details) applyDeviceDetails(payload.details);
+      if(code === 'ROUTER_STATUS' || payload.gatewayIp != null || payload.ssid != null) applyRouterStatus(payload);
+      if(code === 'WIFI_ENVIRONMENT') applyWifi(payload);
+      if(code === 'SECURITY_SUMMARY') applySecurity(payload);
+      if(code === 'SCAN_STATE') applyScanState(payload);
+      if(code === 'SPEEDTEST_STATE') { state.speed = payload.state || payload; updateSpeed(payload); }
+      if(code === 'MAP_STATE' || code === 'TOPOLOGY_STATE') applyTopology(payload);
+      if(payload.downMbps != null || payload.deviceCount != null || payload.latencyMs != null) applyAnalytics(payload);
+      if(/^DEVICE_/.test(code) && code !== 'DEVICE_DETAILS'){
+        req('devices.list', {});
+        if(state.selectedDeviceId) req('device.details', {deviceId:state.selectedDeviceId});
+      }
+      if(/^ROUTER_/.test(code) && code !== 'ROUTER_STATUS'){
+        req('router.status', {});
+      }
+      if(code.indexOf('EXPORT') >= 0){
+        noteAction(payload.message || 'Report export requested.');
+      }else if(payload.message){
+        noteAction(payload.message, payload.status === 'NOT_SUPPORTED' || payload.status === 'NO_DATA');
+      }
+    }
+
+    function bindNativeUi(){
+      if(byId('searchInput')){
+        byId('searchInput').addEventListener('input', renderDevices);
+      }
+      if(byId('btnScanDevices')){
+        byId('btnScanDevices').addEventListener('click', ()=>{
+          req('scan.start', {});
+          req('devices.list', {});
+          req('map.state', {});
+        });
+      }
+      if(byId('btnExport')){
+        byId('btnExport').addEventListener('click', ()=>req('analytics.export', {}));
+      }
+      if(byId('drawerClose')){
+        byId('drawerClose').addEventListener('click', ()=>byId('drawer').classList.remove('open'));
+      }
+      document.querySelectorAll('#drawer .tab').forEach((tab)=>{
+        tab.addEventListener('click', ()=>{
+          const target = tab.getAttribute('data-tab');
+          document.querySelectorAll('#drawer .tab').forEach((item)=>item.classList.toggle('active', item === tab));
+          ['overview','radio','traffic','actions'].forEach((name)=>{
+            const pane = byId(`tab-${name}`);
+            if(pane) pane.style.display = name === target ? '' : 'none';
+          });
+        });
+      });
+      if(byId('actPing')){
+        byId('actPing').addEventListener('click', ()=>{
+          if(!state.selectedDeviceId) return;
+          req('device.ping', {deviceId:state.selectedDeviceId});
+        });
+      }
+      if(byId('actReport')){
+        byId('actReport').addEventListener('click', ()=>req('analytics.export', {}));
+      }
+      if(byId('actBlock')){
+        byId('actBlock').addEventListener('click', ()=>{
+          const device = findDevice(state.selectedDeviceId);
+          if(!device) return;
+          const support = deviceSupportFor(device, device.isBlocked ? 'device.unblock' : 'device.block', device.isBlocked ? 'Unblock device' : 'Block device');
+          if(!support.supported){
+            noteAction(support.reason, true);
+            return;
+          }
+          req('device.setBlocked', {deviceId:device.id, blocked:!device.isBlocked});
+        });
+      }
+      if(byId('actTrace')){
+        byId('actTrace').addEventListener('click', ()=>noteAction('Traceroute is unsupported on the shared bridge.', true));
+      }
+      if(byId('actLock')){
+        byId('actLock').addEventListener('click', ()=>noteAction('Target lock is visual-only in this restored theme.', true));
+      }
+      if(byId('map2-scan')){
+        byId('map2-scan').addEventListener('click', ()=>{
+          req('scan.start', {});
+          req('devices.list', {});
+          req('map.state', {});
+        });
+      }
+      if(byId('map2-refresh')){
+        byId('map2-refresh').addEventListener('click', ()=>{
+          req('map.refresh', {});
+          req('map.state', {});
+          req('devices.list', {});
+        });
+      }
+      if(byId('map2-filter')){
+        byId('map2-filter').addEventListener('input', ()=>{
+          state.mapFilter = byId('map2-filter').value || '';
+          renderMap();
+        });
+      }
+      if(byId('map2-clear')){
+        byId('map2-clear').addEventListener('click', ()=>{
+          byId('map2-filter').value = '';
+          state.mapFilter = '';
+          renderMap();
+        });
+      }
+      if(byId('map2-labels')){
+        byId('map2-labels').addEventListener('change', ()=>{
+          state.mapHideLabels = !byId('map2-labels').checked;
+          renderMap();
+        });
+      }
+      if(byId('map2-links')){
+        byId('map2-links').addEventListener('change', ()=>{
+          state.mapHideLinks = !byId('map2-links').checked;
+          renderMap();
+        });
+      }
+      if(byId('map2-focus-gw')){
+        byId('map2-focus-gw').addEventListener('click', ()=>{
+          state.mapSelection = null;
+          renderMap();
+        });
+      }
+      if(byId('map2-auto')){
+        const setAuto = ()=>{
+          if(state.mapAutoTimer){
+            clearInterval(state.mapAutoTimer);
+            state.mapAutoTimer = null;
+          }
+          if(byId('map2-auto').checked){
+            state.mapAutoTimer = setInterval(()=>{
+              if(document.visibilityState !== 'visible') return;
+              req('devices.list', {});
+              req('map.state', {});
+            }, 4000);
+          }
+        };
+        byId('map2-auto').addEventListener('change', setAuto);
+        setAuto();
+      }
+      if(byId('c-btnConnectBest')){
+        byId('c-btnConnectBest').disabled = true;
+        byId('c-btnConnectBest').title = 'Connecting to discovered APs is unsupported from the shared bridge.';
+        byId('c-btnConnectBest').style.opacity = '0.55';
+      }
+      if(byId('c-btnOpenLogs')){
+        byId('c-btnOpenLogs').title = 'Console logs remain local and can be opened normally.';
+      }
+    }
+
+    window.NERF.request = req;
+    window.NERF.onEvent = function(eventName, payload){
+      const p = payload || {};
+      if(eventName === 'action.result'){
+        handleActionResult(p);
+        return;
+      }
+      if(eventName === 'devices.update'){
+        if(Array.isArray(p.devices)) applyDevices(p.devices);
+        else if(p.device){ mergeDevice(p.device); renderDevices(); renderMap(); }
+        return;
+      }
+      if(eventName === 'analytics.snapshot'){ applyAnalytics(p); return; }
+      if(eventName === 'router.status'){ applyRouterStatus(p); return; }
+      if(eventName === 'wifi.environment'){ applyWifi(p); return; }
+      if(eventName === 'security.summary'){ applySecurity(p); return; }
+      if(eventName === 'scan.progress' || eventName === 'scan_progress' || eventName === 'scan.state'){ applyScanState(p); return; }
+      if(eventName === 'scan.results'){
+        if(Array.isArray(p.devices)) applyDevices(p.devices);
+        else if(p.device){ mergeDevice(p.device); renderDevices(); renderMap(); }
+        return;
+      }
+      if(eventName === 'scan_done'){
+        applyScanState(Object.assign({}, p, {phase:'COMPLETE'}));
+        req('devices.list', {});
+        req('map.state', {});
+        return;
+      }
+      if(eventName === 'scan_error'){
+        applyScanState(Object.assign({}, p, {phase:'ERROR'}));
+        noteAction(p.message || 'Scan failed.', true);
+        return;
+      }
+      if(eventName === 'speedtest.ui' || eventName === 'speedtest.result'){
+        state.speed = p;
+        updateSpeed(p);
+        return;
+      }
+      if(eventName === 'topology.state'){
+        applyTopology(p);
+      }
+    };
+
+    bindNativeUi();
+    noteAction('Native bridge linked.');
+    req('devices.list', {});
+    req('analytics.snapshot', {});
+    req('router.status', {});
+    req('wifi.environment', {});
+    req('security.summary', {});
+    req('scan.state', {});
+    req('speedtest.state', {});
+    req('map.state', {});
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState !== 'visible') return;
+      req('analytics.snapshot', {});
+      req('router.status', {});
+      req('devices.list', {});
+      req('map.state', {});
+    });
+  })();
+</script>
 </body>
 </html>
