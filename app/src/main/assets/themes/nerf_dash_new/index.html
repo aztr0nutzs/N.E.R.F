@@ -1639,6 +1639,27 @@ function hudIcon(kind){
 const AD = {th:[], lt:[], tr:[], up:[], max:60};
 function adPush(){
   const push=(arr,v)=>{arr.push(v);if(arr.length>AD.max)arr.shift();};
+  const nativeState = window.__NERF_NATIVE_STATE;
+  if(nativeState&&nativeState.ready){
+    const devices = Array.isArray(nativeState.devices) ? nativeState.devices : [];
+    const security = nativeState.security || {};
+    const activeDevices = devices.filter(d=>d.online!==false && d.isPaused!==true).length;
+    const threatIndex = Math.max(
+      0,
+      Math.min(
+        100,
+        toNum(security.riskDeviceCount, 0) * 24 +
+        toNum(security.unknownDeviceCount, 0) * 9 +
+        toNum(S.loss, 0) * 18
+      )
+    );
+    const uptime = devices.length ? (activeDevices / devices.length) * 100 : 0;
+    push(AD.th, Math.max(0, toNum(S.dl, 0)));
+    push(AD.lt, Math.max(0, toNum(S.lat, 0)));
+    push(AD.tr, threatIndex);
+    push(AD.up, uptime);
+    return;
+  }
   push(AD.th, S.dl + (Math.random()-0.5)*6);
   push(AD.lt, S.lat + (Math.random()-0.5)*8);
   push(AD.tr, S.thr*100 + (Math.random()-0.5)*4);
@@ -2795,25 +2816,84 @@ function initMap(){
   canvas.width=scr.clientWidth||360;
   canvas.height=scr.clientHeight||480;
 
-  // build topology
   const W=canvas.width,H=canvas.height;
-  mapNodes=[
-    {id:0,x:W/2,y:H/2,r:22,type:'gateway',lbl:'GATEWAY',col:'var(--c)',dev:null},
-  ];
-  DEVS.forEach((d,i)=>{
-    const a=(i/DEVS.length)*Math.PI*2-(Math.PI/2);
-    const dist=90+Math.random()*60;
-    mapNodes.push({
-      id:i+1,x:W/2+Math.cos(a)*dist,y:H/2+Math.sin(a)*dist,
-      r:d.status==='gateway'?20:12,type:d.status,
-      lbl:d.name.split('-')[0],col:d.status==='online'?'var(--gn)':d.status==='threat'?'var(--rd)':'rgba(2,254,255,.2)',
-      dev:d,vel:{x:(Math.random()-.5)*.2,y:(Math.random()-.5)*.2}
-    });
-    mapLinks.push({a:0,b:i+1,col:d.status==='threat'?'rgba(255,34,0,.4)':d.status==='online'?'rgba(2,254,255,.2)':'rgba(2,254,255,.07)'});
+  const nativeState = window.__NERF_NATIVE_STATE || {};
+  const nativeDevices = Array.isArray(nativeState.devices) ? nativeState.devices : [];
+  const topology = nativeState.topology || {};
+  const topoNodes = Array.isArray(topology.nodes) ? topology.nodes : [];
+  const topoLinks = Array.isArray(topology.links) ? topology.links : [];
+  mapNodes=[];
+  mapLinks=[];
+
+  const gatewayDevice = nativeDevices.find(d=>d.isGateway) || nativeDevices[0] || null;
+  mapNodes.push({
+    id:0,
+    nativeId:gatewayDevice&&gatewayDevice.id ? gatewayDevice.id : 'gateway',
+    x:W/2,
+    y:H/2,
+    r:22,
+    type:'gateway',
+    lbl:'GATEWAY',
+    col:'var(--c)',
+    dev:gatewayDevice
   });
 
-  // initial packet spawn
-  for(let i=0;i<8;i++) spawnPacket();
+  const deviceById = new Map(nativeDevices.map(d=>[String(d.id), d]));
+  const sourceNodes = topoNodes.length
+    ? topoNodes.filter(node=>String(node.id||'') !== String(gatewayDevice&&gatewayDevice.id||''))
+    : nativeDevices.filter(device=>String(device.id||'') !== String(gatewayDevice&&gatewayDevice.id||''));
+
+  sourceNodes.forEach((source,i)=>{
+    const device = topoNodes.length
+      ? (deviceById.get(String(source.id)) || nativeDevices.find(d=>String(d.ip||'') === String(source.ip||'')) || null)
+      : source;
+    const status = device
+      ? (device.isBlocked ? 'threat' : ((device.online===false && device.reachable===false) ? 'offline' : 'online'))
+      : (toNum(source.strength, 0) > 35 ? 'online' : 'offline');
+    const a=(i/Math.max(1,sourceNodes.length))*Math.PI*2-(Math.PI/2);
+    const dist=85+Math.max(0, (100-toNum(device&&device.quality, toNum(source.strength, 48))))*0.9;
+    const labelSource = device&&device.name ? device.name : (source.label || source.ip || `NODE ${i+1}`);
+    mapNodes.push({
+      id:i+1,
+      nativeId:String(device&&device.id ? device.id : (source.id || `node-${i+1}`)),
+      x:W/2+Math.cos(a)*dist,
+      y:H/2+Math.sin(a)*dist,
+      r:device&&device.isGateway ? 20 : 12,
+      type:status,
+      lbl:String(labelSource).split('-')[0],
+      col:status==='online' ? 'var(--gn)' : status==='threat' ? 'var(--rd)' : 'rgba(2,254,255,.2)',
+      dev:device,
+      vel:{x:(Math.random()-.5)*.2,y:(Math.random()-.5)*.2}
+    });
+  });
+
+  const nodeIndexes = new Map(mapNodes.map((node,idx)=>[String(node.nativeId), idx]));
+  if(topoLinks.length){
+    topoLinks.forEach(link=>{
+      const fromIndex = nodeIndexes.get(String(link.fromId));
+      const toIndex = nodeIndexes.get(String(link.toId));
+      if(fromIndex==null || toIndex==null || fromIndex===toIndex) return;
+      const quality = toNum(link.quality, 40);
+      mapLinks.push({
+        a:fromIndex,
+        b:toIndex,
+        col:quality >= 65 ? 'rgba(2,254,255,.2)' : quality >= 35 ? 'rgba(242,193,78,.22)' : 'rgba(255,34,0,.28)'
+      });
+    });
+  } else {
+    mapNodes.slice(1).forEach((node,idx)=>{
+      mapLinks.push({
+        a:0,
+        b:idx+1,
+        col:node.type==='threat' ? 'rgba(255,34,0,.4)' : node.type==='online' ? 'rgba(2,254,255,.2)' : 'rgba(2,254,255,.07)'
+      });
+    });
+  }
+
+  mapPackets=[];
+  if(mapLinks.length){
+    for(let i=0;i<8;i++) spawnPacket();
+  }
 
   // events
   canvas.onmousedown=canvas.ontouchstart=e=>{
@@ -2830,13 +2910,14 @@ function initMap(){
   canvas.onmouseup=canvas.ontouchend=()=>mapDrag.on=false;
   canvas.onwheel=e=>{e.preventDefault();mapZoom=Math.max(.4,Math.min(3,mapZoom-e.deltaY*.002));};
 
-  document.getElementById('minfo').innerHTML=`NODES: ${mapNodes.length} | LINKS: ${mapLinks.length}<br>MODE: PASSIVE SCAN<br>28.5Â°N / 81.3Â°W`;
+  document.getElementById('minfo').innerHTML=`NODES: ${mapNodes.length} | LINKS: ${mapLinks.length}<br>MODE: ${topoLinks.length?'LIVE TOPOLOGY':'PASSIVE SCAN'}<br>28.5Â°N / 81.3Â°W`;
 
   if(S.mapRAF){cancelAnimationFrame(S.mapRAF);S.mapRAF=null;}
   mapLoop();
 }
 
 function spawnPacket(){
+  if(!mapLinks.length) return;
   const li=mapLinks[Math.floor(Math.random()*mapLinks.length)];
   const rev=Math.random()>.5;
   mapPackets.push({link:li,t:Math.random(),spd:.008+Math.random()*.012,rev,col:li.col.includes('255,34')?'rgba(255,107,0,.9)':'rgba(2,254,255,.9)'});
@@ -2973,14 +3054,26 @@ function caSwitch(tab){
 }
 
 function initAnalytics(){
-  // seed data
-  for(let i=0;i<AD.max;i++) adPush();
+  if(!AD.th.length){
+    for(let i=0;i<AD.max;i++) adPush();
+  }
   if(S.caTab==='an') setTimeout(renderAllCharts,50);
   if(S.anRAF){cancelAnimationFrame(S.anRAF);S.anRAF=null;}
   anLoop();
   // seed some log entries
   if(document.getElementById('conlog').children.length===0){
-    const boot=[
+    const nativeState = window.__NERF_NATIVE_STATE || null;
+    const riskCount = nativeState ? toNum(nativeState.security&&nativeState.security.riskDeviceCount, 0) : 1;
+    const deviceCount = nativeState && Array.isArray(nativeState.devices) ? nativeState.devices.length : DEVS.length;
+    const boot=(nativeState&&nativeState.ready)?[
+      ['JARVIS v4.2 NETWORK INTELLIGENCE SYSTEM','sys'],
+      ['Native bridge connected. Initializing live telemetry...','sys'],
+      [nativeState.router&&nativeState.router.message ? nativeState.router.message : 'Router status synchronized from backend.','suc'],
+      [nativeState.analytics&&nativeState.analytics.message ? nativeState.analytics.message : 'Analytics snapshot loaded.','suc'],
+      [`Device scan cache: ${deviceCount} nodes detected, ${riskCount} flagged`,riskCount>0?'wrn':'suc'],
+      [nativeState.security&&nativeState.security.message ? nativeState.security.message : 'Security summary synchronized.','suc'],
+      ['All systems nominal. Standing by.','suc'],
+    ]:[
       ['JARVIS v4.2 NETWORK INTELLIGENCE SYSTEM','sys'],
       ['Initializing subsystems...','sys'],
       ['Firewall: ARMED (4,821 rules active)','suc'],
@@ -3266,6 +3359,7 @@ window.addEventListener('visibilitychange',()=>{
   
   const native = window.__NERF_NATIVE_STATE = {
     ready:false,
+    tickTimer:null,
     scan:{},
     speedtest:{},
     devices:[],
@@ -3332,6 +3426,37 @@ window.addEventListener('visibilitychange',()=>{
     });
     return out;
   }
+  function deviceKind(device){
+    const type = String(device&&device.deviceType || '').toLowerCase();
+    if(type.includes('phone') || type.includes('tablet')) return 'phone';
+    if(type.includes('camera')) return 'camera';
+    if(type.includes('tv') || type.includes('display')) return 'display';
+    if(type.includes('server') || type.includes('nas')) return 'server';
+    if(type.includes('router') || device&&device.isGateway) return 'router';
+    return 'router';
+  }
+  function deviceConnType(device){
+    const kind = deviceKind(device);
+    if(kind === 'phone') return 'mobile';
+    if(kind === 'camera' || kind === 'display' || kind === 'router') return 'iot';
+    return 'pc';
+  }
+  function deviceStatus(device){
+    if(!device) return 'offline';
+    if(device.isBlocked || toNum(device.riskScore, 0) >= 60) return 'threat';
+    if(device.online===false && device.reachable===false) return 'offline';
+    return 'online';
+  }
+  function deviceLastSeenLabel(ts){
+    const epoch = Number(ts || 0);
+    if(!epoch) return 'now';
+    const sec = Math.max(0, Math.floor((Date.now()-epoch)/1000));
+    if(sec < 10) return 'now';
+    if(sec < 60) return sec+'s ago';
+    if(sec < 3600) return Math.floor(sec/60)+'m ago';
+    if(sec < 86400) return Math.floor(sec/3600)+'h ago';
+    return Math.floor(sec/86400)+'d ago';
+  }
   function nativeDeviceByThemeId(id){
     return Array.isArray(native.devices) ? native.devices.find((_, idx) => idx === id) || null : null;
   }
@@ -3381,35 +3506,47 @@ window.addEventListener('visibilitychange',()=>{
         id: idx,
         nativeId: d.id || String(idx),
         name: d.name || d.hostname || d.ip || 'Unknown Device',
-        kind: (d.deviceType || '').toLowerCase().includes('phone') ? 'phone' : ((d.deviceType || '').toLowerCase().includes('camera') ? 'camera' : 'router'),
+        kind: deviceKind(d),
         ip: d.ip || '-',
         mac: d.mac || '-',
         vendor: d.vendor || '-',
-        status: d.isBlocked ? 'threat' : ((d.latencyMs == null && !d.online) ? 'offline' : 'online'),
-        last: 'now',
+        status: deviceStatus(d),
+        last: deviceLastSeenLabel(d.lastSeen),
         q: toNum(d.quality, 0),
         lat: d.latencyMs == null ? null : toNum(d.latencyMs, 0),
         blk: !!d.isBlocked,
         paused: !!d.isPaused,
-        up: toNum(d.quality, 0),
+        up: Math.max(0, Math.min(100, toNum(d.quality, 0))),
+        rate: Math.max(0, toNum(d.downMbps, 0) + toNum(d.upMbps, 0)),
+        connType: deviceConnType(d),
         actionSupport: normalizeActionSupportMap(d.actionSupport)
       }));
     }
     applyDrawerActionState();
+    if (window.S?.devOpen >= 0 && window.DEVS?.[window.S.devOpen] && document.getElementById('dvd')?.classList.contains('open') && typeof dvOpen === 'function') {
+      dvOpen(window.S.devOpen);
+    }
     if (typeof buildDv === 'function' && window.S?.screen==='dv') buildDv();
     if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
+    if (typeof initMap === 'function' && window.S?.screen==='mp') initMap();
   }
 
   function applySpeedtest(s){
     native.speedtest = s || {};
+    const downMbps = toNum(s.downMbps ?? s.downloadMbps, 0);
+    const upMbps = toNum(s.upMbps ?? s.uploadMbps, 0);
+    const pingMs = toNum(s.pingMs ?? s.latencyMs, 0);
+    const jitterMs = toNum(s.jitterMs, 0);
+    const lossPct = toNum(s.packetLossPct, 0);
+    const phase = String(s.phase || (s.running ? 'RUNNING' : 'IDLE')).toUpperCase();
     if (window.S) {
-      S.stRunning = !!s.running;
-      S.stDl = toNum(s.downMbps, 0);
-      S.stUl = toNum(s.upMbps, 0);
-      S.stPing = toNum(s.pingMs ?? s.latencyMs, 0);
-      S.stJit = toNum(s.jitterMs, 0);
-      S.stLoss = toNum(s.packetLossPct, 0);
-      S.stPhase = String(s.phase || 'idle').toLowerCase();
+      S.stRunning = s.running===true || ['RUNNING','STARTED','PING','DOWNLOAD','UPLOAD'].includes(phase);
+      S.stDl = downMbps;
+      S.stUl = upMbps;
+      S.stPing = pingMs;
+      S.stJit = jitterMs;
+      S.stLoss = lossPct;
+      S.stPhase = phase.toLowerCase();
       S.stTargetMode = String(s.targetMode || 'PUBLIC_INTERNET');
       S.stTargetLabel = S.stTargetMode === 'PRIVATE_LOCAL' ? 'PRIVATE/LAN' : 'PUBLIC INTERNET';
       S.dl = S.stDl || S.dl;
@@ -3418,7 +3555,6 @@ window.addEventListener('visibilitychange',()=>{
       S.loss = Number((S.stLoss || 0) / 100);
     }
     if (typeof stPhaseLbl === 'function') {
-      const phase = String(s.phase || 'IDLE').toUpperCase();
       const mode = String(s.targetMode || 'PUBLIC_INTERNET') === 'PRIVATE_LOCAL' ? 'PRIVATE/LAN' : 'PUBLIC INTERNET';
       stPhaseLbl(phase + ' // ' + mode);
     }
@@ -3436,8 +3572,8 @@ window.addEventListener('visibilitychange',()=>{
     if (router.dnsShield && typeof router.dnsShield.enabled === 'boolean') S.dnsShield = router.dnsShield.enabled;
     S.publicIp = router.publicIp || 'UNAVAILABLE';
     S.scanBusy = String(native.scan.phase || '').toUpperCase() === 'RUNNING';
-    S.scanResultsEmpty = devices.length === 0;
-    S.sameChannelNeighbors = Number(wifi.connectedDeviceCount || 0);
+    S.scanResultsEmpty = devices.filter(d=>d.online!==false && d.isPaused!==true).length === 0;
+    S.sameChannelNeighbors = Number(wifi.connectedDeviceCount || wifi.weakSignalCount || 0);
     S.threatsBlockedToday = Number(security.riskDeviceCount || 0);
     S.knownClients = devices.filter(d=>!(d.riskScore > 0) && d.online !== false && !d.isPaused).length;
     S.unknownClients = devices.filter(d=>(d.riskScore > 0 || !d.vendor || d.vendor === 'unknown') && d.online !== false && !d.isPaused).length;
@@ -3445,7 +3581,19 @@ window.addEventListener('visibilitychange',()=>{
     if (analytics.upMbps != null) S.ul = Number(analytics.upMbps);
     if (analytics.latencyMs != null) S.lat = Math.round(Number(analytics.latencyMs));
     if (analytics.packetLossPct != null) S.loss = Number(analytics.packetLossPct) / 100;
-    if (typeof S.thr !== 'number') S.thr = 0;
+    if (analytics.lastScanEpochMs != null) S.lastScanAt = Number(analytics.lastScanEpochMs);
+    if (!S.lastScanAt && native.scan.completedAt != null) S.lastScanAt = Number(native.scan.completedAt);
+    if (router.accessMode || router.linkSpeedMbps) {
+      const linkLabel = router.linkSpeedMbps ? `${router.linkSpeedMbps} Mbps` : null;
+      S.ispType = [router.accessMode, linkLabel].filter(Boolean).join(' / ') || 'Unavailable';
+    }
+    const threatPressure = (
+      Number(security.riskDeviceCount || 0) * 0.24 +
+      Number(security.unknownDeviceCount || 0) * 0.08 +
+      Number(analytics.packetLossPct || 0) / 100 +
+      Number(analytics.latencyMs || 0) / 400
+    );
+    S.thr = Math.max(0, Math.min(1, threatPressure));
   }
 
   window.ensureOverviewTelemetry = function(){
@@ -3492,6 +3640,8 @@ window.addEventListener('visibilitychange',()=>{
   window.tickData = function(){
     if (!native.ready && typeof origTickData === 'function') return origTickData();
     syncOverviewFromNative();
+    if (typeof ovPushHistory === 'function') ovPushHistory();
+    if (typeof adPush === 'function') adPush();
     if (typeof updateTopBar === 'function') updateTopBar();
   };
 
@@ -3584,7 +3734,13 @@ window.addEventListener('visibilitychange',()=>{
     }
   };
   window.ja = function(action){
-    req('assistant.quickAction', {action});
+    if (action === 'alerts') {
+      req('assistant.command', {command:'show alerts'});
+    } else if (action === 'optimize') {
+      req('assistant.command', {command:'optimize network'});
+    } else {
+      req('assistant.quickAction', {action});
+    }
     if (action === 'speedtest' && typeof sw === 'function') sw('st', 1);
     if (action === 'scan' && typeof sw === 'function') sw('dv', 2);
   };
@@ -3652,14 +3808,23 @@ window.addEventListener('visibilitychange',()=>{
   window.NERF = window.NERF || {};
   window.NERF.onEvent = function(name, payload){
     const p = payload || {};
+    if (name === 'bridge.ready') {
+      native.ready = true;
+      return;
+    }
     if (name === 'action.result') {
       if (p.code === 'DEVICES_LIST' && Array.isArray(p.devices)) applyDevices(p.devices);
+      if (p.code === 'SCAN_STATE') native.scan = {...native.scan, ...p};
       if (p.code === 'SPEEDTEST_STATE') applySpeedtest(p.state || p);
       if (p.code === 'SPEEDTEST_HISTORY' && Array.isArray(p.history)) native.speedtest.history = p.history;
+      if (p.code === 'ANALYTICS_SNAPSHOT') native.analytics = p;
       if (p.code === 'ROUTER_STATUS') native.router = p;
+      if (p.code === 'WIFI_ENVIRONMENT') native.wifi = p;
+      if (p.code === 'SECURITY_SUMMARY') native.security = p;
       if (p.code === 'MAP_STATE') native.topology = p;
       if (/^ROUTER_/.test(String(p.code || '')) && p.code !== 'ROUTER_STATUS') req('router.status', {});
       if (/^DEVICE_/.test(String(p.code || '')) && p.code !== 'DEVICE_DETAILS') req('devices.list', {});
+      if (p.code === 'MAP_STATE' && typeof initMap === 'function' && window.S?.screen==='mp') initMap();
       if ((p.status === 'NOT_SUPPORTED' || p.code === 'NOT_SUPPORTED') && window.addLog) addLog(p.errorReason || p.message || 'Action not supported by backend','wrn');
       else if (p.message && window.addLog && !['DEVICES_LIST','SPEEDTEST_STATE','SPEEDTEST_HISTORY','ROUTER_STATUS','MAP_STATE'].includes(p.code)) addLog(p.message, p.ok === false ? 'wrn' : 'suc');
       syncOverviewFromNative();
@@ -3669,7 +3834,10 @@ window.addEventListener('visibilitychange',()=>{
     }
     if (name === 'scan.state' || name === 'scan.progress' || name === 'scan.results') {
       native.scan = {...native.scan, ...p};
-      if (String(p.phase || '').toUpperCase() === 'COMPLETE') S.lastScanAt = Date.now();
+      if (String(p.phase || '').toUpperCase() === 'COMPLETE') {
+        S.lastScanAt = Date.now();
+        req('map.state', {});
+      }
       req('devices.list', {});
       if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
       return;
@@ -3677,7 +3845,7 @@ window.addEventListener('visibilitychange',()=>{
     if (name === 'devices.update') { applyDevices(p.devices || []); applyDrawerActionState(); syncConsoleActionState(); return; }
     if (name === 'speedtest.ui') { applySpeedtest(p); return; }
     if (name === 'speedtest.result') { applySpeedtest(p); return; }
-    if (name === 'topology.state') { native.topology = p; }
+    if (name === 'topology.state') { native.topology = p; if (typeof initMap === 'function' && window.S?.screen==='mp') initMap(); }
     if (name === 'analytics.snapshot') { native.analytics = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
     if (name === 'router.status') { native.router = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
     if (name === 'wifi.environment') { native.wifi = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
@@ -3693,9 +3861,17 @@ window.addEventListener('visibilitychange',()=>{
 
   const oldBoot = window.boot;
   window.boot = function(){
-    native.ready = true;
+    native.ready = !!(window.NERF_NATIVE && window.NERF_NATIVE.request);
     if (typeof oldBoot === 'function') oldBoot();
+    if (native.ready && !native.tickTimer) {
+      native.tickTimer = setInterval(()=>{
+        if (document.visibilityState === 'hidden') return;
+        if (typeof window.tickData === 'function') window.tickData();
+      }, 1200);
+    }
+    if (native.ready && typeof window.tickData === 'function') window.tickData();
     syncConsoleActionState();
+    if (!native.ready) return;
     req('devices.list',{});
     req('scan.state',{});
     req('speedtest.state',{});
