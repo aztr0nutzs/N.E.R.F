@@ -1,6 +1,8 @@
 package com.nerf.netx.ui.screens
 
 import android.annotation.SuppressLint
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -33,7 +35,12 @@ fun HtmlThemeHost(
           settings.domStorageEnabled = true
           settings.allowFileAccess = true
           settings.allowContentAccess = true
+          settings.allowFileAccessFromFileURLs = true
+          settings.allowUniversalAccessFromFileURLs = true
+          settings.mediaPlaybackRequiresUserGesture = false
+          settings.cacheMode = WebSettings.LOAD_NO_CACHE
           settings.loadsImagesAutomatically = true
+          webChromeClient = WebChromeClient()
           webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, loadedUrl: String?) {
               super.onPageFinished(view, loadedUrl)
@@ -49,6 +56,16 @@ fun HtmlThemeHost(
           addJavascriptInterface(bridge.attach(this, themeId), "NERF_NATIVE")
           loadUrl(url)
         }
+      },
+      update = { view ->
+        if (view.url != url) {
+          view.loadUrl(url)
+        }
+      },
+      onRelease = { view ->
+        view.stopLoading()
+        view.removeJavascriptInterface("NERF_NATIVE")
+        view.destroy()
       }
     )
   }

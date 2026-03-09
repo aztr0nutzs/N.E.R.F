@@ -95,6 +95,7 @@ class NerfWebBridge(private val services: AppServices) {
   fun onPageFinished() {
     pageReady = true
     injectBootstrap()
+    injectThemeRuntimeAdapter()
     if (!started) {
       started = true
       startEventStreams()
@@ -296,6 +297,11 @@ class NerfWebBridge(private val services: AppServices) {
         bridge.flush();
       })();
     """.trimIndent()
+    webView?.post { webView?.evaluateJavascript(js, null) }
+  }
+
+  private fun injectThemeRuntimeAdapter() {
+    val js = HtmlThemeRuntimeAdapter.scriptFor(currentThemeId) ?: return
     webView?.post { webView?.evaluateJavascript(js, null) }
   }
 

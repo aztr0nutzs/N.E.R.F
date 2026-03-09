@@ -31,15 +31,20 @@ fun AppRoot(
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
+    val showBottomBar = route != Routes.PREVIEW && route != Routes.HTML_DASHBOARD
 
     Scaffold(
-      bottomBar = { BottomNav(currentRoute = route, onNavigate = { r ->
-        nav.navigate(r) {
-          popUpTo(nav.graph.startDestinationId) { saveState = true }
-          launchSingleTop = true
-          restoreState = true
+      bottomBar = {
+        if (showBottomBar) {
+          BottomNav(currentRoute = route, onNavigate = { r ->
+            nav.navigate(r) {
+              popUpTo(nav.graph.startDestinationId) { saveState = true }
+              launchSingleTop = true
+              restoreState = true
+            }
+          })
         }
-      }) }
+      }
     ) { padding ->
       NavHost(navController = nav, startDestination = Routes.SPEED, modifier = Modifier.padding(padding)) {
         composable(Routes.SPEED) { SpeedtestScreen(services.speedtest) }
@@ -85,6 +90,7 @@ fun AppRoot(
             availableThemes = themeRepository.availableThemes,
             onThemeSelected = themeRepository::set,
             htmlAssetUrlProvider = themeRepository::htmlAssetUrl,
+            services = services,
             credentialsStore = credentialsStore,
             onOpenAssistant = {
               nav.navigate(Routes.ASSISTANT) {

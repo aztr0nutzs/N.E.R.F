@@ -2,8 +2,6 @@ package com.nerf.netx.ui.screens
 
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
-import android.webkit.WebSettings
-import android.webkit.WebView
 import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,6 +45,7 @@ import com.nerf.netx.data.RouterCredentialsStore
 import com.nerf.netx.domain.ActionSupportCatalog
 import com.nerf.netx.domain.ActionSupportState
 import com.nerf.netx.domain.AppActionId
+import com.nerf.netx.domain.AppServices
 import com.nerf.netx.domain.RouterFeatureState
 import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ServiceStatus
@@ -69,6 +68,7 @@ fun SettingsScreen(
   availableThemes: List<ThemeId>,
   onThemeSelected: (ThemeId) -> Unit,
   htmlAssetUrlProvider: (ThemeId) -> String?,
+  services: AppServices,
   credentialsStore: RouterCredentialsStore,
   onOpenAssistant: () -> Unit,
   onOpenDoctor: () -> Unit,
@@ -100,6 +100,9 @@ fun SettingsScreen(
 
   val appliedTheme = themeId
   val previewUrl = htmlAssetUrlProvider(previewTheme)
+  val allowedMainUrls = remember(availableThemes) {
+    availableThemes.mapNotNull(htmlAssetUrlProvider).toSet()
+  }
   val palette = themePalette(previewTheme)
   val themeDescriptions = remember {
     mapOf(
@@ -269,20 +272,14 @@ fun SettingsScreen(
           )
 
           if (previewUrl != null) {
-            AndroidView(
+            HtmlThemeHost(
               modifier = Modifier
                 .fillMaxWidth()
                 .height(250.dp),
-              factory = { ctx ->
-                WebView(ctx).apply {
-                  settings.javaScriptEnabled = true
-                  settings.domStorageEnabled = true
-                  settings.allowFileAccess = true
-                  settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                  loadUrl(previewUrl)
-                }
-              },
-              update = { it.loadUrl(previewUrl) }
+              themeId = previewTheme,
+              url = previewUrl,
+              allowedMainUrls = allowedMainUrls,
+              services = services
             )
           } else {
             Text("Preview unavailable: theme entry HTML not found.", style = MaterialTheme.typography.bodySmall)

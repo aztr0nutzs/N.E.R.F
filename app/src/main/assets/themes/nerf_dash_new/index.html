@@ -3209,6 +3209,717 @@ function boot(){
   updateTopBar();
 }
 
+const nativeDash = (() => {
+  const state = {
+    bridgeReady:false,
+    devices:[],
+    analytics:null,
+    router:null,
+    wifi:null,
+    security:null,
+    speed:null,
+    scan:null,
+    topology:null,
+  };
+
+  function enabled(){
+    return !!(window.NERF_NATIVE && typeof window.NERF_NATIVE.request === 'function');
+  }
+
+  function req(action, payload){
+    try{
+      if(window.NERF && typeof window.NERF.request === 'function'){
+        return window.NERF.request(action, payload || {});
+      }
+      if(enabled()){
+        return window.NERF_NATIVE.request(action, JSON.stringify(payload || {}));
+      }
+    }catch(err){
+      note(`Bridge error for ${action}: ${(err && err.message) || err}`,'err');
+    }
+    return null;
+  }
+
+  function note(message, type){
+    if(!message) return;
+    if(typeof addLog === 'function') addLog(message, type || 'inf');
+  }
+
+  function supportOf(map, key, label){
+    const entry = map && map[key];
+    if(entry){
+      return {
+        supported: entry.supported !== false,
+        reason: entry.reason || `${label} is ${entry.supported === false ? 'unavailable' : 'available'}.`,
+        label: entry.label || label,
+      };
+    }
+    return {supported:false, reason:`${label} is unsupported on the current backend/router.`, label};
+  }
+
+  function deviceSupport(device, key, label){
+    return supportOf(device && device.actionSupport, key, label);
+  }
+
+  function deviceKind(device){
+    const type = String(device.deviceType || '').toLowerCase();
+    if(type.includes('phone') || type.includes('mobile') || type.includes('tablet')) return 'phone';
+    if(type.includes('camera')) return 'camera';
+    if(type.includes('router') || type.includes('gateway')) return 'router';
+    if(type.includes('tv') || type.includes('display') || type.includes('speaker')) return 'display';
+    if(type.includes('server') || type.includes('nas') || type.includes('printer') || type.includes('iot')) return 'server';
+    return 'laptop';
+  }
+
+  function deviceStatus(device){
+    const risk = Number(device.riskScore || 0);
+    if(risk >= 60) return 'threat';
+    if(device.online === false || device.reachable === false) return 'offline';
+    return 'online';
+  }
+
+  function connType(kind){
+    if(kind === 'phone') return 'mobile';
+    if(kind === 'camera' || kind === 'display' || kind === 'router') return 'iot';
+    return 'pc';
+  }
+
+  function fmtAgo(epochMs){
+    if(!epochMs) return 'now';
+    const delta = Math.max(0, Date.now() - Number(epochMs));
+    if(delta < 60000) return 'now';
+    if(delta < 3600000) return `${Math.round(delta/60000)}m ago`;
+    return `${Math.round(delta/3600000)}h ago`;
+  }
+
+  function displayName(device){
+    return device.nickname || device.name || device.hostname || 'Unknown Device';
+  }
+
+  function mapDevice(device, index){
+    const kind = deviceKind(device);
+    const status = deviceStatus(device);
+    const quality = Number(device.quality || 0);
+    const blocked = !!device.isBlocked;
+    const paused = !!device.isPaused;
+    return {
+      id:index,
+      nativeId:String(device.id == null ? index : device.id),
+      name:displayName(device),
+      kind,
+      ip:device.ip || '--',
+      mac:device.mac || '--',
+      vendor:device.vendor || 'Unknown',
+      status,
+      last:fmtAgo(device.lastSeen),
+      q:quality,
+      lat:device.latencyMs == null ? null : Number(device.latencyMs),
+      blk:blocked,
+      paused,
+      up:status === 'offline' ? 0 : Math.max(0, Math.min(100, 100 - Number(device.riskScore || 0))),
+      rate:Number(device.downMbps || device.upMbps || 0),
+      connType:connType(kind),
+      actionSupport:device.actionSupport || {},
+      details:null,
+      riskScore:Number(device.riskScore || 0),
+      signalStrength:device.signalStrength == null ? null : Number(device.signalStrength),
+      lastSeen:device.lastSeen == null ? null : Number(device.lastSeen),
+      online:device.online !== false,
+      reachable:device.reachable !== false,
+      downMbps:Number(device.downMbps || 0),
+      upMbps:Number(device.upMbps || 0),
+    };
+  }
+
+  function normalizeDevices(devices){
+    return (devices || []).map((device, index)=>mapDevice(device, index));
+  }
+
+  function replaceDevices(devices){
+    state.devices = normalizeDevices(devices);
+    DEVS.splice(0, DEVS.length, ...state.devices);
+    syncDerived();
+  }
+
+  function mergeDevice(device){
+    const nativeId = String(device && device.id != null ? device.id : '');
+    if(!nativeId) return;
+    const normalized = mapDevice(device, 0);
+    const existingIndex = DEVS.findIndex((item)=>item.nativeId === nativeId);
+    if(existingIndex >= 0){
+      DEVS[existingIndex] = Object.assign({}, DEVS[existingIndex], normalized, {id:existingIndex});
+    }else{
+      DEVS.push(Object.assign({}, normalized, {id:DEVS.length}));
+    }
+    state.devices = DEVS.slice();
+    syncDerived();
+  }
+
+  function mergeDetails(details){
+    if(!details || !details.device) return;
+    mergeDevice(details.device);
+    const nativeId = String(details.device.id == null ? '' : details.device.id);
+    const device = DEVS.find((item)=>item.nativeId === nativeId);
+    if(device){
+      device.details = details;
+      if(details.pingMs != null) device.lat = Number(details.pingMs);
+      if(details.device){
+        device.actionSupport = details.device.actionSupport || device.actionSupport;
+      }
+    }
+  }
+
+  function syncDerived(){
+    ensureOverviewTelemetry();
+    const analytics = state.analytics || {};
+    const router = state.router || {};
+    const wifi = state.wifi || {};
+    const security = state.security || {};
+    const scan = state.scan || {};
+    const speed = state.speed || {};
+
+    if(analytics.downMbps != null) S.dl = Number(analytics.downMbps);
+    if(analytics.upMbps != null) S.ul = Number(analytics.upMbps);
+    if(analytics.latencyMs != null) S.lat = Math.round(Number(analytics.latencyMs));
+    if(analytics.packetLossPct != null) S.loss = Number(analytics.packetLossPct);
+    if(speed.downMbps != null || speed.downloadMbps != null) S.stDl = Number(speed.downMbps != null ? speed.downMbps : speed.downloadMbps);
+    if(speed.upMbps != null || speed.uploadMbps != null) S.stUl = Number(speed.upMbps != null ? speed.upMbps : speed.uploadMbps);
+    if(speed.pingMs != null || speed.latencyMs != null) S.stPing = Number(speed.pingMs != null ? speed.pingMs : speed.latencyMs);
+    if(speed.jitterMs != null) S.stJit = Number(speed.jitterMs);
+    if(speed.packetLossPct != null) S.stLoss = Number(speed.packetLossPct);
+    if(analytics.lastScanEpochMs != null) S.lastScanAt = Number(analytics.lastScanEpochMs);
+
+    S.stRunning = !!speed.running;
+    S.stPhase = String(speed.phase || scan.phase || 'IDLE').toLowerCase();
+    S.scanBusy = String(scan.phase || '').toUpperCase() === 'RUNNING';
+    S.scanResultsEmpty = DEVS.filter((device)=>device.status !== 'offline' && !device.paused).length === 0;
+
+    S.publicIp = router.publicIp || router.gatewayIp || S.publicIp;
+    S.ispType = router.accessMode || S.ispType;
+    S.guestWifi = !!(router.guestWifi && router.guestWifi.enabled);
+    S.dnsShield = !!(router.dnsShield && router.dnsShield.enabled);
+    S.channel = router.linkSpeedMbps != null && Number(router.linkSpeedMbps) < 150 ? 6 : 149;
+    S.sameChannelNeighbors = wifi.connectedDeviceCount != null
+      ? Math.max(0, Math.min(10, Number(wifi.connectedDeviceCount)))
+      : Math.max(0, Math.min(10, Math.round(Number(wifi.congestionScore || 0) / 10)));
+
+    const unknownCount = security.unknownDeviceCount != null
+      ? Number(security.unknownDeviceCount)
+      : DEVS.filter((device)=>device.vendor === 'Unknown' || device.status === 'threat').length;
+    const riskCount = security.riskDeviceCount != null
+      ? Number(security.riskDeviceCount)
+      : DEVS.filter((device)=>device.status === 'threat' || Number(device.riskScore || 0) >= 40).length;
+    S.knownClients = Math.max(0, DEVS.filter((device)=>device.status !== 'offline' && device.status !== 'threat' && !device.paused).length);
+    S.unknownClients = Math.max(0, unknownCount);
+    S.threatsBlockedToday = Math.max(0, riskCount);
+    S.thr = Math.max(0, Math.min(1, riskCount / Math.max(1, DEVS.length)));
+
+    DEVS.forEach((device)=>{
+      device.blk = !!device.blk;
+      device.paused = !!device.paused;
+      if(device.rate == null) device.rate = Number(device.downMbps || device.upMbps || 0);
+      if(device.status === 'offline' || device.paused) device.rate = 0;
+      device.last = fmtAgo(device.lastSeen);
+    });
+  }
+
+  function refreshVisible(){
+    updateTopBar();
+    if(S.screen === 'ov' && document.getElementById('s-ov')) buildOv();
+    if(S.screen === 'st' && document.getElementById('s-st')) syncStHud();
+    if(S.screen === 'dv' && document.getElementById('dvlist')) dvRenderList();
+    if(S.screen === 'mp' && document.getElementById('map-canvas')) initMap();
+    if(S.screen === 'co' && S.caTab === 'an') renderAllCharts();
+  }
+
+  function speedPayload(payload){
+    if(payload && payload.state && typeof payload.state === 'object') return payload.state;
+    return payload || {};
+  }
+
+  function applyAnalytics(payload){
+    state.analytics = payload || {};
+    syncDerived();
+    refreshVisible();
+  }
+
+  function applyRouter(payload){
+    state.router = payload || {};
+    syncDerived();
+    refreshVisible();
+  }
+
+  function applyWifi(payload){
+    state.wifi = payload || {};
+    syncDerived();
+    refreshVisible();
+  }
+
+  function applySecurity(payload){
+    state.security = payload || {};
+    syncDerived();
+    refreshVisible();
+  }
+
+  function applyScan(payload){
+    state.scan = payload || {};
+    syncDerived();
+    refreshVisible();
+  }
+
+  function applySpeed(payload){
+    state.speed = speedPayload(payload);
+    syncDerived();
+    refreshVisible();
+  }
+
+  function applyTopology(payload){
+    state.topology = payload || {};
+    refreshVisible();
+  }
+
+  function refreshAll(){
+    req('devices.list', {});
+    req('analytics.snapshot', {});
+    req('router.status', {});
+    req('wifi.environment', {});
+    req('security.summary', {});
+    req('scan.state', {});
+    req('speedtest.state', {});
+    req('map.state', {});
+  }
+
+  function handleActionResult(payload){
+    const data = payload || {};
+    const code = String(data.code || '');
+    if(code === 'DEVICES_LIST' && Array.isArray(data.devices)) replaceDevices(data.devices);
+    if(code === 'DEVICE_DETAILS' && data.details) mergeDetails(data.details);
+    if(code === 'ROUTER_STATUS' || data.gatewayIp != null || data.ssid != null) applyRouter(data);
+    if(code === 'WIFI_ENVIRONMENT') applyWifi(data);
+    if(code === 'SECURITY_SUMMARY') applySecurity(data);
+    if(code === 'SCAN_STATE') applyScan(data);
+    if(code === 'SPEEDTEST_STATE') applySpeed(data);
+    if(code === 'MAP_STATE' || code === 'TOPOLOGY_STATE') applyTopology(data);
+    if(data.downMbps != null || data.deviceCount != null || data.latencyMs != null) applyAnalytics(data);
+
+    if(/^DEVICE_/.test(code) && code !== 'DEVICE_DETAILS'){
+      req('devices.list', {});
+      if(S.devOpen >= 0 && DEVS[S.devOpen]) req('device.details', {deviceId:DEVS[S.devOpen].nativeId});
+    }
+    if(/^ROUTER_/.test(code) && code !== 'ROUTER_STATUS'){
+      req('router.status', {});
+      req('wifi.environment', {});
+      req('security.summary', {});
+    }
+    if(code.startsWith('SPEEDTEST_') && code !== 'SPEEDTEST_STATE'){
+      req('speedtest.state', {});
+    }
+    if(code.startsWith('SCAN_') && code !== 'SCAN_STATE'){
+      req('scan.state', {});
+    }
+
+    const type = data.ok === false
+      ? (data.status === 'NOT_SUPPORTED' || data.status === 'NO_DATA' ? 'wrn' : 'err')
+      : 'suc';
+    if(data.message) note(data.message, type);
+    if(data.errorReason && data.ok === false) note(data.errorReason, 'wrn');
+  }
+
+  function handleEvent(eventName, payload){
+    const data = payload || {};
+    if(eventName === 'bridge.ready'){
+      state.bridgeReady = true;
+      refreshAll();
+      note('Native bridge linked. Live telemetry mode active.','suc');
+      return;
+    }
+    if(eventName === 'action.result'){
+      handleActionResult(data);
+      return;
+    }
+    if(eventName === 'devices.update'){
+      if(Array.isArray(data.devices)) replaceDevices(data.devices);
+      else if(data.device) mergeDevice(data.device);
+      return;
+    }
+    if(eventName === 'analytics.snapshot'){ applyAnalytics(data); return; }
+    if(eventName === 'router.status'){ applyRouter(data); return; }
+    if(eventName === 'wifi.environment'){ applyWifi(data); return; }
+    if(eventName === 'security.summary'){ applySecurity(data); return; }
+    if(eventName === 'scan.progress' || eventName === 'scan.state' || eventName === 'scan_progress'){ applyScan(data); return; }
+    if(eventName === 'scan.results'){
+      if(Array.isArray(data.devices)) replaceDevices(data.devices);
+      else if(data.device) mergeDevice(data.device);
+      return;
+    }
+    if(eventName === 'scan_done'){
+      applyScan(Object.assign({}, data, {phase:'COMPLETE'}));
+      req('devices.list', {});
+      req('map.state', {});
+      return;
+    }
+    if(eventName === 'scan_error'){
+      applyScan(Object.assign({}, data, {phase:'ERROR'}));
+      note(data.message || 'Scan failed.','err');
+      return;
+    }
+    if(eventName === 'speedtest.state' || eventName === 'speedtest.ui' || eventName === 'speedtest.result'){
+      applySpeed(data);
+      return;
+    }
+    if(eventName === 'topology.state' || eventName === 'map.state'){
+      applyTopology(data);
+      return;
+    }
+    if(eventName === 'assistant.response' && data.message){
+      jMsgJ(data.message);
+    }
+  }
+
+  return {
+    enabled,
+    req,
+    note,
+    refreshAll,
+    handleEvent,
+    applySpeed,
+    deviceSupport,
+  };
+})();
+
+const __dashSim = {
+  adPush,
+  tickData,
+  ovSimulateDevices,
+  ovRefreshData,
+  initMap,
+  initAnalytics,
+  syncStHud,
+  ovScan,
+  ovToggleDevice,
+  ovToggleAction,
+  ovConfirmReboot,
+  stStart,
+  stAbort,
+  stReset,
+  dvScan,
+  dvOpen,
+  dvPing,
+  dvBlock,
+  tglSw,
+  rc,
+  sendCmd,
+  ja,
+  jsend,
+  boot,
+};
+
+adPush = function(){
+  if(!nativeDash.enabled()) return __dashSim.adPush();
+  const push=(arr,v)=>{arr.push(v);if(arr.length>AD.max)arr.shift();};
+  push(AD.th, Math.max(0, Math.min(100, S.thr*100)));
+  push(AD.lt, Math.max(0, Number(S.lat || 0)));
+  push(AD.tr, Math.max(0, Math.min(100, Number(S.loss || 0))));
+  push(AD.up, Math.max(0, Math.min(100, Number(S.ul || 0))));
+};
+
+ovSimulateDevices = function(){
+  if(!nativeDash.enabled()) return __dashSim.ovSimulateDevices();
+  ensureOverviewTelemetry();
+  DEVS.forEach((device)=>{
+    device.rate = Number(device.rate || device.downMbps || device.upMbps || 0);
+    if(device.status === 'offline' || device.paused) device.rate = 0;
+    device.blk = !!device.blk;
+  });
+  S.knownClients = DEVS.filter((device)=>device.status !== 'offline' && device.status !== 'threat' && !device.paused).length;
+  S.unknownClients = DEVS.filter((device)=>device.status === 'threat' && !device.paused).length;
+};
+
+tickData = function(){
+  if(!nativeDash.enabled()) return __dashSim.tickData();
+  ensureOverviewTelemetry();
+  ovPushHistory();
+  adPush();
+  updateTopBar();
+};
+
+ovRefreshData = function(){
+  __dashSim.ovRefreshData();
+  if(!nativeDash.enabled()) return;
+  const signal = document.getElementById('ov-signal');
+  if(signal){
+    const firstSignal = DEVS.find((device)=>device.signalStrength != null);
+    signal.textContent = firstSignal ? `${firstSignal.signalStrength} dBm` : 'N/A';
+  }
+};
+
+initMap = function(){
+  mapLinks = [];
+  mapPackets = [];
+  return __dashSim.initMap();
+};
+
+initAnalytics = function(){
+  if(!nativeDash.enabled()) return __dashSim.initAnalytics();
+  while(AD.th.length < AD.max) adPush();
+  if(S.caTab === 'an') setTimeout(renderAllCharts,50);
+  if(S.anRAF){cancelAnimationFrame(S.anRAF);S.anRAF=null;}
+  anLoop();
+  const log = document.getElementById('conlog');
+  if(log && log.children.length === 0){
+    [
+      ['JARVIS NETWORK INTELLIGENCE LINKED','sys'],
+      ['Live bridge telemetry active.','suc'],
+      ['Router and device actions are capability-gated by the backend.','sys'],
+    ].forEach((entry, index)=>setTimeout(()=>addLog(entry[0], entry[1]), index*120));
+  }
+};
+
+syncStHud = function(){
+  __dashSim.syncStHud();
+  if(!nativeDash.enabled()) return;
+  const phase = String(S.stPhase || '').toUpperCase();
+  const start = document.getElementById('st-start');
+  const stop = document.getElementById('st-abort');
+  const reset = document.getElementById('st-reset');
+  if(start) start.classList.toggle('dis', !!S.stRunning);
+  if(stop) stop.classList.toggle('dis', !S.stRunning);
+  if(reset) reset.classList.toggle('dis', !!S.stRunning || (!S.stDl && !S.stUl && !S.stPing));
+  if(!S.stRunning && phase === 'DONE') stPhaseLbl('✓ TEST COMPLETE - LIVE RESULT');
+  else if(!S.stRunning && phase === 'ERROR') stPhaseLbl('⊗ TEST ERROR');
+  else if(!S.stRunning && phase === 'ABORTED') stPhaseLbl('⊗ TEST ABORTED');
+  else if(!S.stRunning && !S.stDl && !S.stUl) stPhaseLbl('IDLE - STANDBY');
+};
+
+ovScan = function(){
+  if(!nativeDash.enabled()) return __dashSim.ovScan();
+  nativeDash.req('scan.start', {});
+  nativeDash.req('devices.list', {});
+  nativeDash.req('map.state', {});
+  nativeDash.note('Network scan requested from command hub.','inf');
+};
+
+ovToggleDevice = function(id){
+  if(!nativeDash.enabled()) return __dashSim.ovToggleDevice(id);
+  const device = DEVS.find((item)=>item.id === id);
+  if(!device) return;
+  const nextPaused = !device.paused;
+  const support = nativeDash.deviceSupport(device, nextPaused ? 'device.pause' : 'device.resume', nextPaused ? 'Pause device' : 'Resume device');
+  if(!support.supported){
+    nativeDash.note(support.reason,'wrn');
+    return;
+  }
+  nativeDash.req('device.setPaused', {deviceId:device.nativeId, paused:nextPaused});
+};
+
+ovToggleAction = function(key){
+  if(!nativeDash.enabled()) return __dashSim.ovToggleAction(key);
+  if(key === 'guestWifi'){
+    nativeDash.req('router.setGuest', {enabled:!S.guestWifi});
+    return;
+  }
+  if(key === 'dnsShield'){
+    nativeDash.req('router.setDnsShield', {enabled:!S.dnsShield});
+  }
+};
+
+ovConfirmReboot = function(){
+  if(!nativeDash.enabled()) return __dashSim.ovConfirmReboot();
+  S.rebooting = false;
+  buildOv();
+  nativeDash.req('router.reboot', {});
+};
+
+stStart = function(){
+  if(!nativeDash.enabled()) return __dashSim.stStart();
+  nativeDash.req('speedtest.start', {});
+};
+
+stAbort = function(){
+  if(!nativeDash.enabled()) return __dashSim.stAbort();
+  nativeDash.req('speedtest.stop', {});
+};
+
+stReset = function(){
+  if(!nativeDash.enabled()) return __dashSim.stReset();
+  nativeDash.req('speedtest.reset', {});
+};
+
+dvScan = function(){
+  if(!nativeDash.enabled()) return __dashSim.dvScan();
+  nativeDash.req('scan.start', {});
+  nativeDash.req('devices.list', {});
+  nativeDash.note('Device scan initiated from node matrix.','inf');
+};
+
+dvOpen = function(id){
+  __dashSim.dvOpen(id);
+  if(!nativeDash.enabled()) return;
+  const device = DEVS[id];
+  if(!device) return;
+  const access = document.getElementById('tg1');
+  if(access) access.classList.toggle('on', !device.blk);
+  const prio = document.getElementById('tg2');
+  if(prio){
+    const support = nativeDash.deviceSupport(device, 'device.prioritize', 'Prioritize device');
+    prio.classList.toggle('on', support.supported);
+    prio.title = support.reason;
+  }
+  const monitor = document.getElementById('tg3');
+  if(monitor){
+    const support = nativeDash.deviceSupport(device, device.paused ? 'device.resume' : 'device.pause', device.paused ? 'Resume device' : 'Pause device');
+    monitor.classList.toggle('on', !device.paused);
+    monitor.title = support.reason;
+  }
+  nativeDash.req('device.details', {deviceId:device.nativeId});
+};
+
+dvPing = function(){
+  if(!nativeDash.enabled()) return __dashSim.dvPing();
+  const device = DEVS[S.devOpen];
+  if(!device) return;
+  nativeDash.req('device.ping', {deviceId:device.nativeId});
+};
+
+dvBlock = function(){
+  if(!nativeDash.enabled()) return __dashSim.dvBlock();
+  const device = DEVS[S.devOpen];
+  if(!device) return;
+  const nextBlocked = !device.blk;
+  const support = nativeDash.deviceSupport(device, nextBlocked ? 'device.block' : 'device.unblock', nextBlocked ? 'Block device' : 'Unblock device');
+  if(!support.supported){
+    nativeDash.note(support.reason,'wrn');
+    return;
+  }
+  nativeDash.req('device.setBlocked', {deviceId:device.nativeId, blocked:nextBlocked});
+};
+
+tglSw = function(row, id){
+  if(!nativeDash.enabled()) return __dashSim.tglSw(row, id);
+  const device = DEVS[S.devOpen];
+  if(!device) return;
+  if(id === 'tg1'){
+    dvBlock();
+    return;
+  }
+  if(id === 'tg2'){
+    const support = nativeDash.deviceSupport(device, 'device.prioritize', 'Prioritize device');
+    if(!support.supported){
+      nativeDash.note(support.reason,'wrn');
+      return;
+    }
+    nativeDash.req('device.prioritize', {deviceId:device.nativeId});
+    const toggle = row.querySelector('.tgl-sw');
+    if(toggle) toggle.classList.add('on');
+    return;
+  }
+  if(id === 'tg3'){
+    const nextPaused = !device.paused;
+    const support = nativeDash.deviceSupport(device, nextPaused ? 'device.pause' : 'device.resume', nextPaused ? 'Pause device' : 'Resume device');
+    if(!support.supported){
+      nativeDash.note(support.reason,'wrn');
+      return;
+    }
+    nativeDash.req('device.setPaused', {deviceId:device.nativeId, paused:nextPaused});
+    return;
+  }
+  __dashSim.tglSw(row, id);
+};
+
+rc = function(cmd){
+  if(!nativeDash.enabled()) return __dashSim.rc(cmd);
+  if(cmd === 'clear'){
+    const log = document.getElementById('conlog');
+    if(log) log.innerHTML = '';
+    logLines = [];
+    return;
+  }
+  if(cmd === 'speed') sw('st',1);
+  const map = {
+    scan:'scan network',
+    diag:'diagnostics',
+    export:'export analytics',
+    speed:'speedtest',
+    flush:'flush dns',
+  };
+  nativeDash.req(cmd === 'export' ? 'analytics.export' : 'console.execute', cmd === 'export' ? {} : {command:map[cmd] || cmd});
+};
+
+sendCmd = function(){
+  if(!nativeDash.enabled()) return __dashSim.sendCmd();
+  const inp=document.getElementById('cin');if(!inp||!inp.value.trim())return;
+  const cmd=inp.value.trim();inp.value='';
+  addLog('> '+cmd,'wrn');
+  if(cmd.toLowerCase() === 'help'){
+    addLog('Commands route to native bridge: scan | diagnostics | export | speedtest | flush dns | ping <device/ip>','suc');
+  }else if(cmd.toLowerCase() === 'clear'){
+    const log = document.getElementById('conlog');
+    if(log) log.innerHTML = '';
+    logLines = [];
+  }else{
+    nativeDash.req('console.execute', {command:cmd});
+  }
+  inp.focus();
+};
+
+ja = function(action){
+  if(!nativeDash.enabled()) return __dashSim.ja(action);
+  const quick = {
+    speedtest:{kind:'assistant.quickAction', payload:{action:'speedtest'}},
+    scan:{kind:'assistant.quickAction', payload:{action:'scan'}},
+    alerts:{kind:'assistant.command', payload:{command:'Show current network alerts.'}},
+    optimize:{kind:'assistant.command', payload:{command:'Recommend the best way to optimize my network right now.'}},
+  }[action];
+  if(!quick) return;
+  nativeDash.req(quick.kind, quick.payload);
+  if(action === 'speedtest') setTimeout(()=>{sw('st',1);jToggle();},400);
+};
+
+jsend = function(){
+  if(!nativeDash.enabled()) return __dashSim.jsend();
+  const inp=document.getElementById('jpin');if(!inp||!inp.value.trim())return;
+  const txt=inp.value.trim();inp.value='';
+  jMsgU(txt);
+  nativeDash.req('assistant.command', {command:txt});
+};
+
+jToggle = function(){
+  jOpen=!jOpen;
+  const p=document.getElementById('jpnl');
+  if(jOpen){
+    p.classList.add('open');
+    if(p.querySelector('.jp-chat').children.length===0){
+      jMsgJ(nativeDash.enabled()
+        ? 'Native bridge linked. Ask for a speedtest, scan, security review, or router status.'
+        : "Good to have you online. I'm monitoring your network in real-time. All primary systems are nominal. One unverified device has been flagged at 192.168.1.99. What would you like to do?");
+    }
+  } else {
+    p.classList.remove('open');
+  }
+};
+
+boot = function(){
+  if(!nativeDash.enabled()) return __dashSim.boot();
+  setInterval(tickData, 1200);
+  setInterval(()=>{
+    if(S.screen==='co'&&S.caTab==='an') renderAllCharts();
+  },1500);
+  setInterval(()=>{
+    if(document.hidden) return;
+    nativeDash.refreshAll();
+  },5000);
+  buildOv();
+  makeOrbDraggable();
+  updateTopBar();
+  nativeDash.refreshAll();
+};
+
+window.NERF = window.NERF || {};
+window.NERF.onEvent = function(eventName, payload){
+  if(!nativeDash.enabled()) return;
+  nativeDash.handleEvent(eventName, payload);
+};
+
 window.addEventListener('load',boot);
 window.addEventListener('visibilitychange',()=>{
   if(document.hidden){
