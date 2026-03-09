@@ -8,6 +8,7 @@ import com.nerf.netx.assistant.model.AssistantDiagnosisType
 import com.nerf.netx.assistant.model.AssistantSeverity
 import com.nerf.netx.domain.Device
 import com.nerf.netx.domain.DeviceControlStatusSnapshot
+import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ServiceStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -66,7 +67,11 @@ class RecommendationEngineTest {
           status = ServiceStatus.NOT_SUPPORTED,
           message = "Device control unsupported."
         ),
-        routerInfo = null
+        routerInfo = null,
+        routerStatus = RouterStatusSnapshot(
+          status = ServiceStatus.NO_DATA,
+          message = "Router status unavailable."
+        )
       ),
       targetDevice = target
     )

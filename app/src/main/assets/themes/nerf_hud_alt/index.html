@@ -1,138 +1,242 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>NERF HUD Alt</title>
   <style>
-    :root{--hud-cyan:#00a3ff;--hud-blue:#2f8dff;--hud-orange:#ffe600;--hud-red:#ff6464;--hud-text:#eaf2f8;--hud-panel:#10151a;--hud-border:#1f2c38;--hud-glow:rgba(0,194,255,.26);--hud-muted:#9eb2c3;--bg:#040607;--line:var(--hud-border);--txt:var(--hud-text);--mut:var(--hud-muted)}
-    *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Segoe UI,Arial,sans-serif;background:radial-gradient(circle at 20% 0%,#16232f 0%,var(--bg) 45%);color:var(--txt)}
-    .app{height:100dvh;display:flex;flex-direction:column}.screen{display:none;flex:1;overflow:auto;padding:10px 10px 92px}.screen.active{display:block}
-    .header{width:100%;height:74px;object-fit:contain;margin:0 auto 8px;display:block}.card{background:linear-gradient(180deg,#131b22 0%,#0e141a 100%);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;box-shadow:0 0 18px var(--hud-glow)}
-    .row{display:flex;gap:8px;align-items:center;justify-content:space-between}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .btn{border:1px solid #2c3f4f;color:var(--txt);background:#13202b;border-radius:10px;padding:10px;font-weight:600;min-height:44px}.btn.pri{border-color:#7a3f0f;background:#46250a;color:#ffd4b2}.btn.acc{border-color:#165274;background:#0a273a;color:#bcecff}.btn:disabled{opacity:.45}
-    .mut{color:var(--mut);font-size:12px}.kv{font-size:13px;color:var(--mut)}.v{color:var(--txt);font-weight:700}.chip{border:1px solid #2b3f50;border-radius:999px;padding:3px 8px;font-size:11px;color:#c5d8e6}.list{display:flex;flex-direction:column;gap:8px}.item{border:1px solid #2a3a48;border-radius:10px;padding:8px;background:#0f171e}.mono{font-family:Consolas,monospace}
-    .map-stage{position:relative;width:100%;min-height:300px;border:1px solid #274153;border-radius:12px;background:#081117;overflow:hidden}.map-canvas{width:100%;height:300px;display:block}
-    .map-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,8,12,.78)}.map-empty.hidden{display:none}.map-empty-box{max-width:260px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center}
-    .map-list{margin-top:8px;max-height:140px;overflow:auto}.node{padding:6px 8px;border:1px solid #315063;border-radius:8px;margin:6px 0;background:#0d1b25;font-size:12px}
-    .status{font-size:12px;color:#bcd5e7}.progress-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0d151c;height:10px;width:100%}.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--hud-cyan),var(--hud-blue));transition:width 140ms linear}
-    .router-box{border:1px solid var(--line);border-radius:10px;padding:8px;background:#0d151c;margin-top:8px}.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(3,8,12,.94);border-top:1px solid #203344;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
-    .nav{background:#0f1a22;color:#b9d1e2;border:1px solid #254153;border-radius:8px;font-size:10px;min-height:56px}.nav.active{border-color:#9e4d0d;color:#ffd8be}
-    input,select{width:100%;min-height:40px;border:1px solid #2d4456;background:#0a131a;color:#d8e8f3;border-radius:8px;padding:8px}#log{max-height:220px;overflow:auto}
-    .modal{position:fixed;inset:0;display:none;align-items:flex-end;background:rgba(0,0,0,.55);z-index:90}.modal.show{display:flex}.modal-sheet{width:100%;background:#0c141b;border-top:1px solid #2a4253;border-top-left-radius:14px;border-top-right-radius:14px;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+    :root{ --bg:#040607; --panel:#10151a; --line:#1f2c38; --pri:#ffe600; --acc:#00a3ff; --ok:#43d77b; --txt:#eaf2f8; --mut:#9eb2c3; }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; width:100%; height:100%; overflow:hidden; font-family:Segoe UI, Arial, sans-serif; background:radial-gradient(circle at 20% 0%, #16232f 0%, var(--bg) 45%); color:var(--txt); }
+    .app{ height:100dvh; display:flex; flex-direction:column; }
+    .screen{ display:none; flex:1; overflow:auto; padding:10px 10px 92px; }
+    .screen.active{ display:block; }
+    .header{ width:100%; height:74px; object-fit:contain; margin:0 auto 8px; display:block; }
+    .card{ background:linear-gradient(180deg, #131b22 0%, #0e141a 100%); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px; }
+    .row{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .btn{ border:1px solid #2c3f4f; color:var(--txt); background:#13202b; border-radius:10px; padding:10px; font-weight:600; min-height:44px; }
+    .btn.pri{ border-color:#7a3f0f; background:#46250a; color:#ffd4b2; }
+    .btn.acc{ border-color:#165274; background:#0a273a; color:#bcecff; }
+    .mut{ color:var(--mut); font-size:12px; }
+    .kv{ font-size:13px; color:var(--mut); }
+    .v{ color:var(--txt); font-weight:700; }
+    .chip{ border:1px solid #2b3f50; border-radius:999px; padding:3px 8px; font-size:11px; color:#c5d8e6; }
+    .list{ display:flex; flex-direction:column; gap:8px; }
+    .item{ border:1px solid #2a3a48; border-radius:10px; padding:8px; background:#0f171e; }
+    .mono{ font-family:Consolas, monospace; }
+    .map{ width:100%; min-height:300px; border:1px solid #274153; border-radius:12px; background:#081117; padding:8px; }
+    .node{ padding:6px 8px; border:1px solid #315063; border-radius:8px; margin:6px 0; background:#0d1b25; font-size:12px; }
+    .status{ font-size:12px; color:#bcd5e7; }
+    .bottom{ position:fixed; left:0; right:0; bottom:0; background:rgba(3,8,12,0.94); border-top:1px solid #203344; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); }
+    .nav{ background:#0f1a22; color:#b9d1e2; border:1px solid #254153; border-radius:8px; font-size:10px; min-height:56px; }
+    .nav.active{ border-color:#9e4d0d; color:#ffd8be; }
+    input,select{ width:100%; min-height:40px; border:1px solid #2d4456; background:#0a131a; color:#d8e8f3; border-radius:8px; padding:8px; }
+    #log{ max-height:220px; overflow:auto; }
   </style>
 </head>
 <body>
 <div class="app">
-  <section id="screen-overview" class="screen active"><img class="header" src="file:///android_asset/headers/overview.png" alt="overview" /><div class="card"><div class="row"><div class="kv">WAN</div><div id="ovWan" class="v">-</div></div><div class="row"><div class="kv">Latency</div><div id="ovLat" class="v">-</div></div><div class="row"><div class="kv">Jitter</div><div id="ovJit" class="v">-</div></div><div class="row"><div class="kv">Loss</div><div id="ovLoss" class="v">-</div></div><div class="row"><div class="kv">Devices</div><div id="ovDev" class="v">-</div></div></div><div class="grid2"><button class="btn pri" id="btnQuickScan">Deep Scan</button><button class="btn acc" id="btnRefreshOv">Refresh</button></div><div class="card" style="margin-top:10px"><div class="row"><div class="kv">Scan State</div><div id="scanState" class="v">IDLE</div></div><div class="progress-wrap"><div id="scanProgressBar" class="progress-bar"></div></div><div class="grid2" style="margin-top:8px"><div class="kv">Targets <span id="scanTargets" class="v">0</span></div><div class="kv">Probes <span id="scanProbes" class="v">0</span></div><div class="kv">Found <span id="scanFound" class="v">0</span></div><div class="kv">Elapsed <span id="scanElapsed" class="v">0s</span></div></div><div class="grid2" style="margin-top:8px"><button class="btn pri" id="btnStartScan">Start Scan</button><button class="btn" id="btnStopScan">Stop Scan</button></div></div><div class="card"><div class="kv" style="margin-bottom:6px">Router Info (Read-only)</div><div class="router-box"><div class="row"><div class="kv">Gateway</div><div id="routerGateway" class="v mono">-</div></div><div class="row"><div class="kv">SSID</div><div id="routerSsid" class="v">-</div></div><div class="row"><div class="kv">Wi-Fi RSSI</div><div id="routerRssi" class="v">-</div></div><div class="row"><div class="kv">DNS</div><div id="routerDns" class="v mono">-</div></div><div class="row"><div class="kv">Subnet</div><div id="routerSubnet" class="v mono">-</div></div></div><button class="btn acc" id="btnRouterInfo" style="margin-top:8px">Refresh Router Info</button></div><div class="status" id="statusOv"></div></section>
-  <section id="screen-speed" class="screen"><img class="header" src="file:///android_asset/headers/speedtest.png" alt="speedtest" /><div class="card"><div class="row"><div class="kv">Phase</div><div id="spPhase" class="v">IDLE</div></div><div class="row"><div class="kv">Download</div><div id="spDown" class="v">0 Mbps</div></div><div class="row"><div class="kv">Upload</div><div id="spUp" class="v">0 Mbps</div></div><div class="row"><div class="kv">Latency</div><div id="spLat" class="v">0 ms</div></div></div><div class="grid2"><button class="btn pri" id="btnStartSpeed">Start</button><button class="btn" id="btnStopSpeed">Stop</button></div><button class="btn" id="btnResetSpeed">Reset</button></section>
-  <section id="screen-console" class="screen"><img class="header" src="file:///android_asset/headers/console.png" alt="console" /><div class="card"><div class="grid2"><button class="btn" id="btnDhcp">Renew DHCP</button><button class="btn" id="btnDns">Flush DNS</button><button class="btn" id="btnFw">Toggle Firewall</button><button class="btn" id="btnVpn">Toggle VPN</button></div><div class="row" style="margin-top:8px"><select id="qosMode"><option>BALANCED</option><option>GAMING</option><option>STREAMING</option></select><button class="btn" id="btnQos">Set QoS</button></div><button class="btn pri" id="btnReboot">Reboot Router</button><div class="mut" id="routerActionReason">Waiting for router control availability...</div></div><div class="card"><div class="mut">Console Log</div><div id="log" class="mono"></div></div></section>
-  <section id="screen-map" class="screen"><img class="header" src="file:///android_asset/headers/map.png" alt="map" /><div class="row" style="margin-bottom:8px"><button class="btn pri" id="btnMapRefresh">Refresh Topology</button><span class="chip" id="mapCount">0 nodes</span></div><div id="mapStage" class="map-stage"><canvas id="mapCanvas" class="map-canvas"></canvas><div id="mapEmpty" class="map-empty hidden"><div class="map-empty-box"><div class="v">No devices discovered</div><div class="mut">Run scan to build topology map.</div><button class="btn pri" id="btnMapRunScan">Run Scan</button></div></div></div><div id="mapList" class="list map-list"></div></section>
-  <section id="screen-devices" class="screen"><img class="header" src="file:///android_asset/headers/devices.png" alt="devices" /><div class="row" style="margin-bottom:8px"><input id="devSearch" placeholder="Search name / IP / MAC" /><button class="btn" id="btnDevRefresh">Refresh</button></div><div id="devList" class="list"></div></section>
-  <section id="screen-analytics" class="screen"><img class="header" src="file:///android_asset/headers/analytics.png" alt="analytics" /><div class="card"><div class="row"><div class="kv">Down</div><div id="anDown" class="v">-</div></div><div class="row"><div class="kv">Up</div><div id="anUp" class="v">-</div></div><div class="row"><div class="kv">Latency</div><div id="anLat" class="v">-</div></div><div class="row"><div class="kv">Jitter</div><div id="anJit" class="v">-</div></div><div class="row"><div class="kv">Packet Loss</div><div id="anLoss" class="v">-</div></div><div class="row"><div class="kv">Device Count</div><div id="anDev" class="v">-</div></div></div><button class="btn pri" id="btnAnRefresh">Refresh Analytics</button></section>
+  <section id="screen-overview" class="screen active">
+    <img class="header" src="file:///android_asset/headers/overview.png" alt="overview" />
+    <div class="card">
+      <div class="row"><div class="kv">WAN</div><div id="ovWan" class="v">-</div></div>
+      <div class="row"><div class="kv">Latency</div><div id="ovLat" class="v">-</div></div>
+      <div class="row"><div class="kv">Jitter</div><div id="ovJit" class="v">-</div></div>
+      <div class="row"><div class="kv">Loss</div><div id="ovLoss" class="v">-</div></div>
+      <div class="row"><div class="kv">Devices</div><div id="ovDev" class="v">-</div></div>
+    </div>
+    <div class="grid2">
+      <button class="btn pri" id="btnQuickScan">Deep Scan</button>
+      <button class="btn acc" id="btnRefreshOv">Refresh</button>
+    </div>
+    <div class="status" id="statusOv"></div>
+  </section>
+
+  <section id="screen-speed" class="screen">
+    <img class="header" src="file:///android_asset/headers/speedtest.png" alt="speedtest" />
+    <div class="card">
+      <div class="row"><div class="kv">Phase</div><div id="spPhase" class="v">IDLE</div></div>
+      <div class="row"><div class="kv">Download</div><div id="spDown" class="v">0 Mbps</div></div>
+      <div class="row"><div class="kv">Upload</div><div id="spUp" class="v">0 Mbps</div></div>
+      <div class="row"><div class="kv">Latency</div><div id="spLat" class="v">0 ms</div></div>
+    </div>
+    <div class="grid2">
+      <button class="btn pri" id="btnStartSpeed">Start</button>
+      <button class="btn" id="btnStopSpeed">Stop</button>
+    </div>
+    <button class="btn" id="btnResetSpeed">Reset</button>
+  </section>
+
+  <section id="screen-console" class="screen">
+    <img class="header" src="file:///android_asset/headers/console.png" alt="console" />
+    <div class="card">
+      <div class="grid2">
+        <button class="btn" id="btnDhcp">Renew DHCP</button>
+        <button class="btn" id="btnDns">Flush DNS</button>
+        <button class="btn" id="btnFw">Toggle Firewall</button>
+        <button class="btn" id="btnVpn">Toggle VPN</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <select id="qosMode"><option>BALANCED</option><option>GAMING</option><option>STREAMING</option></select>
+        <button class="btn" id="btnQos">Set QoS</button>
+      </div>
+      <button class="btn pri" id="btnReboot">Reboot Router</button>
+    </div>
+    <div class="card"><div class="mut">Console Log</div><div id="log" class="mono"></div></div>
+  </section>
+
+  <section id="screen-map" class="screen">
+    <img class="header" src="file:///android_asset/headers/map.png" alt="map" />
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn pri" id="btnMapRefresh">Refresh Topology</button>
+      <span class="chip" id="mapCount">0 nodes</span>
+    </div>
+    <div id="mapList" class="map"></div>
+  </section>
+
+  <section id="screen-devices" class="screen">
+    <img class="header" src="file:///android_asset/headers/devices.png" alt="devices" />
+    <div class="row" style="margin-bottom:8px">
+      <input id="devSearch" placeholder="Search name / IP / MAC" />
+      <button class="btn" id="btnDevRefresh">Refresh</button>
+    </div>
+    <div id="devList" class="list"></div>
+  </section>
+
+  <section id="screen-analytics" class="screen">
+    <img class="header" src="file:///android_asset/headers/analytics.png" alt="analytics" />
+    <div class="card">
+      <div class="row"><div class="kv">Down</div><div id="anDown" class="v">-</div></div>
+      <div class="row"><div class="kv">Up</div><div id="anUp" class="v">-</div></div>
+      <div class="row"><div class="kv">Latency</div><div id="anLat" class="v">-</div></div>
+      <div class="row"><div class="kv">Jitter</div><div id="anJit" class="v">-</div></div>
+      <div class="row"><div class="kv">Packet Loss</div><div id="anLoss" class="v">-</div></div>
+      <div class="row"><div class="kv">Device Count</div><div id="anDev" class="v">-</div></div>
+    </div>
+    <button class="btn pri" id="btnAnRefresh">Refresh Analytics</button>
+  </section>
 </div>
-<div id="deviceModal" class="modal"><div class="modal-sheet"><div class="row"><div><div id="dmName" class="v">Device</div><div id="dmMeta" class="mut mono">-</div></div><button class="btn" id="dmClose">Close</button></div><div class="row"><div class="kv">Hostname</div><div id="dmHostname" class="v">-</div></div><div class="row"><div class="kv">IP</div><div id="dmIp" class="v mono">-</div></div><div class="row"><div class="kv">MAC</div><div id="dmMac" class="v mono">-</div></div><div class="row"><div class="kv">Vendor</div><div id="dmVendor" class="v">-</div></div><div class="row"><div class="kv">Latency</div><div id="dmLatency" class="v">-</div></div><div class="row"><div class="kv">Online</div><div id="dmOnline" class="v">-</div></div><div class="row"><div class="kv">Last Seen</div><div id="dmLastSeen" class="v">-</div></div><div class="row"><div class="kv">Risk</div><div id="dmRisk" class="v">-</div></div><div class="grid2" style="margin-top:8px"><button class="btn" id="dmPing">Ping</button><button class="btn" id="dmCopyIp">Copy IP</button><button class="btn" id="dmCopyMac">Copy MAC</button><button class="btn" id="dmBlock" disabled>Block (Unsupported)</button></div><button class="btn" id="dmPrio" disabled>Prioritize (Unsupported)</button><div class="mut" id="dmActionReason">Block/Prioritize unsupported on the current backend/router.</div></div></div>
-<nav class="bottom"><button class="nav active" data-screen="overview">Overview</button><button class="nav" data-screen="speed">Speed</button><button class="nav" data-screen="console">Console</button><button class="nav" data-screen="map">Map</button><button class="nav" data-screen="devices">Devices</button><button class="nav" data-screen="analytics">Analytics</button></nav>
+
+<nav class="bottom">
+  <button class="nav active" data-screen="overview">Overview</button>
+  <button class="nav" data-screen="speed">Speed</button>
+  <button class="nav" data-screen="console">Console</button>
+  <button class="nav" data-screen="map">Map</button>
+  <button class="nav" data-screen="devices">Devices</button>
+  <button class="nav" data-screen="analytics">Analytics</button>
+</nav>
+
 <script>
 (function(){
-const $=id=>document.getElementById(id); const state={devices:[],filtered:[],selectedDeviceId:null,selectedDeviceDetails:null,routerControlSupported:false,routerStatus:null,scan:{state:'IDLE',targetsPlanned:0,probesSent:0,devicesFound:0,startedAt:0,elapsedSec:0},mapNodes:[],topology:null,wifi:null,security:null};
-function req(action,payload){try{if(window.NERF_NATIVE&&window.NERF_NATIVE.request)window.NERF_NATIVE.request(action,JSON.stringify(payload||{}));else log('Bridge unavailable: '+action);}catch(e){log('Bridge error: '+e.message)}}
-function log(msg){const el=document.createElement('div');el.textContent='['+new Date().toLocaleTimeString()+'] '+msg;$('log').prepend(el)}
-function fallbackActionSupport(label,reason,status){const resolvedStatus=String(status||'NOT_SUPPORTED').toUpperCase();return{supported:false,availableNow:false,availability:resolvedStatus==='NO_DATA'?'unavailable':'unsupported',status:resolvedStatus,label:label||'Action',reason:reason||'Unsupported on the current backend/router.',detected:false,authenticated:false,readable:false,writable:false,source:null}}
-function normalizeActionSupportMap(map){const out={};const src=map&&typeof map==='object'?map:{};Object.keys(src).forEach(key=>{const item=src[key];out[key]=item&&typeof item==='object'?{supported:item.supported===true,availableNow:item.availableNow===true||item.supported===true,availability:String(item.availability||(((item.status||'').toUpperCase()==='NO_DATA')?'unavailable':(item.supported===true?'available':'unsupported'))),status:String(item.status||(item.supported===true?'OK':'NOT_SUPPORTED')).toUpperCase(),label:item.label||key,reason:item.reason||'Unsupported on the current backend/router.',detected:item.detected===true,authenticated:item.authenticated===true,readable:item.readable===true,writable:item.writable===true,source:item.source||null}:fallbackActionSupport(key,'Unsupported on the current backend/router.')});return out}
-function normalizeDevices(rows){return(rows||[]).map((d,i)=>({id:String(d.id||('node-'+i)),name:String(d.name||d.hostname||('Device '+(i+1))),hostname:String(d.hostname||''),ip:String(d.ip||'0.0.0.0'),mac:String(d.mac||'unknown'),vendor:String(d.vendor||'unknown'),riskScore:Number(d.riskScore||0),quality:Number(d.quality||0),lastSeen:Number(d.lastSeen||Date.now()),isGateway:!!d.isGateway,deviceType:String(d.deviceType||''),online:d.online==null?true:!!d.online,reachable:d.reachable==null?true:!!d.reachable,latencyMs:d.latencyMs==null?null:Number(d.latencyMs),isBlocked:!!d.isBlocked,isPaused:!!d.isPaused,actionSupport:normalizeActionSupportMap(d.actionSupport)}))}
-function applyThemeVars(vars){if(!vars||typeof vars!=='object')return;const root=document.documentElement;Object.keys(vars).forEach(k=>root.style.setProperty(k.startsWith('--')?k:'--'+k,String(vars[k])))}
-function routerCaps(){return new Set(Array.isArray(state.routerStatus&&state.routerStatus.capabilities)?state.routerStatus.capabilities:[])}
-function actionSupport(key){const map=state.routerStatus&&state.routerStatus.actionSupport;const item=map&&map[key];return item&&typeof item==='object'?item:fallbackActionSupport(key,'Unsupported on the current backend/router.')}
-function routerFeatureEnabled(key){const feature=state.routerStatus&&state.routerStatus[key];return feature&&typeof feature.enabled==='boolean'?feature.enabled:null}
-function supportAvailability(support){if(support&&support.availableNow===true)return'available';if(String(support&&support.status||'').toUpperCase()==='NO_DATA'||String(support&&support.availability||'').toLowerCase()==='unavailable')return'unavailable';return'unsupported'}
-function disabledControlLabel(baseLabel,support){return baseLabel+' ('+(supportAvailability(support)==='unavailable'?'Unavailable':'Unsupported')+')'}
-function setControlState(id,support,reason){const el=$(id);if(!el)return;if(!el.dataset.baseLabel)el.dataset.baseLabel=el.textContent;const enabled=!!(support&&support.supported);el.disabled=!enabled;el.title=enabled?'':(reason||(support&&support.reason)||'Unavailable');el.textContent=enabled?el.dataset.baseLabel:disabledControlLabel(el.dataset.baseLabel,support||fallbackActionSupport(el.dataset.baseLabel,reason,'NO_DATA'))}
-function setRouterActionReason(text){const el=$('routerActionReason');if(el)el.textContent=text||'Router control availability is unavailable.'}
-function summarizeUnsupportedActions(items,fallback){const unsupported=(items||[]).filter(item=>!item.support.supported);if(!unsupported.length){setRouterActionReason('All router write controls shown here are currently available.');return}const labels=unsupported.map(item=>item.label+' '+(supportAvailability(item.support)==='unavailable'?'unavailable':'unsupported')).join(', ');const reason=unsupported.map(item=>item.support.reason).find(Boolean)||fallback||'Unsupported on the current backend/router.';setRouterActionReason(labels+' on the current backend/router. '+reason)}
-function formatElapsed(sec){if(sec<60)return sec+'s';const m=Math.floor(sec/60);return m+'m '+(sec%60)+'s'}
-function updateScanProgress(progress){const p=progress||{};const st=String(p.state||p.phase||state.scan.state||'IDLE').toUpperCase();if(st==='SCANNING'||st==='RUNNING'||st==='STARTED'){if(!state.scan.startedAt)state.scan.startedAt=Number(p.startedAt||Date.now());state.scan.state='SCANNING'}else state.scan.state=st;if(p.targetsPlanned!=null)state.scan.targetsPlanned=Number(p.targetsPlanned)||0;if(p.probesSent!=null)state.scan.probesSent=Number(p.probesSent)||0;if(p.devicesFound!=null)state.scan.devicesFound=Number(p.devicesFound)||0;state.scan.elapsedSec=state.scan.state==='SCANNING'?Math.max(0,Math.floor((Date.now()-state.scan.startedAt)/1000)):state.scan.elapsedSec;const total=Math.max(0,state.scan.targetsPlanned),done=Math.max(0,state.scan.probesSent),pct=total>0?Math.min(1,done/total):0;$('scanState').textContent=state.scan.state;$('scanTargets').textContent=String(total);$('scanProbes').textContent=String(done);$('scanFound').textContent=String(state.scan.devicesFound);$('scanElapsed').textContent=formatElapsed(state.scan.elapsedSec);$('scanProgressBar').style.width=Math.round(pct*100)+'%';$('statusOv').textContent=state.scan.state==='SCANNING'?('Scan '+done+'/'+total+' found '+state.scan.devicesFound):(state.scan.state==='DONE'?'Scan complete':state.scan.state==='CANCELLED'?'Scan cancelled':state.scan.state==='ERROR'?(p.message||'Scan failed'):$('statusOv').textContent)}
-function startScan(){updateScanProgress({state:'SCANNING',targetsPlanned:0,probesSent:0,devicesFound:0,startedAt:Date.now()});req('scan.start',{});req('devices.list',{});req('map.state',{})}
-function stopScan(){req('scan.stop',{});updateScanProgress({state:'CANCELLED'})}
-function show(screen){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.nav').forEach(s=>s.classList.remove('active'));const sc=$('screen-'+screen);if(sc)sc.classList.add('active');const nb=document.querySelector('.nav[data-screen="'+screen+'"]');if(nb)nb.classList.add('active');if(screen==='map')drawMap()}
-function maskMac(mac){const p=String(mac||'').split(':');if(p.length<6)return mac||'-';return p[0]+':'+p[1]+':xx:xx:xx:'+p[5]}
-function formatRelativeTime(ts){const t=Number(ts||0);if(!t)return '-';const s=Math.max(0,Math.floor((Date.now()-t)/1000));if(s<10)return'just now';if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
-function copyText(v,label){if(!v){$('statusOv').textContent='Nothing to copy for '+label;return}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(()=>$('statusOv').textContent=label+' copied').catch(()=>$('statusOv').textContent='Copy failed for '+label)}else $('statusOv').textContent='Clipboard unavailable'}
-function findDevice(id){return state.devices.find(x=>x.id===id)||null}
-function mergeDevice(updated){if(!updated||!updated.id)return;const next=normalizeDevices([updated])[0];const idx=state.devices.findIndex(item=>item.id===next.id);if(idx>=0)state.devices[idx]=Object.assign({},state.devices[idx],next);else state.devices.push(next)}
-function deviceActionSupport(device,key,label){const item=device&&device.actionSupport&&device.actionSupport[key];return item&&typeof item==='object'?item:fallbackActionSupport(label,label+' is unsupported on the current backend/router.')}
-function updateSelectedDeviceControls(){const device=(state.selectedDeviceDetails&&state.selectedDeviceDetails.device)||findDevice(state.selectedDeviceId);const blockSupport=deviceActionSupport(device,'device.block','Block device');const prioritizeSupport=deviceActionSupport(device,'device.prioritize','Prioritize device');const dmBlock=$('dmBlock');const dmPrio=$('dmPrio');const reason=$('dmActionReason');if(dmBlock){dmBlock.disabled=!device||!blockSupport.supported;dmBlock.title=device&&blockSupport.supported?'':blockSupport.reason;dmBlock.textContent=device&&blockSupport.supported?(device.isBlocked?'Unblock':'Block'):disabledControlLabel('Block',blockSupport)}if(dmPrio){dmPrio.disabled=true;dmPrio.title=prioritizeSupport.reason;dmPrio.textContent=disabledControlLabel('Prioritize',prioritizeSupport)}if(reason){if(device&&blockSupport.supported)reason.textContent='Block/unblock is available for this device. Prioritize remains disabled until router/backend support exists.';else reason.textContent=(device?blockSupport.reason:'Select a device to view backend-supported actions.')||'Device actions are unavailable.'}}
-function applyDeviceDetails(details){if(!details||!details.device)return;const merged=Object.assign({},details.device,{actionSupport:normalizeActionSupportMap(details.actionSupport||details.device.actionSupport)});mergeDevice(merged);state.selectedDeviceDetails={device:findDevice(merged.id)||normalizeDevices([merged])[0],backend:details.backend||null,deviceCapabilities:details.deviceCapabilities||{},actionSupport:normalizeActionSupportMap(details.actionSupport||{})};if(state.selectedDeviceId===merged.id){openDeviceModal(state.selectedDeviceDetails.device,true)}}
-function renderDevices(devicesArg){if(Array.isArray(devicesArg))state.devices=normalizeDevices(devicesArg);const q=($('devSearch').value||'').toLowerCase(),list=$('devList');list.innerHTML='';const rows=state.devices.filter(d=>(d.name+d.hostname+d.ip+d.mac).toLowerCase().includes(q));state.filtered=rows;rows.forEach(d=>{const blockSupport=deviceActionSupport(d,'device.block','Block device');const prioritizeSupport=deviceActionSupport(d,'device.prioritize','Prioritize device');const blockLabel=blockSupport.supported?(d.isBlocked?'Unblock':'Block'):disabledControlLabel('Block',blockSupport);const item=document.createElement('div');item.className='item';item.innerHTML='<div class="row"><div><div class="v">'+d.name+'</div><div class="mut mono">'+d.ip+' ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ '+(d.vendor||'unknown')+' ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ '+maskMac(d.mac||'')+'</div></div><span class="chip">'+(d.online===false?'OFFLINE':(d.isBlocked?'BLOCKED':'ONLINE'))+'</span></div><div class="row" style="margin-top:6px"><div class="mut">latency '+(d.latencyMs!=null?(d.latencyMs+' ms'):'N/A')+'</div><div class="mut">last '+formatRelativeTime(d.lastSeen)+'</div></div><div class="row" style="margin-top:8px"><button class="btn" data-ping="'+d.id+'">Ping</button><button class="btn" data-block="'+d.id+'"'+(blockSupport.supported?'':' disabled title="'+blockSupport.reason.replace(/"/g,'&quot;')+'"')+'>'+blockLabel+'</button><button class="btn" disabled title="'+prioritizeSupport.reason.replace(/"/g,'&quot;')+'">'+disabledControlLabel('Prioritize',prioritizeSupport)+'</button></div>';item.addEventListener('click',ev=>{if(ev.target.closest('button'))return;openDeviceModal(d)});list.appendChild(item)});list.querySelectorAll('[data-ping]').forEach(b=>b.addEventListener('click',()=>req('device.ping',{deviceId:b.dataset.ping})));list.querySelectorAll('[data-block]').forEach(b=>b.addEventListener('click',()=>{const device=findDevice(b.dataset.block);const support=deviceActionSupport(device,'device.block','Block device');if(!device){$('statusOv').textContent='Device not found.';return}if(!support.supported){$('statusOv').textContent=support.reason;return}req('device.setBlocked',{deviceId:device.id,blocked:!device.isBlocked})}));$('ovDev').textContent=String(rows.length);drawMap();renderMapList(rows)}
-function renderMapList(rows){const box=$('mapList');box.innerHTML='';rows.forEach(d=>{const n=document.createElement('div');n.className='node';n.innerHTML='<div class="row"><b>'+d.name+'</b><span class="chip mono">'+d.ip+'</span></div><div class="mut">vendor '+(d.vendor||'unknown')+' ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ score '+(d.riskScore||0)+'</div>';n.addEventListener('click',()=>openDeviceModal(d));box.appendChild(n)})}
-function linkQuality(d){const direct=Number(d.quality||0);if(direct>0)return Math.max(20,Math.min(99,direct));const risk=Number(d.riskScore||0);return Math.max(20,Math.min(96,88-risk*2))}
-function drawMap(){const rows=state.filtered.length?state.filtered:state.devices;const canvas=$('mapCanvas');const empty=$('mapEmpty');empty.classList.toggle('hidden',rows.length>0);const nodeCount=state.topology&&Array.isArray(state.topology.nodes)&&state.topology.nodes.length?state.topology.nodes.length:(rows.length+(rows.length?1:0));$('mapCount').textContent=nodeCount+' nodes';const ctx=canvas.getContext('2d');const w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=w;canvas.height=h;ctx.clearRect(0,0,w,h);ctx.fillStyle='#081117';ctx.fillRect(0,0,w,h);state.mapNodes=[];if(!rows.length)return;const core=rows.find(d=>d.isGateway)||rows[0];const peers=rows.filter(d=>d.id!==core.id).sort((a,b)=>linkQuality(b)-linkQuality(a));state.mapNodes.push({id:core.id,x:w/2,y:h/2,r:20,device:core});ctx.fillStyle='#ffae3d';ctx.beginPath();ctx.arc(w/2,h/2,20,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ecf6ff';ctx.fillText('GATEWAY',w/2-28,h/2+4);const radius=Math.min(w,h)/2-32;peers.forEach((d,i)=>{const a=(i/Math.max(1,peers.length))*Math.PI*2-Math.PI/2;const x=w/2+Math.cos(a)*radius*.72,y=h/2+Math.sin(a)*radius*.72,q=linkQuality(d),r=12+Math.round(q/24);ctx.strokeStyle='rgba(90,194,255,'+(.25+q/130)+')';ctx.lineWidth=1.2+q/35;ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle='#60cbff';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ecf6ff';ctx.fillText((d.name||'Device').slice(0,10),x-r,y+r+12);state.mapNodes.push({id:d.id,x,y,r,device:d})})}
-function openDeviceModalById(id){const d=findDevice(id);if(d)openDeviceModal(d)}
-function openDeviceModal(device,keepDetails){state.selectedDeviceId=device.id;if(!keepDetails)state.selectedDeviceDetails=null;$('dmName').textContent=device.name;$('dmMeta').textContent=(device.deviceType||'UNKNOWN')+' ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ '+(device.online===false?'OFFLINE':(device.isBlocked?'BLOCKED':'ONLINE'));$('dmHostname').textContent=device.hostname||'-';$('dmIp').textContent=device.ip||'-';$('dmMac').textContent=maskMac(device.mac||'');$('dmVendor').textContent=device.vendor||'-';$('dmLatency').textContent=device.latencyMs!=null?(device.latencyMs+' ms'):'N/A';$('dmOnline').textContent=device.online===false?'OFFLINE':'ONLINE';$('dmLastSeen').textContent=formatRelativeTime(device.lastSeen);$('dmRisk').textContent=String(device.riskScore||0);$('deviceModal').classList.add('show');updateSelectedDeviceControls();if(!keepDetails)req('device.details',{deviceId:device.id})}
-function closeDeviceModal(){$('deviceModal').classList.remove('show');state.selectedDeviceId=null;state.selectedDeviceDetails=null}
-function setRouterInfo(info){const p=info||{};state.routerStatus=p;$('routerGateway').textContent=p.gatewayIp||'-';$('routerSsid').textContent=p.ssid||'-';$('routerRssi').textContent=p.wifiRssi!=null?(p.wifiRssi+' dBm'):'N/A';$('routerDns').textContent=Array.isArray(p.dnsServers)?p.dnsServers.join(', '):'-';$('routerSubnet').textContent=p.subnet||p.prefixLength||p.localIp||p.publicIp||'-';const dhcpSupport=actionSupport('router.renewDhcp');const dnsSupport=actionSupport('router.flushDns');const fwSupport=actionSupport('router.firewall');const vpnSupport=actionSupport('router.vpn');const rebootSupport=actionSupport('router.reboot');const qosSupport=actionSupport('router.qos');const routerActions=[{label:'Renew DHCP',support:dhcpSupport},{label:'Flush DNS',support:dnsSupport},{label:'Firewall',support:fwSupport},{label:'VPN',support:vpnSupport},{label:'QoS',support:qosSupport},{label:'Reboot Router',support:rebootSupport}];state.routerControlSupported=!!qosSupport.supported;setControlState('btnDhcp',dhcpSupport,dhcpSupport.reason||p.message);setControlState('btnDns',dnsSupport,dnsSupport.reason||p.message);setControlState('btnFw',fwSupport,fwSupport.reason||((p.firewall&&p.firewall.message)||p.message));setControlState('btnVpn',vpnSupport,vpnSupport.reason||((p.vpn&&p.vpn.message)||p.message));setControlState('btnReboot',rebootSupport,rebootSupport.reason||p.message);setControlState('btnQos',qosSupport,qosSupport.reason||p.message);summarizeUnsupportedActions(routerActions,p.message);updateSelectedDeviceControls();$('statusOv').textContent=p.message||'Router status updated.';}
-function renderAnalytics(payload){$('anDown').textContent=payload.downMbps!=null?Number(payload.downMbps).toFixed(1)+' Mbps':'N/A';$('anUp').textContent=payload.upMbps!=null?Number(payload.upMbps).toFixed(1)+' Mbps':'N/A';$('anLat').textContent=payload.latencyMs!=null?Number(payload.latencyMs).toFixed(1)+' ms':'N/A';$('anJit').textContent=payload.jitterMs!=null?Number(payload.jitterMs).toFixed(1)+' ms':'N/A';$('anLoss').textContent=payload.packetLossPct!=null?Number(payload.packetLossPct).toFixed(1)+' %':'N/A';$('anDev').textContent=String(payload.deviceCount!=null?payload.deviceCount:(state.devices||[]).length);$('ovLat').textContent=payload.avgRttMs!=null?Number(payload.avgRttMs).toFixed(1)+' ms':(payload.latencyMs!=null?Number(payload.latencyMs).toFixed(1)+' ms':'N/A');$('ovJit').textContent=payload.medianRttMs!=null?Number(payload.medianRttMs).toFixed(1)+' ms':'N/A';$('ovLoss').textContent=payload.packetLossPct!=null?Number(payload.packetLossPct).toFixed(1)+' %':'N/A'}
-function renderTopologyState(payload){state.topology=payload||null;drawMap()}
-function disableRouterControls(reason){['btnDhcp','btnDns','btnFw','btnVpn','btnReboot','btnQos'].forEach(id=>{const el=$(id);if(el){el.disabled=true;el.title=reason;if(!el.dataset.baseLabel)el.dataset.baseLabel=el.textContent;el.textContent=disabledControlLabel(el.dataset.baseLabel,fallbackActionSupport(el.dataset.baseLabel,reason,'NO_DATA'))}});setRouterActionReason(reason);updateSelectedDeviceControls();$('statusOv').textContent=reason}
-window.startScan=startScan;window.stopScan=stopScan;window.renderDevices=renderDevices;window.updateScanProgress=updateScanProgress;window.openDeviceModal=openDeviceModalById;window.setRouterInfo=setRouterInfo;window.applyThemeVars=applyThemeVars;window.NERF=window.NERF||{};window.NERF.request=req;window.NERF.startScan=startScan;window.NERF.stopScan=stopScan;window.NERF.renderDevices=renderDevices;window.NERF.updateScanProgress=updateScanProgress;window.NERF.openDeviceModal=openDeviceModalById;window.NERF.setRouterInfo=setRouterInfo;window.NERF.applyThemeVars=applyThemeVars;
-window.NERF.onEvent=function(eventName,payload){const p=payload||{};if(eventName==='action.result'){if(p.code==='DEVICES_LIST'&&Array.isArray(p.devices))renderDevices(p.devices);if(p.code==='DEVICE_DETAILS'&&p.details)applyDeviceDetails(p.details);if(p.code==='MAP_STATE')renderTopologyState(p);if(p.code==='ROUTER_STATUS'||p.gatewayIp!=null||p.dnsServers!=null||p.ssid!=null)setRouterInfo(p);if(p.code==='WIFI_ENVIRONMENT')state.wifi=p;if(p.code==='SECURITY_SUMMARY')state.security=p;if(p.downMbps!=null||p.deviceCount!=null||p.latencyMs!=null)renderAnalytics(p);if(/^DEVICE_/.test(String(p.code||''))&&p.code!=='DEVICE_DETAILS'){req('devices.list',{});if(state.selectedDeviceId)req('device.details',{deviceId:state.selectedDeviceId})}if(/^ROUTER_/.test(String(p.code||''))&&p.code!=='ROUTER_STATUS')req('router.status',{});if((p.status==='NOT_SUPPORTED'||p.status==='NO_DATA')&&p.message)$('statusOv').textContent=p.errorReason||p.message;else if(p.message)$('statusOv').textContent=p.message;log('EVENT '+eventName);return;}if(eventName==='devices.update'){renderDevices(p.devices||[]);return;}if(eventName==='analytics.snapshot'){renderAnalytics(p);return;}if(eventName==='router.status'){setRouterInfo(p);return;}if(eventName==='wifi.environment'){state.wifi=p;return;}if(eventName==='security.summary'){state.security=p;return;}if(eventName==='scan.progress'||eventName==='scan_progress'){updateScanProgress(Object.assign({},p,{state:'SCANNING'}));return;}if(eventName==='scan.state'){const phase=String(p.phase||'').toUpperCase();if(phase==='RUNNING'||phase==='STARTED')updateScanProgress(Object.assign({},p,{state:'SCANNING'}));else if(phase==='COMPLETE')updateScanProgress(Object.assign({},p,{state:'DONE'}));else if(phase==='ERROR')updateScanProgress(Object.assign({},p,{state:'ERROR'}));else if(phase==='IDLE')updateScanProgress(Object.assign({},p,{state:'IDLE'}));return;}if(eventName==='scan.results'&&Array.isArray(p.devices)){renderDevices(p.devices);return;}if(eventName==='scan_done'){updateScanProgress(Object.assign({},p,{state:'DONE'}));req('devices.list',{});req('map.state',{});return;}if(eventName==='scan_error'){updateScanProgress(Object.assign({},p,{state:'ERROR'}));return;}if(eventName==='speedtest.ui'||eventName==='speedtest.result'){const phase=String(p.phase||'IDLE').toUpperCase();const mode=p.targetMode==='PRIVATE_LOCAL'?'PRIVATE/LAN':(p.targetMode==='PUBLIC_INTERNET'?'PUBLIC INTERNET':'CURRENT MODE');$('spPhase').textContent=phase+' · '+mode;$('spDown').textContent=(p.downMbps!=null?Number(p.downMbps).toFixed(1):0)+' Mbps';$('spUp').textContent=(p.upMbps!=null?Number(p.upMbps).toFixed(1):0)+' Mbps';$('spLat').textContent=(p.pingMs!=null?Number(p.pingMs).toFixed(1):(p.latencyMs!=null?Number(p.latencyMs).toFixed(1):0))+' ms';if(p.message)$('statusOv').textContent=p.message;return;}if(eventName==='topology.state'){renderTopologyState(p);return;}};
-window.NERF.onEvent=function(eventName,payload){
-const p=payload||{};
-const speedPayload=(source)=>{
-const data=source&&source.state&&typeof source.state==='object'?source.state:source||{};
-const phase=String(data.phase||'IDLE').toUpperCase();
-const mode=data.targetMode==='PRIVATE_LOCAL'?'PRIVATE/LAN':(data.targetMode==='PUBLIC_INTERNET'?'PUBLIC INTERNET':'CURRENT MODE');
-const down=data.downMbps!=null?Number(data.downMbps):Number(data.downloadMbps||0);
-const up=data.upMbps!=null?Number(data.upMbps):Number(data.uploadMbps||0);
-const latency=data.pingMs!=null?Number(data.pingMs):(data.latencyMs!=null?Number(data.latencyMs):0);
-$('spPhase').textContent=phase+' · '+mode;
-$('spDown').textContent=down.toFixed(1)+' Mbps';
-$('spUp').textContent=up.toFixed(1)+' Mbps';
-$('spLat').textContent=latency.toFixed(1)+' ms';
-if(data.message)$('statusOv').textContent=data.message;
-};
-const scanStatePayload=(source)=>{
-const phase=String(source&&source.phase||'').toUpperCase();
-if(phase==='RUNNING'||phase==='STARTED')updateScanProgress(Object.assign({},source,{state:'SCANNING'}));
-else if(phase==='COMPLETE')updateScanProgress(Object.assign({},source,{state:'DONE'}));
-else if(phase==='ERROR')updateScanProgress(Object.assign({},source,{state:'ERROR'}));
-else if(phase==='IDLE')updateScanProgress(Object.assign({},source,{state:'IDLE'}));
-};
-if(eventName==='action.result'){
-if(p.code==='DEVICES_LIST'&&Array.isArray(p.devices))renderDevices(p.devices);
-if(p.code==='DEVICE_DETAILS'&&p.details)applyDeviceDetails(p.details);
-if(p.code==='MAP_STATE')renderTopologyState(p);
-if(p.code==='SCAN_STATE')scanStatePayload(p);
-if(p.code==='SPEEDTEST_STATE')speedPayload(p);
-if(p.code==='ROUTER_STATUS'||p.gatewayIp!=null||p.dnsServers!=null||p.ssid!=null)setRouterInfo(p);
-if(p.code==='WIFI_ENVIRONMENT')state.wifi=p;
-if(p.code==='SECURITY_SUMMARY')state.security=p;
-if(p.downMbps!=null||p.deviceCount!=null||p.latencyMs!=null)renderAnalytics(p);
-if(/^DEVICE_/.test(String(p.code||''))&&p.code!=='DEVICE_DETAILS'){req('devices.list',{});if(state.selectedDeviceId)req('device.details',{deviceId:state.selectedDeviceId})}
-if(/^ROUTER_/.test(String(p.code||''))&&p.code!=='ROUTER_STATUS')req('router.status',{});
-if((p.status==='NOT_SUPPORTED'||p.status==='NO_DATA')&&p.message)$('statusOv').textContent=p.errorReason||p.message;else if(p.message)$('statusOv').textContent=p.message;
-log('EVENT '+eventName);
-return;
-}
-if(eventName==='devices.update'){if(Array.isArray(p.devices))renderDevices(p.devices);else if(p.device){mergeDevice(p.device);renderDevices()}return;}
-if(eventName==='analytics.snapshot'){renderAnalytics(p);return;}
-if(eventName==='router.status'){setRouterInfo(p);return;}
-if(eventName==='wifi.environment'){state.wifi=p;return;}
-if(eventName==='security.summary'){state.security=p;return;}
-if(eventName==='scan.progress'||eventName==='scan_progress'){updateScanProgress(Object.assign({},p,{state:'SCANNING'}));return;}
-if(eventName==='scan.state'){scanStatePayload(p);return;}
-if(eventName==='scan.results'&&Array.isArray(p.devices)){renderDevices(p.devices);return;}
-if(eventName==='scan.results'&&p.device){mergeDevice(p.device);renderDevices();if(state.selectedDeviceId===String(p.device.id||''))req('device.details',{deviceId:state.selectedDeviceId});return;}
-if(eventName==='scan_done'){updateScanProgress(Object.assign({},p,{state:'DONE'}));req('devices.list',{});req('map.state',{});return;}
-if(eventName==='scan_error'){updateScanProgress(Object.assign({},p,{state:'ERROR'}));return;}
-if(eventName==='speedtest.ui'||eventName==='speedtest.result'){speedPayload(p);return;}
-if(eventName==='topology.state'){renderTopologyState(p);return;}
-};
-setInterval(()=>{if(document.visibilityState!=='visible')return; if(state.scan.state==='SCANNING')updateScanProgress({state:'SCANNING'}); req('analytics.snapshot',{});req('devices.list',{})},4000);
-$('mapCanvas').addEventListener('click',ev=>{const r=$('mapCanvas').getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top;const hit=state.mapNodes.find(n=>Math.hypot(n.x-x,n.y-y)<=n.r+4);if(hit)openDeviceModal(hit.device)});
-$('dmClose').addEventListener('click',closeDeviceModal);$('deviceModal').addEventListener('click',ev=>{if(ev.target.id==='deviceModal')closeDeviceModal()});$('dmPing').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);if(device)req('device.ping',{deviceId:device.id})});$('dmCopyIp').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);if(device)copyText(device.ip,'IP')});$('dmCopyMac').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);if(device)copyText(device.mac,'MAC')});$('dmBlock').addEventListener('click',()=>{const device=findDevice(state.selectedDeviceId);const support=deviceActionSupport(device,'device.block','Block device');if(!device){$('statusOv').textContent='Device not found.';return}if(!support.supported){$('statusOv').textContent=support.reason;updateSelectedDeviceControls();return}req('device.setBlocked',{deviceId:device.id,blocked:!device.isBlocked})});
-document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));$('btnMapRunScan').addEventListener('click',startScan);$('btnMapRefresh').addEventListener('click',()=>{req('map.refresh',{});req('map.state',{})});$('devSearch').addEventListener('input',()=>renderDevices());$('btnDevRefresh').addEventListener('click',()=>{req('devices.list',{});req('map.state',{})});$('btnQuickScan').addEventListener('click',startScan);$('btnStartScan').addEventListener('click',startScan);$('btnStopScan').addEventListener('click',stopScan);$('btnRouterInfo').addEventListener('click',()=>req('router.status',{}));$('btnRefreshOv').addEventListener('click',()=>{req('analytics.snapshot',{});req('devices.list',{});req('router.status',{});req('wifi.environment',{});req('security.summary',{})});$('btnStartSpeed').addEventListener('click',()=>req('speedtest.start',{}));$('btnStopSpeed').addEventListener('click',()=>req('speedtest.stop',{}));$('btnResetSpeed').addEventListener('click',()=>req('speedtest.reset',{}));$('btnDhcp').addEventListener('click',()=>req('router.renewDhcp',{}));$('btnDns').addEventListener('click',()=>req('router.flushDns',{}));$('btnFw').addEventListener('click',()=>{const enabled=routerFeatureEnabled('firewall');if(enabled===null){$('statusOv').textContent=(state.routerStatus&&state.routerStatus.firewall&&state.routerStatus.firewall.message)||'Firewall readback is unavailable on this backend.';return;}req('router.setFirewall',{enabled:!enabled})});$('btnVpn').addEventListener('click',()=>{const enabled=routerFeatureEnabled('vpn');if(enabled===null){$('statusOv').textContent=(state.routerStatus&&state.routerStatus.vpn&&state.routerStatus.vpn.message)||'VPN readback is unavailable on this backend.';return;}req('router.setVpn',{enabled:!enabled})});$('btnReboot').addEventListener('click',()=>req('router.reboot',{}));$('btnQos').addEventListener('click',()=>{if(!state.routerControlSupported)return;req('router.setQos',{mode:$('qosMode').value})});$('btnAnRefresh').addEventListener('click',()=>req('analytics.snapshot',{}));
-disableRouterControls('Waiting for router status...');show('overview');updateScanProgress({state:'IDLE'});req('devices.list',{});req('scan.state',{});req('analytics.snapshot',{});req('speedtest.state',{});req('map.state',{});req('router.status',{});req('wifi.environment',{});req('security.summary',{});
+  const $=(id)=>document.getElementById(id);
+  const state={ devices:[], filtered:[] };
+
+  window.NERF = window.NERF || {};
+  window.NERF.onEvent = function(eventName,payload){
+    if(eventName==='action.result'){
+      if(payload.devices){ state.devices = payload.devices; renderDevices(); renderMap(); updateOverviewFromDevices(); }
+      if(payload.downMbps!=null){ renderAnalytics(payload); }
+      log('EVENT '+eventName+' '+JSON.stringify(payload));
+    }
+  };
+
+  function req(action,payload){
+    try{
+      if(window.NERF_NATIVE && window.NERF_NATIVE.request){
+        window.NERF_NATIVE.request(action, JSON.stringify(payload||{}));
+      } else { log('Bridge unavailable: '+action); }
+    } catch(e){ log('Bridge error: '+e.message); }
+  }
+  window.NERF.request = req;
+
+  function log(msg){
+    const el = document.createElement('div');
+    el.textContent = '['+new Date().toLocaleTimeString()+'] '+msg;
+    $('log').prepend(el);
+  }
+
+  function show(screen){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.querySelectorAll('.nav').forEach(s=>s.classList.remove('active'));
+    const sc = $('screen-'+screen); if(sc) sc.classList.add('active');
+    const nb = document.querySelector('.nav[data-screen="'+screen+'"]'); if(nb) nb.classList.add('active');
+  }
+
+  document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
+
+  function renderDevices(){
+    const q = ($('devSearch').value||'').toLowerCase();
+    const list = $('devList'); list.innerHTML='';
+    const rows = state.devices.filter(d=> (d.name+d.ip+d.mac).toLowerCase().includes(q));
+    state.filtered = rows;
+    rows.forEach(d=>{
+      const item = document.createElement('div');
+      item.className='item';
+      item.innerHTML = '<div class="row"><div><div class="v">'+d.name+'</div><div class="mut mono">'+d.ip+' • '+(d.vendor||'unknown')+' • '+(d.mac||'unknown')+'</div></div><span class="chip">risk '+(d.riskScore||0)+'</span></div>'+
+        '<div class="row" style="margin-top:8px"><button class="btn" data-ping="'+d.id+'">Ping</button><button class="btn" data-block="'+d.id+'">Block</button><button class="btn" data-prio="'+d.id+'">Prioritize</button></div>';
+      list.appendChild(item);
+    });
+    list.querySelectorAll('[data-ping]').forEach(b=>b.addEventListener('click',()=>req('device.ping',{deviceId:b.dataset.ping})));
+    list.querySelectorAll('[data-block]').forEach(b=>b.addEventListener('click',()=>req('device.block',{deviceId:b.dataset.block})));
+    list.querySelectorAll('[data-prio]').forEach(b=>b.addEventListener('click',()=>req('device.prioritize',{deviceId:b.dataset.prio})));
+    $('ovDev').textContent = rows.length;
+  }
+
+  function renderMap(){
+    const box = $('mapList'); box.innerHTML='';
+    const rows = state.filtered.length?state.filtered:state.devices;
+    $('mapCount').textContent = rows.length+' nodes';
+    rows.forEach(d=>{
+      const n = document.createElement('div');
+      n.className='node';
+      n.innerHTML = '<div class="row"><b>'+d.name+'</b><span class="chip mono">'+d.ip+'</span></div>'+
+        '<div class="mut">vendor '+(d.vendor||'unknown')+' • score '+(d.riskScore||0)+'</div>';
+      box.appendChild(n);
+    });
+  }
+
+  function updateOverviewFromDevices(){
+    const c = state.devices.length;
+    $('ovDev').textContent = c;
+    $('ovWan').textContent = c>0 ? 'UP' : 'UNKNOWN';
+  }
+
+  function renderAnalytics(s){
+    $('anDown').textContent = s.downMbps.toFixed(1)+' Mbps';
+    $('anUp').textContent = s.upMbps.toFixed(1)+' Mbps';
+    $('anLat').textContent = s.latencyMs.toFixed(1)+' ms';
+    $('anJit').textContent = s.jitterMs.toFixed(1)+' ms';
+    $('anLoss').textContent = s.packetLossPct.toFixed(1)+' %';
+    $('anDev').textContent = String(s.deviceCount);
+    $('ovLat').textContent = s.latencyMs.toFixed(1)+' ms';
+    $('ovJit').textContent = s.jitterMs.toFixed(1)+' ms';
+    $('ovLoss').textContent = s.packetLossPct.toFixed(1)+' %';
+  }
+
+  $('devSearch').addEventListener('input', renderDevices);
+  $('btnDevRefresh').addEventListener('click', ()=>{ req('devices.list',{}); req('scan.start',{}); });
+  $('btnQuickScan').addEventListener('click', ()=>{ req('scan.start',{}); req('devices.list',{}); $('statusOv').textContent='Deep scan requested'; });
+  $('btnRefreshOv').addEventListener('click', ()=>{ req('analytics.snapshot',{}); req('devices.list',{}); });
+  $('btnMapRefresh').addEventListener('click', ()=>{ req('map.refresh',{}); req('devices.list',{}); });
+
+  $('btnStartSpeed').addEventListener('click', ()=>req('speedtest.start',{}));
+  $('btnStopSpeed').addEventListener('click', ()=>req('speedtest.stop',{}));
+  $('btnResetSpeed').addEventListener('click', ()=>{ req('speedtest.stop',{}); $('spPhase').textContent='IDLE'; $('spDown').textContent='0 Mbps'; $('spUp').textContent='0 Mbps'; $('spLat').textContent='0 ms'; });
+
+  $('btnDhcp').addEventListener('click', ()=>req('router.renewDhcp',{}));
+  $('btnDns').addEventListener('click', ()=>req('router.flushDns',{}));
+  $('btnFw').addEventListener('click', ()=>req('router.toggleFirewall',{}));
+  $('btnVpn').addEventListener('click', ()=>req('router.toggleVpn',{}));
+  $('btnReboot').addEventListener('click', ()=>req('router.reboot',{}));
+  $('btnQos').addEventListener('click', ()=>req('router.setQos',{mode:$('qosMode').value}));
+
+  $('btnAnRefresh').addEventListener('click', ()=>req('analytics.snapshot',{}));
+
+  setInterval(()=>{ req('analytics.snapshot',{}); req('devices.list',{}); }, 4000);
+  req('scan.start',{});
+  req('devices.list',{});
+  req('analytics.snapshot',{});
 })();
 </script>
 </body>

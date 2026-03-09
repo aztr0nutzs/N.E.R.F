@@ -12,6 +12,7 @@ import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.Device
 import com.nerf.netx.domain.DeviceControlStatusSnapshot
 import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.networkdoctor.model.NetworkDoctorAction
 import com.nerf.netx.networkdoctor.model.NetworkDoctorHealthStatus
@@ -148,6 +149,18 @@ class NetworkDoctorStateMapperTest {
       status = ServiceStatus.NOT_SUPPORTED,
       message = "Device control unsupported."
     ),
-    routerInfo = routerInfo
+    routerInfo = routerInfo,
+    routerStatus = routerInfo?.toRouterStatus()
   )
+
+  private fun RouterInfoResult.toRouterStatus(): RouterStatusSnapshot {
+    return RouterStatusSnapshot(
+      status = status,
+      message = message,
+      gatewayIp = gatewayIp,
+      dnsServers = dnsServers,
+      ssid = ssid,
+      linkSpeedMbps = linkSpeedMbps
+    )
+  }
 }

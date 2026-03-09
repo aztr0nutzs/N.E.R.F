@@ -38,6 +38,8 @@ import com.nerf.netx.domain.ScanEvent
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.domain.SpeedtestResult
 import com.nerf.netx.domain.SpeedtestUiState
+import com.nerf.netx.domain.unavailableResult
+import com.nerf.netx.domain.unsupportedResult
 import com.nerf.netx.ui.theme.ThemeBridgeContract
 import com.nerf.netx.ui.theme.ThemeId
 import kotlinx.coroutines.CoroutineScope

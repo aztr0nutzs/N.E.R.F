@@ -8,6 +8,7 @@ import com.nerf.netx.domain.AnalyticsSnapshot
 import com.nerf.netx.domain.Device
 import com.nerf.netx.domain.DeviceControlStatusSnapshot
 import com.nerf.netx.domain.RouterInfoResult
+import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ScanPhase
 import com.nerf.netx.domain.ScanState
 import com.nerf.netx.domain.ServiceStatus
@@ -108,7 +109,19 @@ class NetworkDiagnosisEngineTest {
         status = ServiceStatus.NOT_SUPPORTED,
         message = "Device control unsupported."
       ),
-      routerInfo = routerInfo
+      routerInfo = routerInfo,
+      routerStatus = routerInfo?.toRouterStatus()
+    )
+  }
+
+  private fun RouterInfoResult.toRouterStatus(): RouterStatusSnapshot {
+    return RouterStatusSnapshot(
+      status = status,
+      message = message,
+      gatewayIp = gatewayIp,
+      dnsServers = dnsServers,
+      ssid = ssid,
+      linkSpeedMbps = linkSpeedMbps
     )
   }
 

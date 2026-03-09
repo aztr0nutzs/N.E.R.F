@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -209,7 +208,7 @@ private fun AssistantMessageItem(
   onConfirm: () -> Unit,
   onCancel: () -> Unit
 ) {
-  val alignment = if (item.author == AssistantMessageAuthor.USER) Alignment.CenterEnd else Alignment.CenterStart
+  val alignment = if (item.author == AssistantMessageAuthor.USER) Alignment.End else Alignment.Start
   val bgColor = if (item.author == AssistantMessageAuthor.USER) Color(0xFF1E3A5F) else Color(0xFF2F2F3A)
 
   Column(horizontalAlignment = alignment, modifier = Modifier.fillMaxWidth()) {

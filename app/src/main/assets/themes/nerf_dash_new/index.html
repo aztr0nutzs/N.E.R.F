@@ -1,14 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,maximum-scale=1.0">
 <meta name="theme-color" content="#000000">
-<title>J.A.R.V.I.S. â€” NETWORK INTELLIGENCE v4.2</title>
+<title>J.A.R.V.I.S. — NETWORK INTELLIGENCE v4.2</title>
 <style>
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    ROOT VARIABLES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 :root {
   --c:  #02feff;
   --c2: #00d4e8;
@@ -32,12 +32,12 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;color:var(--c);font-family:var(--font);font-style:italic;font-weight:700;letter-spacing:.04em;}
 
-/* â•â•â• SCANLINE OVERLAY â•â•â• */
+/* ═══ SCANLINE OVERLAY ═══ */
 body::after {display:none;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   KEYFRAMES â€” from asset files + extended
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════════════════════════════════════════
+   KEYFRAMES — from asset files + extended
+═══════════════════════════════════════════════════════ */
 @keyframes rot       {0%{transform:rotateZ(0)}   100%{transform:rotateZ(360deg)}}
 @keyframes rot-r     {0%{transform:rotateZ(360deg)} 100%{transform:rotateZ(0)}}
 @keyframes col-ease  {0%,100%{border-color:var(--c)} 50%{border-color:rgba(2,254,255,.3)}}
@@ -59,12 +59,12 @@ body::after {display:none;}
 @keyframes scan-h    {0%{top:-2px} 100%{top:100%}}
 @keyframes glitch    {0%,92%,100%{transform:translate(0)} 93%{transform:translate(-2px,1px)} 95%{transform:translate(2px,-1px)} 97%{transform:translate(-1px,0)}}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    APP SHELL
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #app {display:flex;flex-direction:column;width:100%;height:100%;position:relative;}
 
-/* â”€â”€â”€ TOP STATUS BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── TOP STATUS BAR ───────────────────────────────── */
 #topbar {
   height:46px;min-height:46px;
   background:rgba(0,6,12,.98);
@@ -95,12 +95,12 @@ body::after {display:none;}
   border:1px solid rgba(255,107,0,.35);display:none;
 }
 
-/* â”€â”€â”€ SCREENS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── SCREENS ──────────────────────────────────────── */
 #screens{flex:1;overflow:hidden;position:relative;min-height:0;}
 .screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;}
 .screen.active{display:block;animation:fdi .22s ease;}
 
-/* â”€â”€â”€ BOTTOM NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── BOTTOM NAV ───────────────────────────────────── */
 #botnav {
   height:68px;min-height:68px;
   background:rgba(0,6,12,.98);
@@ -127,9 +127,9 @@ body::after {display:none;}
 .nbtn .ni{font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;height:26px;}
 .nbtn .nl{font-size:8px;letter-spacing:1.7px;text-transform:uppercase;font-family:var(--font);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SHARED HUD COMPONENTS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 .hpnl {
   background:var(--gls);border:1px solid var(--br);
   border-radius:1px;position:relative;overflow:hidden;
@@ -191,7 +191,7 @@ body::after {display:none;}
 .hbtn.dng::after{background:rgba(255,34,0,.1);}
 .hbtn.dis{opacity:.3;pointer-events:none;}
 
-/* â”€â”€â”€ ARC REACTOR CSS COMPONENTS (from asset) â”€â”€â”€â”€â”€â”€ */
+/* ─── ARC REACTOR CSS COMPONENTS (from asset) ────── */
 .arc-ring {
   border-radius:50%;border:2px solid var(--c);
   background:rgba(2,254,255,.03);
@@ -226,24 +226,24 @@ body::after {display:none;}
   animation:mrk 3s ease-in-out infinite;
 }
 
-/* â”€â”€â”€ SCROLLBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── SCROLLBAR ─────────────────────────────────── */
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:rgba(2,254,255,.2);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 1: OVERVIEW
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #s-ov { padding:8px; display:flex; flex-direction:column; gap:6px; min-height:100%; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 2: SPEEDTEST
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #s-st { padding:8px; display:flex; flex-direction:column; align-items:center; gap:8px; min-height:100%; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 3: DEVICES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #s-dv { padding:8px; display:flex; flex-direction:column; gap:6px; min-height:100%; }
 .dsrch {
   flex:1;background:var(--gls);border:1px solid var(--br);
@@ -286,7 +286,7 @@ body::after {display:none;}
 .dc-qb{height:3px;background:rgba(2,254,255,.07);margin-top:5px;overflow:hidden;}
 .dc-qf{height:100%;transition:width .5s;}
 
-/* â”€â”€â”€ DEVICE DRAWER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── DEVICE DRAWER ─────────────────────────────── */
 #dvd {
   position:fixed;bottom:54px;left:0;right:0;
   background:rgba(0,5,14,.99);border-top:1px solid var(--c);
@@ -308,15 +308,14 @@ body::after {display:none;}
 .dw-tgls{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;}
 .dw-tgl{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--br);flex:1;min-width:120px;cursor:pointer;}
 .tgl-lbl{font-size:7.5px;letter-spacing:1px;color:rgba(2,254,255,.5);flex:1;}
-.dw-note{margin-top:6px;font-size:7px;line-height:1.5;color:#ffd39f;letter-spacing:.8px}
 .tgl-sw{width:34px;height:17px;border-radius:9px;background:rgba(2,254,255,.07);border:1px solid var(--br);position:relative;transition:background .25s;}
 .tgl-sw.on{background:rgba(2,254,255,.2);border-color:var(--c);}
 .tgl-sw::after{content:'';position:absolute;width:13px;height:13px;border-radius:50%;background:rgba(2,254,255,.4);top:1px;left:1px;transition:left .25s,background .25s;}
 .tgl-sw.on::after{left:18px;background:var(--c);box-shadow:0 0 6px var(--c);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 4: NETWORK MAP
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #s-mp{position:relative;width:100%;height:100%;overflow:hidden;}
 #map-canvas{width:100%;height:100%;display:block;touch-action:none;}
 .m-ov{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;pointer-events:all;}
@@ -339,9 +338,9 @@ body::after {display:none;}
 .li{display:flex;align-items:center;gap:5px;margin-bottom:2px;}
 .ldot{width:7px;height:7px;border-radius:50%;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 5: CONSOLE + ANALYTICS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #s-co{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 .ca-tabs{display:flex;background:rgba(0,5,12,.98);border-bottom:1px solid var(--br2);flex-shrink:0;}
 .catab{
@@ -392,9 +391,9 @@ canvas.chtc{width:100%;height:68px;display:block;}
   font-family:var(--font);font-size:8px;padding:4px 9px;cursor:pointer;letter-spacing:1px;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    JARVIS ORB + PANEL
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 #jorb {
   position:fixed;bottom:76px;right:14px;width:74px;height:74px;
   border-radius:50%;
@@ -460,7 +459,7 @@ canvas.chtc{width:100%;height:68px;display:block;}
   padding:5px 10px;cursor:pointer;letter-spacing:1px;
 }
 
-/* â•â•â• AGGRESSIVE TYPOGRAPHY + GOLD STATUS TONE â•â•â• */
+/* ═══ AGGRESSIVE TYPOGRAPHY + GOLD STATUS TONE ═══ */
 button,input,select,textarea,.ph,.k,.tb-lbl,.tb-clk,.nbtn .nl,.nbtn .ni,.dr .v,.cht-title,.cv,.dw-title,.jp-tle,.jp-sub,.jm,.ll,.qc,.jqa,.m-info,.m-leg,.mbtn,.catab,.tb-spd .v,.tb-spd .l,.tb-alrt,.dc-nm,.dc-ip,.dc-mac,.dc-st,.dw-dat .dk,.dw-dat .dv,.tgl-lbl,.cpmt,.cin,.jp-in,.jp-snd,.ph .ser{
   font-family:var(--font);
   font-style:italic;
@@ -471,7 +470,7 @@ button,input,select,textarea,.ph,.k,.tb-lbl,.tb-clk,.nbtn .nl,.nbtn .ni,.dr .v,.
 .bwf.gn{background:linear-gradient(90deg,var(--gold2),var(--gold));box-shadow:0 0 8px rgba(242,193,78,.45);}
 #topbar,#botnav,#jpnl,#dvd,.con-log,.cin-row,.ca-tabs{backdrop-filter:none;}
 
-/* â•â•â• AMBIENT HUD OVERLAYS FROM ATTACHED ELEMENT STYLE â•â•â• */
+/* ═══ AMBIENT HUD OVERLAYS FROM ATTACHED ELEMENT STYLE ═══ */
 #bg-hud{display:none;}
 
 #app{z-index:1;}
@@ -598,13 +597,13 @@ button,input,select,textarea,.ph,.k,.tb-lbl,.tb-clk,.nbtn .nl,.nbtn .ni,.dr .v,.
 /* ===== FINAL VISUAL OVERRIDES ===== */
 :root{
   /* Updated neon palette: primary accents */
-  --c:#39ff14;        /* neon yellowishâ€‘green */
+  --c:#39ff14;        /* neon yellowish‑green */
   --c2:#00ffff;       /* neon blue */
   --tl:#ff48c9;       /* neon pink */
   --bl:#ff8c1a;       /* neon orange */
   --or:#ff8c1a;       /* neon orange */
   --rd:#ff48c9;       /* neon pink for danger */
-  --gn:#39ff14;       /* neon yellowishâ€‘green */
+  --gn:#39ff14;       /* neon yellowish‑green */
   --pink:#ff48c9;     /* explicit neon pink */
   --ny:#c0ff00;       /* bright neon lime for key stats */
   --bg:#000000;
@@ -1094,7 +1093,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 
 
 
-/* â”€â”€â”€ VIDEO HEADERS + EXTRA HUD DECOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── VIDEO HEADERS + EXTRA HUD DECOR ───────────────── */
 .screen-video-header{
   position:relative;overflow:hidden;min-height:102px;border:1px solid rgba(39,232,255,.18);
   background:linear-gradient(180deg,rgba(0,10,18,.96),rgba(0,4,10,.88));
@@ -1168,7 +1167,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 /* ===== NETWORK HEARTBEAT DASHBOARD REFACTOR ===== */
 :root{
   /* Override status colors to neon palette */
-  --ok:#39ff14;        /* neon yellowishâ€‘green */
+  --ok:#39ff14;        /* neon yellowish‑green */
   --amber:#ff8c1a;     /* neon orange */
   --danger:#ff48c9;    /* neon pink */
 }
@@ -1350,12 +1349,6 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 }
 .nd-toggle.on{justify-content:flex-end;background:rgba(231,76,60,.12);border-color:rgba(231,76,60,.42);}
 .nd-toggle.on::after{background:#fff;box-shadow:0 0 16px rgba(231,76,60,.28);}
-.nd-toggle.unsupported,.nd-switch.unsupported,.nd-reboot.unsupported,.dw-tgl.unsupported{
-  opacity:.42;cursor:not-allowed;
-}
-.nd-action.unsupported{
-  border-color:rgba(231,76,60,.22);box-shadow:none;
-}
 .nd-toggle-label{margin-top:4px;font-size:6px;color:rgba(255,255,255,.28);letter-spacing:1.3px;text-transform:uppercase;text-align:right;}
 .nd-empty{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
@@ -1373,14 +1366,12 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 .nd-action{
   border:1px solid rgba(2,254,255,.11);background:rgba(0,0,0,.16);padding:10px;display:flex;justify-content:space-between;gap:10px;align-items:center;
 }
-.nd-action.unsupported{border-color:rgba(255,179,71,.34);background:rgba(255,179,71,.06)}
 .nd-action.glow{
   box-shadow:0 0 20px rgba(46,204,113,.08), inset 0 0 24px rgba(46,204,113,.04);
   border-color:rgba(46,204,113,.32);
 }
 .nd-action-copy .title{font-size:9px;color:#fff;letter-spacing:1.3px;text-transform:uppercase;}
 .nd-action-copy .sub{margin-top:4px;font-size:6.5px;color:rgba(255,255,255,.32);letter-spacing:1.2px;text-transform:uppercase;line-height:1.5;}
-.nd-unsupported{margin-top:6px;font-size:6.5px;color:#ffd39f;letter-spacing:1px;line-height:1.5;text-transform:none}
 .nd-switch{
   width:58px;height:28px;padding:2px;border:1px solid rgba(2,254,255,.18);background:rgba(255,255,255,.05);display:flex;align-items:center;
   cursor:pointer;transition:all .18s;
@@ -1462,7 +1453,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 <div id="app">
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• TOP BAR â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ TOP BAR ══════════════ -->
 <div id="topbar">
   <span class="tb-clk" id="tbclk">--:--:--</span>
   <div class="tb-sec"></div>
@@ -1470,13 +1461,13 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   <div class="tb-sec"></div>
   <div class="tb-stat"><div class="tb-dot ok" id="tbd2"></div><span class="tb-lbl" id="tbl2">SECURE</span></div>
   <div class="tb-spds">
-    <div class="tb-spd"><span class="v" id="tbdl">â†“ 0.0</span><span class="l">Mbps</span></div>
-    <div class="tb-spd"><span class="v" id="tbul">â†‘ 0.0</span><span class="l">Mbps</span></div>
+    <div class="tb-spd"><span class="v" id="tbdl">↓ 0.0</span><span class="l">Mbps</span></div>
+    <div class="tb-spd"><span class="v" id="tbul">↑ 0.0</span><span class="l">Mbps</span></div>
   </div>
-  <span class="tb-alrt" id="tbalrt">âš  THREAT</span>
+  <span class="tb-alrt" id="tbalrt">⚠ THREAT</span>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• SCREENS â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ SCREENS ══════════════ -->
 <div id="screens">
   <div id="s-ov" class="screen active"></div>
   <div id="s-st" class="screen">
@@ -1499,11 +1490,11 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     <canvas id="map-canvas"></canvas>
     <div class="hud-deco-corner"><div class="r1"></div><div class="r2"></div><div class="ticks"></div></div>
     <div class="m-ov">
-      <button class="mbtn act" id="mradar" onclick="mapRadarToggle()" title="Visual-only map overlay.">â—‰ RADAR VIEW</button>
-      <button class="mbtn" id="mthreat" onclick="mapThreatToggle()" title="Visual-only map overlay.">âš  THREAT VIEW</button>
-      <button class="mbtn" onclick="mapReset()" title="Visual-only camera reset.">âŠ™ RESET VIEW</button>
+      <button class="mbtn act" id="mradar" onclick="mapRadarToggle()">◉ RADAR</button>
+      <button class="mbtn" id="mthreat" onclick="mapThreatToggle()">⚠ THREAT</button>
+      <button class="mbtn" onclick="mapReset()">⊙ RESET</button>
     </div>
-    <div class="m-info" id="minfo">NODES: 0 | LINKS: 0<br>MODE: PASSIVE SCAN<br>28.5Â°N / 81.3Â°W</div>
+    <div class="m-info" id="minfo">NODES: 0 | LINKS: 0<br>MODE: PASSIVE SCAN<br>28.5°N / 81.3°W</div>
     <div class="m-leg">
       <div class="li"><div class="ldot" style="background:var(--c)"></div>GATEWAY</div>
       <div class="li"><div class="ldot" style="background:var(--gn)"></div>ONLINE</div>
@@ -1524,13 +1515,13 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     </div>
     <div class="intel-stage">
     <div class="ca-tabs">
-      <button class="catab act" id="tab-an" onclick="caSwitch('an')">â—ˆ ANALYTICS</button>
-      <button class="catab" id="tab-co" onclick="caSwitch('co')">â–¶ CONSOLE</button>
+      <button class="catab act" id="tab-an" onclick="caSwitch('an')">◈ ANALYTICS</button>
+      <button class="catab" id="tab-co" onclick="caSwitch('co')">▶ CONSOLE</button>
     </div>
     <div class="ca-pnl act" id="cap-an">
       <div class="an-grid" id="angrid">
-        <div class="cht-wrap"><div class="cht-title">THROUGHPUT â€” Mbps <span class="cv" id="cv-th">--</span></div><canvas class="chtc" id="ch-th"></canvas></div>
-        <div class="cht-wrap"><div class="cht-title">LATENCY â€” ms <span class="cv" id="cv-lt">--</span></div><canvas class="chtc" id="ch-lt"></canvas></div>
+        <div class="cht-wrap"><div class="cht-title">THROUGHPUT — Mbps <span class="cv" id="cv-th">--</span></div><canvas class="chtc" id="ch-th"></canvas></div>
+        <div class="cht-wrap"><div class="cht-title">LATENCY — ms <span class="cv" id="cv-lt">--</span></div><canvas class="chtc" id="ch-lt"></canvas></div>
         <div class="cht-wrap"><div class="cht-title">THREAT INDEX <span class="cv" id="cv-tr" style="color:var(--or)">--</span></div><canvas class="chtc" id="ch-tr"></canvas></div>
         <div class="cht-wrap"><div class="cht-title">DEVICE UPTIME % <span class="cv" id="cv-up" style="color:var(--gn)">--</span></div><canvas class="chtc" id="ch-up"></canvas></div>
       </div>
@@ -1538,12 +1529,12 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
     <div class="ca-pnl" id="cap-co">
       <div class="con-log" id="conlog"></div>
       <div class="qcmds">
-        <button class="qc" onclick="rc('scan')">â—‰ SCAN</button>
-        <button class="qc" onclick="rc('diag')">âš™ DIAG</button>
-        <button class="qc" onclick="rc('export')">â†— EXPORT</button>
-        <button class="qc" onclick="rc('speed')">âš¡ SPEED</button>
-        <button class="qc" onclick="rc('flush')" title="Flush DNS capability is loading from the backend/router.">â†º FLUSH DNS</button>
-        <button class="qc" onclick="rc('clear')">âœ• CLEAR</button>
+        <button class="qc" onclick="rc('scan')">◉ SCAN</button>
+        <button class="qc" onclick="rc('diag')">⚙ DIAG</button>
+        <button class="qc" onclick="rc('export')">↗ EXPORT</button>
+        <button class="qc" onclick="rc('speed')">⚡ SPEED</button>
+        <button class="qc" onclick="rc('flush')">↺ FLUSH DNS</button>
+        <button class="qc" onclick="rc('clear')">✕ CLEAR</button>
       </div>
       <div class="cin-row">
         <span class="cpmt">JARVIS://&gt;</span>
@@ -1555,7 +1546,7 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• BOTTOM NAV â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ BOTTOM NAV ══════════════ -->
 <nav id="botnav">
   <button class="nbtn active" id="nb0" onclick="sw('ov',0)"><span class="ni"><svg class="nav-ic" viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 8v8M8 10.5h8"/></svg></span><span class="nl">HUB</span></button>
   <button class="nbtn" id="nb1" onclick="sw('st',1)"><span class="ni"><svg class="nav-ic" viewBox="0 0 24 24"><path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 12l4-3"/><circle cx="12" cy="15" r="1.8"/></svg></span><span class="nl">SPEED</span></button>
@@ -1565,11 +1556,11 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 </nav>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• DEVICE DRAWER â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ DEVICE DRAWER ══════════════ -->
 <div id="dvd">
   <div class="dw-hd">
-    <span class="dw-title" id="dwtitle">â€” DEVICE â€”</span>
-    <button class="dw-cls" onclick="dvClose()">âœ•</button>
+    <span class="dw-title" id="dwtitle">— DEVICE —</span>
+    <button class="dw-cls" onclick="dvClose()">✕</button>
   </div>
   <div class="dw-grid" id="dwgrid"></div>
   <div style="height:55px;border:1px solid var(--br);margin-bottom:8px;overflow:hidden;position:relative;background:rgba(0,2,6,.9);">
@@ -1578,29 +1569,28 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
   </div>
   <div class="dw-tgls" id="dwact"></div>
   <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
-    <button class="hbtn" onclick="dvPing()" style="font-size:8px;padding:7px 12px;">â—‰ PING TEST</button>
-    <button class="hbtn dng" onclick="dvBlock()" id="dvblkbtn" style="font-size:8px;padding:7px 12px;">âŠ— BLOCK (UNSUPPORTED)</button>
+    <button class="hbtn" onclick="dvPing()" style="font-size:8px;padding:7px 12px;">◉ PING TEST</button>
+    <button class="hbtn dng" onclick="dvBlock()" id="dvblkbtn" style="font-size:8px;padding:7px 12px;">⊗ BLOCK</button>
   </div>
-  <div class="dw-note" id="dvActionReason">Device control actions are unsupported on the current backend/router.</div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• JARVIS ORB â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ JARVIS ORB ══════════════ -->
 <div id="jorb" onclick="jToggle()" aria-label="Open JARVIS assistant">
   <video autoplay muted loop playsinline preload="auto" src="jarvis.mp4"></video>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• JARVIS PANEL â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ JARVIS PANEL ══════════════ -->
 <div id="jpnl">
   <div class="jp-hd">
     <div><div class="jp-tle">J.A.R.V.I.S.</div><div class="jp-sub">NETWORK INTELLIGENCE SYSTEM v4.2</div></div>
-    <button class="jp-cls" onclick="jToggle()">âœ•</button>
+    <button class="jp-cls" onclick="jToggle()">✕</button>
   </div>
   <div class="jp-chat" id="jchat"></div>
   <div class="jp-qa">
-    <button class="jqa" onclick="ja('speedtest')">âš¡ RUN SPEEDTEST</button>
-    <button class="jqa" onclick="ja('scan')">ðŸ” SCAN DEVICES</button>
-    <button class="jqa" onclick="ja('alerts')">âš  SHOW ALERTS</button>
-    <button class="jqa" onclick="ja('optimize')">â—Ž OPTIMIZE</button>
+    <button class="jqa" onclick="ja('speedtest')">⚡ RUN SPEEDTEST</button>
+    <button class="jqa" onclick="ja('scan')">🔍 SCAN DEVICES</button>
+    <button class="jqa" onclick="ja('alerts')">⚠ SHOW ALERTS</button>
+    <button class="jqa" onclick="ja('optimize')">◎ OPTIMIZE</button>
   </div>
   <div class="jp-ir">
     <input class="jp-in" id="jpin" placeholder="Ask JARVIS anything...">
@@ -1609,9 +1599,9 @@ input::placeholder{color:rgba(255,72,201,.55) !important;}
 </div>
 
 <script>
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    GLOBAL STATE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 const S = {
   screen:'ov', caTab:'an',
   dl:52.4, ul:14.2, lat:18, loss:.08, thr:.12,
@@ -1635,38 +1625,17 @@ function hudIcon(kind){
   return icons[kind] || icons.router;
 }
 
-/* â”€â”€â”€ AD = Analytics Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── AD = Analytics Data ─────────────────────── */
 const AD = {th:[], lt:[], tr:[], up:[], max:60};
 function adPush(){
   const push=(arr,v)=>{arr.push(v);if(arr.length>AD.max)arr.shift();};
-  const nativeState = window.__NERF_NATIVE_STATE;
-  if(nativeState&&nativeState.ready){
-    const devices = Array.isArray(nativeState.devices) ? nativeState.devices : [];
-    const security = nativeState.security || {};
-    const activeDevices = devices.filter(d=>d.online!==false && d.isPaused!==true).length;
-    const threatIndex = Math.max(
-      0,
-      Math.min(
-        100,
-        toNum(security.riskDeviceCount, 0) * 24 +
-        toNum(security.unknownDeviceCount, 0) * 9 +
-        toNum(S.loss, 0) * 18
-      )
-    );
-    const uptime = devices.length ? (activeDevices / devices.length) * 100 : 0;
-    push(AD.th, Math.max(0, toNum(S.dl, 0)));
-    push(AD.lt, Math.max(0, toNum(S.lat, 0)));
-    push(AD.tr, threatIndex);
-    push(AD.up, uptime);
-    return;
-  }
   push(AD.th, S.dl + (Math.random()-0.5)*6);
   push(AD.lt, S.lat + (Math.random()-0.5)*8);
   push(AD.tr, S.thr*100 + (Math.random()-0.5)*4);
   push(AD.up, 92 + Math.random()*8);
 }
 
-/* â”€â”€â”€ DEVICES DATASET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── DEVICES DATASET ─────────────────────────── */
 const DEVS = [
   {id:0,name:'Tony-MacBook-Pro',kind:'laptop',ip:'192.168.1.2',mac:'A4:C3:F0:3B:9E:11',vendor:'Apple Inc.',status:'online',last:'now',q:94,lat:4,blk:false,up:99.8},
   {id:1,name:'Pepper-iPhone-14',kind:'phone',ip:'192.168.1.3',mac:'F8:27:93:C1:4A:22',vendor:'Apple Inc.',status:'online',last:'now',q:88,lat:11,blk:false,up:96.1},
@@ -1680,9 +1649,9 @@ const DEVS = [
   {id:9,name:'UNKNOWN_DEVICE',kind:'threat',ip:'192.168.1.99',mac:'00:00:00:??:??:??',vendor:'UNVERIFIED',status:'threat',last:'now',q:78,lat:22,blk:false,up:72.1},
 ];
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    NAVIGATION
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 function sw(id, n){
   // stop active animations
   if(S.screen==='ov' && S.ovRAF){cancelAnimationFrame(S.ovRAF);S.ovRAF=null;}
@@ -1707,9 +1676,9 @@ function sw(id, n){
   if(id==='co')  setTimeout(initAnalytics,30);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    TOP BAR CLOCK + LIVE DATA
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 function tickData(){
   // simulate fluctuation
   S.dl = Math.max(1, Math.min(980, S.dl + (Math.random()-0.45)*(S.scanBusy ? 18 : 32)));
@@ -1727,8 +1696,8 @@ function updateTopBar(){
   const n=new Date();
   const pad=v=>String(v).padStart(2,'0');
   document.getElementById('tbclk').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
-  document.getElementById('tbdl').textContent='â†“ '+S.dl.toFixed(1);
-  document.getElementById('tbul').textContent='â†‘ '+S.ul.toFixed(1);
+  document.getElementById('tbdl').textContent='↓ '+S.dl.toFixed(1);
+  document.getElementById('tbul').textContent='↑ '+S.ul.toFixed(1);
   const alrt=document.getElementById('tbalrt');
   const d2=document.getElementById('tbd2'), l2=document.getElementById('tbl2');
   if(S.thr>.55){
@@ -1744,9 +1713,9 @@ function updateTopBar(){
   if(S.screen==='ov') ovRefreshData();
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 1: OVERVIEW BUILD + CANVAS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 
 
 function ensureOverviewTelemetry(){
@@ -1758,8 +1727,8 @@ function ensureOverviewTelemetry(){
   if(typeof S.lastScanLabel!=='string') S.lastScanLabel='42s ago';
   if(typeof S.scanBusy!=='boolean') S.scanBusy=false;
   if(typeof S.scanResultsEmpty!=='boolean') S.scanResultsEmpty=false;
-  if(typeof S.guestWifi!=='boolean') S.guestWifi=false;
-  if(typeof S.dnsShield!=='boolean') S.dnsShield=false;
+  if(typeof S.guestWifi!=='boolean') S.guestWifi=true;
+  if(typeof S.dnsShield!=='boolean') S.dnsShield=true;
   if(typeof S.rebooting!=='boolean') S.rebooting=false;
   if(typeof S.publicIp!=='string') S.publicIp='73.162.45.201';
   if(typeof S.ispType!=='string') S.ispType='Fiber / DHCP';
@@ -1778,33 +1747,6 @@ function ensureOverviewTelemetry(){
     }
     if(typeof d.paused!=='boolean') d.paused = !!d.blk;
   });
-}
-function ovRouterSupport(key){
-  const map=window.__NERF_NATIVE_STATE&&window.__NERF_NATIVE_STATE.router&&window.__NERF_NATIVE_STATE.router.actionSupport;
-  const item=map&&map[key];
-  return item&&typeof item==='object'?item:{supported:false,availableNow:false,availability:'unsupported',status:'NOT_SUPPORTED',reason:'Unsupported on the current backend/router.'};
-}
-function ovDeviceSupport(device){
-  const item=device&&device.actionSupport&&device.actionSupport['device.block'];
-  return item&&typeof item==='object'?item:{supported:false,availableNow:false,availability:'unsupported',status:'NOT_SUPPORTED',reason:'Block/unblock is unsupported on the current backend/router.'};
-}
-function ovSupportAvailability(support){
-  if(support&&support.availableNow===true)return'available';
-  if(String(support&&support.status||'').toUpperCase()==='NO_DATA'||String(support&&support.availability||'').toLowerCase()==='unavailable')return'unavailable';
-  return'unsupported';
-}
-function ovDisabledLabel(baseLabel,support){
-  return `${baseLabel} (${ovSupportAvailability(support)==='unavailable'?'Unavailable':'Unsupported'})`;
-}
-function ovSupportText(baseLabel,support){
-  return `${baseLabel} ${ovSupportAvailability(support)==='unavailable'?'unavailable':'unsupported'}`;
-}
-function ovDeviceControlReason(device){
-  const support = ovDeviceSupport(device);
-  return support.supported ? 'Tap to block or unblock this device through the router backend.' : (support.reason || 'Block/unblock is unsupported on the current backend/router.');
-}
-function ovWarnUnsupported(label,reason,support){
-  addLog(`${label} ${ovSupportAvailability(support)==='unavailable'?'unavailable':'unsupported'}. ${reason||'Unsupported on the current backend/router.'}`,'wrn');
 }
 function ovPushHistory(){
   ensureOverviewTelemetry();
@@ -1902,9 +1844,6 @@ function buildOv(){
   const latencyColor = S.lat > 100 ? 'var(--amber)' : 'var(--ok)';
   const visibleCount = ovVisibleDevices().length;
   const empty = visibleCount===0;
-  const guestSupport = ovRouterSupport('router.guestWifi');
-  const dnsSupport = ovRouterSupport('router.dnsShield');
-  const rebootSupport = ovRouterSupport('router.reboot');
   const el=document.getElementById('s-ov');
   el.innerHTML=`
 <div class="nd-shell">
@@ -1934,9 +1873,9 @@ function buildOv(){
       <div class="nd-head">
         <div>
           <div class="nd-title">Network Heartbeat</div>
-          <div class="nd-sub">real-time uplink posture Â· current public edge</div>
+          <div class="nd-sub">real-time uplink posture · current public edge</div>
         </div>
-        <div class="nd-stat-pill" id="ov-heart-pill">${status.label} Â· ${activeClients} active clients</div>
+        <div class="nd-stat-pill" id="ov-heart-pill">${status.label} · ${activeClients} active clients</div>
       </div>
       <div class="nd-body">
         <div class="nd-heartbeat-wrap">
@@ -1944,7 +1883,7 @@ function buildOv(){
             ${ovHeartbeatSvg(status.key)}
             <div class="nd-heart-state" style="color:${status.color}">
               <div class="state" id="ov-heart-state">${status.label}</div>
-              <div class="meta" id="ov-heart-meta">traffic posture Â· ${(S.thr*100).toFixed(0)}% anomaly pressure</div>
+              <div class="meta" id="ov-heart-meta">traffic posture · ${(S.thr*100).toFixed(0)}% anomaly pressure</div>
             </div>
           </div>
           <div>
@@ -1952,22 +1891,22 @@ function buildOv(){
               <div class="nd-metric">
                 <div class="k">ISP Connection Type</div>
                 <div class="v" id="ov-isp">${S.ispType}</div>
-                <div class="mini">wan path Â· ${S.channel===6?'2.4ghz coexistence':'5ghz preferred'}</div>
+                <div class="mini">wan path · ${S.channel===6?'2.4ghz coexistence':'5ghz preferred'}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Current Public IP</div>
                 <div class="v" id="ov-ip">${S.publicIp}</div>
-                <div class="mini">lease quality Â· ${guestSupport.supported ? (S.guestWifi ? 'guest vlan armed' : 'guest vlan dormant') : ovSupportText('guest wifi', guestSupport)}</div>
+                <div class="mini">lease quality · ${S.guestWifi ? 'guest vlan armed' : 'guest vlan dormant'}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Latency</div>
                 <div class="v" id="ov-lat" style="color:${latencyColor}">${S.lat} ms</div>
-                <div class="mini" id="ov-jit">jitter ${(S.lat*.12).toFixed(1)} ms Â· packet loss ${lossText}</div>
+                <div class="mini" id="ov-jit">jitter ${(S.lat*.12).toFixed(1)} ms · packet loss ${lossText}</div>
               </div>
               <div class="nd-metric">
                 <div class="k">Current Throughput</div>
                 <div class="v" id="ov-live-rate">${ovFmtRate(S.dl)} down</div>
-                <div class="mini" id="ov-live-up">${ovFmtRate(S.ul)} up Â· ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps</div>
+                <div class="mini" id="ov-live-up">${ovFmtRate(S.ul)} up · ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps</div>
               </div>
             </div>
             <div class="nd-heart-actions">
@@ -1975,10 +1914,10 @@ function buildOv(){
                 <span class="spinner"></span>
                 <span class="label">${scanButtonLabel}</span>
               </button>
-              <div class="nd-scan-meta" id="ov-last-scan">Last scanned Â· ${ovFmtAgo(S.lastScanAt)}</div>
+              <div class="nd-scan-meta" id="ov-last-scan">Last scanned · ${ovFmtAgo(S.lastScanAt)}</div>
               <div class="nd-tag">known ${S.knownClients}</div>
               <div class="nd-tag">unknown ${S.unknownClients}</div>
-              <div class="nd-tag">${dnsSupport.supported ? ('dns shield ' + (S.dnsShield ? 'on' : 'off')) : ovSupportText('dns shield', dnsSupport)}</div>
+              <div class="nd-tag">dns shield ${S.dnsShield ? 'on' : 'off'}</div>
             </div>
           </div>
         </div>
@@ -1989,7 +1928,7 @@ function buildOv(){
       <div class="nd-head">
         <div>
           <div class="nd-title">Live Bandwidth Widget</div>
-          <div class="nd-sub">last 60 seconds Â· auto scales from 10 Mbps to 1 Gbps</div>
+          <div class="nd-sub">last 60 seconds · auto scales from 10 Mbps to 1 Gbps</div>
         </div>
         <div class="nd-stat-pill" id="ov-scale-pill">dynamic range</div>
       </div>
@@ -2035,7 +1974,7 @@ function buildOv(){
       <div class="nd-head">
         <div>
           <div class="nd-title">The Shame List</div>
-          <div class="nd-sub">top bandwidth hogs Â· because somebody is always streaming nonsense</div>
+          <div class="nd-sub">top bandwidth hogs · because somebody is always streaming nonsense</div>
         </div>
         <div class="nd-stat-pill" id="ov-hogs-pill">${empty ? '0 devices' : hogs.length+' ranked'}</div>
       </div>
@@ -2058,12 +1997,12 @@ function buildOv(){
                 <div class="nd-kind">${ovConnIcon(d.connType)}</div>
                 <div>
                   <div class="nd-hog-name">${d.name}</div>
-                  <div class="nd-hog-meta">${d.connType.toUpperCase()} Â· ${d.ip}</div>
+                  <div class="nd-hog-meta">${d.connType.toUpperCase()} · ${d.ip}</div>
                   <div class="nd-hog-rate">${ovFmtRate(d.rate)} current throughput</div>
                 </div>
                 <div>
-                  <div class="nd-toggle ${ovDeviceSupport(d).supported ? (d.blk ? 'on' : '') : 'unsupported'}" title="${ovDeviceControlReason(d)}" onclick="ovToggleDevice(${d.id})"></div>
-                  <div class="nd-toggle-label">${ovDeviceSupport(d).supported ? (d.blk ? 'blocked' : 'live') : 'unavailable'}</div>
+                  <div class="nd-toggle ${d.paused ? 'on' : ''}" onclick="ovToggleDevice(${d.id})"></div>
+                  <div class="nd-toggle-label">${d.paused ? 'paused' : 'live'}</div>
                 </div>
               </div>`).join('')}</div>`}
         </div>
@@ -2076,30 +2015,30 @@ function buildOv(){
           <div class="nd-title">Tactical Action Center</div>
           <div class="nd-sub">quick toggles and one red button humans always regret</div>
         </div>
-        <div class="nd-stat-pill">${guestSupport.supported ? (S.guestWifi ? 'guest wifi active' : 'guest wifi sleeping') : ovSupportText('guest wifi', guestSupport)}</div>
+        <div class="nd-stat-pill">${S.guestWifi ? 'guest wifi active' : 'guest wifi sleeping'}</div>
       </div>
       <div class="nd-body">
         <div class="nd-quick-grid">
-          <div class="nd-action ${guestSupport.supported && S.guestWifi ? 'glow' : ''}${guestSupport.supported ? '' : ' unsupported'}">
+          <div class="nd-action ${S.guestWifi ? 'glow' : ''}">
             <div class="nd-action-copy">
-              <div class="title">Guest Wi-Fi${guestSupport.supported ? '' : ' (Unsupported)'}</div>
-              <div class="sub">${guestSupport.supported ? 'isolated network lane Â· glow means visitors are leeching politely' : guestSupport.reason}</div>
+              <div class="title">Guest Wi-Fi</div>
+              <div class="sub">isolated network lane · glow means visitors are leeching politely</div>
             </div>
-            <div class="nd-switch ${guestSupport.supported ? (S.guestWifi ? 'on' : 'off') : 'unsupported'}" title="${guestSupport.reason||''}" onclick="ovToggleAction('guestWifi')"><div class="knob"></div></div>
+            <div class="nd-switch ${S.guestWifi ? 'on' : 'off'}" onclick="ovToggleAction('guestWifi')"><div class="knob"></div></div>
           </div>
-          <div class="nd-action ${dnsSupport.supported && S.dnsShield ? 'glow' : ''}${dnsSupport.supported ? '' : ' unsupported'}">
+          <div class="nd-action ${S.dnsShield ? 'glow' : ''}">
             <div class="nd-action-copy">
-              <div class="title">DNS Shield${dnsSupport.supported ? '' : ' (Unsupported)'}</div>
-              <div class="sub">${dnsSupport.supported ? 'ad-blocking and security filtering Â· keeps nonsense in its lane' : dnsSupport.reason}</div>
+              <div class="title">DNS Shield</div>
+              <div class="sub">ad-blocking and security filtering · keeps nonsense in its lane</div>
             </div>
-            <div class="nd-switch ${dnsSupport.supported ? (S.dnsShield ? 'on' : 'off') : 'unsupported'}" title="${dnsSupport.reason||''}" onclick="ovToggleAction('dnsShield')"><div class="knob"></div></div>
+            <div class="nd-switch ${S.dnsShield ? 'on' : 'off'}" onclick="ovToggleAction('dnsShield')"><div class="knob"></div></div>
           </div>
-          <div class="nd-action${rebootSupport.supported ? '' : ' unsupported'}" style="grid-column:1/-1;">
+          <div class="nd-action" style="grid-column:1/-1;">
             <div class="nd-action-copy">
-              <div class="title">System Reboot${rebootSupport.supported ? '' : ' (Unsupported)'}</div>
-              <div class="sub">${rebootSupport.supported ? 'requires confirmation because accidental internet suicide is still frowned upon' : rebootSupport.reason}</div>
+              <div class="title">System Reboot</div>
+              <div class="sub">requires confirmation because accidental internet suicide is still frowned upon</div>
             </div>
-            <button class="nd-reboot${rebootSupport.supported ? '' : ' unsupported'}" title="${rebootSupport.reason||''}" onclick="ovShowRebootModal()">Reboot Router${rebootSupport.supported ? '' : ' (' + (ovSupportAvailability(rebootSupport)==='unavailable' ? 'Unavailable' : 'Unsupported') + ')'}</button>
+            <button class="nd-reboot" onclick="ovShowRebootModal()">Reboot Router</button>
           </div>
         </div>
       </div>
@@ -2147,7 +2086,7 @@ function buildOv(){
               <div class="nd-mini-card">
                 <div class="label">Active Clients</div>
                 <div class="value" id="ov-active">${activeClients}</div>
-                <div class="sub" id="ov-client-sub">${S.knownClients} known Â· ${S.unknownClients} unknown</div>
+                <div class="sub" id="ov-client-sub">${S.knownClients} known · ${S.unknownClients} unknown</div>
               </div>
             </div>
 
@@ -2161,7 +2100,7 @@ function buildOv(){
               <div class="nd-mini-card">
                 <div class="label">Runtime Notes</div>
                 <div class="sub" style="margin-top:6px;line-height:1.8;">
-                  Last scan ${ovFmtAgo(S.lastScanAt)} Â· public edge stable Â· anomaly pressure ${(S.thr*100).toFixed(0)}%
+                  Last scan ${ovFmtAgo(S.lastScanAt)} · public edge stable · anomaly pressure ${(S.thr*100).toFixed(0)}%
                 </div>
                 <div class="nd-pills" style="margin-top:8px;">
                   <div class="nd-pill">wan ${status.label}</div>
@@ -2207,17 +2146,17 @@ function ovRefreshData(){
   const activeClients = S.knownClients + S.unknownClients;
   const qs = (id)=>document.getElementById(id);
   if(qs('ov-heart-state')) qs('ov-heart-state').textContent = status.label;
-  if(qs('ov-heart-meta')) qs('ov-heart-meta').textContent = `traffic posture Â· ${(S.thr*100).toFixed(0)}% anomaly pressure`;
-  if(qs('ov-heart-pill')) qs('ov-heart-pill').textContent = `${status.label} Â· ${activeClients} active clients`;
+  if(qs('ov-heart-meta')) qs('ov-heart-meta').textContent = `traffic posture · ${(S.thr*100).toFixed(0)}% anomaly pressure`;
+  if(qs('ov-heart-pill')) qs('ov-heart-pill').textContent = `${status.label} · ${activeClients} active clients`;
   if(qs('ov-isp')) qs('ov-isp').textContent = S.ispType;
   if(qs('ov-ip')) qs('ov-ip').textContent = S.publicIp;
   if(qs('ov-lat')){
     qs('ov-lat').textContent = `${S.lat} ms`;
     qs('ov-lat').style.color = S.lat>100 ? 'var(--amber)' : 'var(--ok)';
   }
-  if(qs('ov-jit')) qs('ov-jit').textContent = `jitter ${(S.lat*.12).toFixed(1)} ms Â· packet loss ${lossText}`;
+  if(qs('ov-jit')) qs('ov-jit').textContent = `jitter ${(S.lat*.12).toFixed(1)} ms · packet loss ${lossText}`;
   if(qs('ov-live-rate')) qs('ov-live-rate').textContent = `${ovFmtRate(S.dl)} down`;
-  if(qs('ov-live-up')) qs('ov-live-up').textContent = `${ovFmtRate(S.ul)} up Â· ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps`;
+  if(qs('ov-live-up')) qs('ov-live-up').textContent = `${ovFmtRate(S.ul)} up · ${(Math.min(100,(S.dl/1000)*100)).toFixed(0)}% of 1 Gbps`;
   if(qs('ov-dl')) qs('ov-dl').textContent = ovFmtRate(S.dl);
   if(qs('ov-ul')) qs('ov-ul').textContent = ovFmtRate(S.ul);
   const maxHist = Math.max(10, ...S.ovHistDl, ...S.ovHistUl);
@@ -2226,7 +2165,7 @@ function ovRefreshData(){
   if(qs('ov-spark-note')) qs('ov-spark-note').textContent = ceil===1000 ? 'burst from 10 Mbps to 1 Gbps' : 'y-axis compresses low-noise periods';
   if(qs('ov-scale-pill')) qs('ov-scale-pill').textContent = ceil===1000 ? '1 Gbps scale' : ceil===100 ? '100 Mbps scale' : '10 Mbps scale';
   if(qs('ov-burst-state')) qs('ov-burst-state').textContent = S.dl>700 ? 'burst watch: hot' : S.dl>150 ? 'burst watch: elevated' : 'burst watch: normal';
-  if(qs('ov-last-scan')) qs('ov-last-scan').textContent = `Last scanned Â· ${ovFmtAgo(S.lastScanAt)}`;
+  if(qs('ov-last-scan')) qs('ov-last-scan').textContent = `Last scanned · ${ovFmtAgo(S.lastScanAt)}`;
   if(qs('mh-health')) qs('mh-health').textContent = Math.round(Math.max(52,Math.min(99,71+(S.thr*18))))+'%';
   if(qs('ov-neighbors')) qs('ov-neighbors').textContent = S.sameChannelNeighbors;
   const congestion = S.sameChannelNeighbors > 5;
@@ -2237,7 +2176,7 @@ function ovRefreshData(){
   }
   if(qs('ov-threats')) qs('ov-threats').textContent = S.threatsBlockedToday;
   if(qs('ov-active')) qs('ov-active').textContent = activeClients;
-  if(qs('ov-client-sub')) qs('ov-client-sub').textContent = `${S.knownClients} known Â· ${S.unknownClients} unknown`;
+  if(qs('ov-client-sub')) qs('ov-client-sub').textContent = `${S.knownClients} known · ${S.unknownClients} unknown`;
   if(qs('ov-hogs-pill')){
     const hc = ovVisibleDevices().length===0 ? '0 devices' : `${ovTopHogs().length} ranked`;
     qs('ov-hogs-pill').textContent = hc;
@@ -2329,11 +2268,17 @@ function ovDrawCongestionGauge(){
 function ovToggleDevice(id){
   const d = DEVS.find(x=>x.id===id);
   if(!d) return;
-  ovWarnUnsupported(`Device control for ${d.name}`, ovDeviceControlReason(), ovDeviceSupport(d));
+  d.paused = !d.paused;
+  d.blk = d.paused;
+  if(d.paused) addLog(`Traffic paused for ${d.name}`,'wrn');
+  else addLog(`Traffic restored for ${d.name}`,'suc');
+  buildOv();
 }
 function ovToggleAction(key){
-  const support = ovRouterSupport(key === 'guestWifi' ? 'router.guestWifi' : 'router.dnsShield');
-  ovWarnUnsupported(key==='guestWifi'?'Guest Wi-Fi':'DNS Shield', support.reason, support);
+  ensureOverviewTelemetry();
+  S[key] = !S[key];
+  addLog(`${key==='guestWifi'?'Guest Wi-Fi':'DNS Shield'} ${S[key]?'enabled':'disabled'}`,'inf');
+  buildOv();
 }
 function ovShowRebootModal(){
   ensureOverviewTelemetry();
@@ -2348,9 +2293,18 @@ function ovHideRebootModal(){
 function ovConfirmReboot(){
   ensureOverviewTelemetry();
   S.rebooting = false;
-  const support = ovRouterSupport('router.reboot');
-  ovWarnUnsupported('Router reboot', support.reason, support);
+  addLog('Router reboot sequence started. Brace for temporary silence.','wrn');
+  S.scanBusy = true;
+  S.lastScanAt = Date.now();
   buildOv();
+  setTimeout(()=>{
+    S.scanBusy = false;
+    S.sameChannelNeighbors = Math.max(1, S.sameChannelNeighbors - 1);
+    S.threatsBlockedToday += Math.floor(Math.random()*2);
+    S.publicIp = `73.162.${40+Math.floor(Math.random()*40)}.${20+Math.floor(Math.random()*180)}`;
+    addLog('Router back online. WAN lease renewed and clients reattached.','suc');
+    buildOv();
+  }, 2200);
 }
 function ovScan(){
   ensureOverviewTelemetry();
@@ -2369,7 +2323,7 @@ function ovScan(){
   }, 1800);
 }
 
-/* â”€â”€â”€ OV REACTOR CANVAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── OV REACTOR CANVAS ─────────────────────── */
 
 function startOvReactor(){
   if(S.ovRAF){cancelAnimationFrame(S.ovRAF);S.ovRAF=null;}
@@ -2419,7 +2373,7 @@ function startOvReactor(){
     }
     ctx.restore();
 
-    // segmented arc â€” health status (like the asset's marks)
+    // segmented arc — health status (like the asset's marks)
     for(let i=0;i<24;i++){
       const a1=(i/24)*Math.PI*2+t*.35, a2=((i+.78)/24)*Math.PI*2+t*.35;
       const threat=i===11&&S.thr>.3, warn=i===5&&S.thr>.1;
@@ -2460,9 +2414,9 @@ function startOvReactor(){
   loop();
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 2: SPEEDTEST
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 let stRAF=null, stIv=null, stCanvas, stCtx;
 
 
@@ -2480,9 +2434,9 @@ function buildSt(){
     <div class="hud-deco-sm"><div class="r1"></div><div class="r2"></div><div class="ticks"></div></div>
   </div>
   <div class="cyber-top">
-    <div class="ct-icon">âš¡</div>
+    <div class="ct-icon">⚡</div>
     <div class="ct-title">NEURAL RIOT</div>
-    <div class="ct-right">â—ˆ</div>
+    <div class="ct-right">◈</div>
   </div>
 
   <div class="cyber-main">
@@ -2532,9 +2486,9 @@ function buildSt(){
   </div>
 
   <div class="cyber-controls">
-    <button class="hbtn pri" id="st-start" onclick="stStart()">â–¶ START TEST</button>
-    <button class="hbtn dng dis" id="st-abort" onclick="stAbort()">â–  STOP TEST</button>
-    <button class="hbtn dis" id="st-reset" onclick="stReset()">â†º RESET</button>
+    <button class="hbtn pri" id="st-start" onclick="stStart()">▶ START TEST</button>
+    <button class="hbtn dng dis" id="st-abort" onclick="stAbort()">■ STOP TEST</button>
+    <button class="hbtn dis" id="st-reset" onclick="stReset()">↺ RESET</button>
   </div>
 </div>`;
   stCanvas=null;stCtx=null;
@@ -2543,7 +2497,7 @@ function buildSt(){
 }
 
 
-/* â”€â”€â”€ GAUGE RENDERER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── GAUGE RENDERER ─────────────────────────── */
 
 const MAX_SPD=500;
 function syncStHud(){
@@ -2592,11 +2546,11 @@ function stStart(){
   document.getElementById('st-start').classList.add('dis');
   document.getElementById('st-abort').classList.remove('dis');
   document.getElementById('st-reset').classList.add('dis');
-  stPhaseLbl('â—‰ INITIALIZING SEQUENCE...');
+  stPhaseLbl('◉ INITIALIZING SEQUENCE...');
   addLog('SPEEDTEST initiated by user','inf');
   setTimeout(()=>{
     S.stPing=5+Math.random()*30;S.stJit=.4+Math.random()*5;S.stLoss=Math.random()*.5;
-    stPhaseLbl('â—Ž MEASURING LATENCY & PING...');
+    stPhaseLbl('◎ MEASURING LATENCY & PING...');
     const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
     s('st-pv',S.stPing.toFixed(0)); s('st-jv',S.stJit.toFixed(1)); s('st-lv',S.stLoss.toFixed(2)); syncStHud();
     addLog(`LATENCY: ${S.stPing.toFixed(0)}ms | JITTER: ${S.stJit.toFixed(1)}ms | LOSS: ${S.stLoss.toFixed(2)}%`,'suc');
@@ -2604,7 +2558,7 @@ function stStart(){
   },700);
 }
 function stDlPhase(){
-  stPhaseLbl('â†“ TESTING DOWNLOAD BANDWIDTH...');
+  stPhaseLbl('↓ TESTING DOWNLOAD BANDWIDTH...');
   const tgt=30+Math.random()*120; let tick=0; const steps=70;
   stIv=setInterval(()=>{
     if(!S.stRunning){clearInterval(stIv);return;}
@@ -2618,7 +2572,7 @@ function stDlPhase(){
   },45);
 }
 function stUlPhase(){
-  stPhaseLbl('â†‘ TESTING UPLOAD BANDWIDTH...');
+  stPhaseLbl('↑ TESTING UPLOAD BANDWIDTH...');
   const tgt=6+Math.random()*35; let tick=0; const steps=55;
   stIv=setInterval(()=>{
     if(!S.stRunning){clearInterval(stIv);return;}
@@ -2633,17 +2587,17 @@ function stUlPhase(){
 }
 function stDone(){
   S.stRunning=false;
-  stPhaseLbl('âœ“ TEST COMPLETE â€” ALL PHASES DONE');
+  stPhaseLbl('✓ TEST COMPLETE — ALL PHASES DONE');
   document.getElementById('st-abort').classList.add('dis');
   document.getElementById('st-reset').classList.remove('dis');
   syncStHud();
   S.dl=S.stDl;S.ul=S.stUl;S.lat=Math.round(S.stPing);
-  addLog(`SPEEDTEST COMPLETE â€” DL:${S.stDl.toFixed(1)} UL:${S.stUl.toFixed(1)} PING:${S.stPing.toFixed(0)}ms`,'suc');
+  addLog(`SPEEDTEST COMPLETE — DL:${S.stDl.toFixed(1)} UL:${S.stUl.toFixed(1)} PING:${S.stPing.toFixed(0)}ms`,'suc');
   jMsgJ(`Speedtest complete. Download: ${S.stDl.toFixed(1)} Mbps, Upload: ${S.stUl.toFixed(1)} Mbps, Latency: ${S.stPing.toFixed(0)}ms. Network performance is ${S.stDl>80?'excellent':'satisfactory'}.`);
 }
 function stAbort(){
   S.stRunning=false;if(stIv)clearInterval(stIv);
-  stPhaseLbl('âŠ— TEST ABORTED');
+  stPhaseLbl('⊗ TEST ABORTED');
   document.getElementById('st-abort').classList.add('dis');
   document.getElementById('st-start').classList.remove('dis');
   document.getElementById('st-reset').classList.remove('dis');
@@ -2652,7 +2606,7 @@ function stAbort(){
 }
 function stReset(){
   S.stDl=0;S.stUl=0;
-  stPhaseLbl('IDLE â€” STANDBY');
+  stPhaseLbl('IDLE — STANDBY');
   document.getElementById('st-reset').classList.add('dis');
   document.getElementById('st-start').classList.remove('dis');
   ['st-dlv','st-ulv'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='0.0';});
@@ -2661,9 +2615,9 @@ function stReset(){
   drawGauge(0,0);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 3: DEVICES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 let dvFilter='all', dvSearch='';
 function buildDv(){
   const el=document.getElementById('s-dv');
@@ -2683,8 +2637,8 @@ function buildDv(){
     <div id="dvct" style="font-size:7px;color:rgba(2,254,255,.28);letter-spacing:1px;"></div>
   </div>
   <div style="display:flex;gap:5px;flex-shrink:0;">
-    <input class="dsrch" id="dsrch" placeholder="âŒ•  SEARCH IP / NAME..." oninput="dvSrch(this.value)">
-    <button class="hbtn" onclick="dvScan()" style="padding:8px 11px;font-size:8px;">â†º SCAN</button>
+    <input class="dsrch" id="dsrch" placeholder="⌕  SEARCH IP / NAME..." oninput="dvSrch(this.value)">
+    <button class="hbtn" onclick="dvScan()" style="padding:8px 11px;font-size:8px;">↺ SCAN</button>
   </div>
   <div style="display:flex;gap:4px;overflow-x:auto;flex-shrink:0;">
     <button class="dfl act" onclick="dvFilt('all',this)">ALL ${DEVS.length}</button>
@@ -2713,11 +2667,11 @@ function dvRenderList(){
         <div class="dc-info">
           <div class="dc-nm">${d.name}</div>
           <div class="dc-ip">${d.ip} &nbsp;|&nbsp; ${d.mac}</div>
-          <div class="dc-mac">${d.vendor} &nbsp;Â·&nbsp; ${d.lat?d.lat+' ms latency':'â€”'}</div>
+          <div class="dc-mac">${d.vendor} &nbsp;·&nbsp; ${d.lat?d.lat+' ms latency':'—'}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
           <div class="dc-st ${d.status}">${d.status.toUpperCase()}</div>
-          <div style="font-size:9px;color:${qcl(d.q)};font-weight:bold;">${d.q||'â€”'}%</div>
+          <div style="font-size:9px;color:${qcl(d.q)};font-weight:bold;">${d.q||'—'}%</div>
           <div style="font-size:6.5px;color:rgba(2,254,255,.28);">${d.last}</div>
         </div>
       </div>
@@ -2749,16 +2703,16 @@ function dvOpen(id){
 
   const act=document.getElementById('dwact');
   act.innerHTML=`
-    <div class="dw-tgl unsupported" title="${ovDeviceControlReason()}">
-      <span class="tgl-lbl">ALLOW ACCESS (UNSUPPORTED)</span>
+    <div class="dw-tgl" onclick="tglSw(this,'tg1')">
+      <span class="tgl-lbl">ALLOW ACCESS</span>
       <div class="tgl-sw ${d.blk?'':'on'}" id="tg1"></div>
     </div>
-    <div class="dw-tgl unsupported" title="${ovDeviceControlReason()}">
-      <span class="tgl-lbl">QoS PRIORITY (UNSUPPORTED)</span>
+    <div class="dw-tgl" onclick="tglSw(this,'tg2')">
+      <span class="tgl-lbl">QoS PRIORITY</span>
       <div class="tgl-sw on" id="tg2"></div>
     </div>
-    <div class="dw-tgl" onclick="tglSw(this,'tg3')" title="Visual-only device drawer indicator.">
-      <span class="tgl-lbl">MONITOR VISUAL ONLY</span>
+    <div class="dw-tgl" onclick="tglSw(this,'tg3')">
+      <span class="tgl-lbl">MONITOR MODE</span>
       <div class="tgl-sw" id="tg3"></div>
     </div>`;
 
@@ -2780,7 +2734,7 @@ function dvOpen(id){
   ctx.fillStyle=grad;ctx.fill();
 
   document.getElementById('dvd').classList.add('open');
-  applyDrawerActionState();
+  document.getElementById('dvblkbtn').textContent=d.blk?'✓ UNBLOCK':'⊗ BLOCK';
 }
 function dvClose(){document.getElementById('dvd').classList.remove('open');S.devOpen=-1;}
 function tglSw(row,id){const sw=document.getElementById(id);if(sw)sw.classList.toggle('on');}
@@ -2792,20 +2746,14 @@ function dvPing(){
 }
 function dvBlock(){
   if(S.devOpen<0)return;
-  const d=DEVS[S.devOpen];
-  const nativeDevice = nativeOpenDevice();
-  const support = nativeDeviceSupport(nativeDevice, 'device.block', 'Block device');
-  if(!support.supported){
-    ovWarnUnsupported(`Device control for ${d.name}`, support.reason, support);
-    applyDrawerActionState();
-    return;
-  }
-  req('device.setBlocked', {deviceId:nativeDevice.id, blocked:!nativeDevice.isBlocked});
+  const d=DEVS[S.devOpen];d.blk=!d.blk;
+  document.getElementById('dvblkbtn').textContent=d.blk?'✓ UNBLOCK':'⊗ BLOCK';
+  addLog(`Device ${d.name} ${d.blk?'BLOCKED':'UNBLOCKED'}`,'wrn');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 4: NETWORK MAP
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 let mapPan={x:0,y:0}, mapZoom=1, mapDrag={on:false,sx:0,sy:0,ox:0,oy:0};
 let mapScanR=0, mapRadarOn=true, mapThreatOn=false, mapPackets=[];
 let mapNodes=[], mapLinks=[];
@@ -2816,84 +2764,25 @@ function initMap(){
   canvas.width=scr.clientWidth||360;
   canvas.height=scr.clientHeight||480;
 
+  // build topology
   const W=canvas.width,H=canvas.height;
-  const nativeState = window.__NERF_NATIVE_STATE || {};
-  const nativeDevices = Array.isArray(nativeState.devices) ? nativeState.devices : [];
-  const topology = nativeState.topology || {};
-  const topoNodes = Array.isArray(topology.nodes) ? topology.nodes : [];
-  const topoLinks = Array.isArray(topology.links) ? topology.links : [];
-  mapNodes=[];
-  mapLinks=[];
-
-  const gatewayDevice = nativeDevices.find(d=>d.isGateway) || nativeDevices[0] || null;
-  mapNodes.push({
-    id:0,
-    nativeId:gatewayDevice&&gatewayDevice.id ? gatewayDevice.id : 'gateway',
-    x:W/2,
-    y:H/2,
-    r:22,
-    type:'gateway',
-    lbl:'GATEWAY',
-    col:'var(--c)',
-    dev:gatewayDevice
-  });
-
-  const deviceById = new Map(nativeDevices.map(d=>[String(d.id), d]));
-  const sourceNodes = topoNodes.length
-    ? topoNodes.filter(node=>String(node.id||'') !== String(gatewayDevice&&gatewayDevice.id||''))
-    : nativeDevices.filter(device=>String(device.id||'') !== String(gatewayDevice&&gatewayDevice.id||''));
-
-  sourceNodes.forEach((source,i)=>{
-    const device = topoNodes.length
-      ? (deviceById.get(String(source.id)) || nativeDevices.find(d=>String(d.ip||'') === String(source.ip||'')) || null)
-      : source;
-    const status = device
-      ? (device.isBlocked ? 'threat' : ((device.online===false && device.reachable===false) ? 'offline' : 'online'))
-      : (toNum(source.strength, 0) > 35 ? 'online' : 'offline');
-    const a=(i/Math.max(1,sourceNodes.length))*Math.PI*2-(Math.PI/2);
-    const dist=85+Math.max(0, (100-toNum(device&&device.quality, toNum(source.strength, 48))))*0.9;
-    const labelSource = device&&device.name ? device.name : (source.label || source.ip || `NODE ${i+1}`);
+  mapNodes=[
+    {id:0,x:W/2,y:H/2,r:22,type:'gateway',lbl:'GATEWAY',col:'var(--c)',dev:null},
+  ];
+  DEVS.forEach((d,i)=>{
+    const a=(i/DEVS.length)*Math.PI*2-(Math.PI/2);
+    const dist=90+Math.random()*60;
     mapNodes.push({
-      id:i+1,
-      nativeId:String(device&&device.id ? device.id : (source.id || `node-${i+1}`)),
-      x:W/2+Math.cos(a)*dist,
-      y:H/2+Math.sin(a)*dist,
-      r:device&&device.isGateway ? 20 : 12,
-      type:status,
-      lbl:String(labelSource).split('-')[0],
-      col:status==='online' ? 'var(--gn)' : status==='threat' ? 'var(--rd)' : 'rgba(2,254,255,.2)',
-      dev:device,
-      vel:{x:(Math.random()-.5)*.2,y:(Math.random()-.5)*.2}
+      id:i+1,x:W/2+Math.cos(a)*dist,y:H/2+Math.sin(a)*dist,
+      r:d.status==='gateway'?20:12,type:d.status,
+      lbl:d.name.split('-')[0],col:d.status==='online'?'var(--gn)':d.status==='threat'?'var(--rd)':'rgba(2,254,255,.2)',
+      dev:d,vel:{x:(Math.random()-.5)*.2,y:(Math.random()-.5)*.2}
     });
+    mapLinks.push({a:0,b:i+1,col:d.status==='threat'?'rgba(255,34,0,.4)':d.status==='online'?'rgba(2,254,255,.2)':'rgba(2,254,255,.07)'});
   });
 
-  const nodeIndexes = new Map(mapNodes.map((node,idx)=>[String(node.nativeId), idx]));
-  if(topoLinks.length){
-    topoLinks.forEach(link=>{
-      const fromIndex = nodeIndexes.get(String(link.fromId));
-      const toIndex = nodeIndexes.get(String(link.toId));
-      if(fromIndex==null || toIndex==null || fromIndex===toIndex) return;
-      const quality = toNum(link.quality, 40);
-      mapLinks.push({
-        a:fromIndex,
-        b:toIndex,
-        col:quality >= 65 ? 'rgba(2,254,255,.2)' : quality >= 35 ? 'rgba(242,193,78,.22)' : 'rgba(255,34,0,.28)'
-      });
-    });
-  } else {
-    mapNodes.slice(1).forEach((node,idx)=>{
-      mapLinks.push({
-        a:0,
-        b:idx+1,
-        col:node.type==='threat' ? 'rgba(255,34,0,.4)' : node.type==='online' ? 'rgba(2,254,255,.2)' : 'rgba(2,254,255,.07)'
-      });
-    });
-  }
-
-  mapPackets=[];
-  if(mapLinks.length){
-    for(let i=0;i<8;i++) spawnPacket();
-  }
+  // initial packet spawn
+  for(let i=0;i<8;i++) spawnPacket();
 
   // events
   canvas.onmousedown=canvas.ontouchstart=e=>{
@@ -2910,14 +2799,13 @@ function initMap(){
   canvas.onmouseup=canvas.ontouchend=()=>mapDrag.on=false;
   canvas.onwheel=e=>{e.preventDefault();mapZoom=Math.max(.4,Math.min(3,mapZoom-e.deltaY*.002));};
 
-  document.getElementById('minfo').innerHTML=`NODES: ${mapNodes.length} | LINKS: ${mapLinks.length}<br>MODE: ${topoLinks.length?'LIVE TOPOLOGY':'PASSIVE SCAN'}<br>28.5Â°N / 81.3Â°W`;
+  document.getElementById('minfo').innerHTML=`NODES: ${mapNodes.length} | LINKS: ${mapLinks.length}<br>MODE: PASSIVE SCAN<br>28.5°N / 81.3°W`;
 
   if(S.mapRAF){cancelAnimationFrame(S.mapRAF);S.mapRAF=null;}
   mapLoop();
 }
 
 function spawnPacket(){
-  if(!mapLinks.length) return;
   const li=mapLinks[Math.floor(Math.random()*mapLinks.length)];
   const rev=Math.random()>.5;
   mapPackets.push({link:li,t:Math.random(),spd:.008+Math.random()*.012,rev,col:li.col.includes('255,34')?'rgba(255,107,0,.9)':'rgba(2,254,255,.9)'});
@@ -2932,7 +2820,7 @@ function mapLoop(){
   ctx.clearRect(0,0,W,H);
   ctx.save();ctx.translate(mapPan.x,mapPan.y);ctx.scale(mapZoom,mapZoom);
 
-  // â”€â”€ hex grid background
+  // ── hex grid background
   const hexR=22,hexW=hexR*2,hexH=Math.sqrt(3)*hexR;
   const offX=-mapPan.x/mapZoom, offY=-mapPan.y/mapZoom;
   ctx.globalAlpha=.06;ctx.strokeStyle='#02feff';ctx.lineWidth=.5;
@@ -2943,7 +2831,7 @@ function mapLoop(){
   }
   ctx.globalAlpha=1;
 
-  // â”€â”€ scan wave (rotating)
+  // ── scan wave (rotating)
   if(mapRadarOn){
     mapScanR+=0.025;
     ctx.save();ctx.translate(W/2,H/2);ctx.rotate(mapScanR);
@@ -2971,14 +2859,14 @@ function mapLoop(){
     });
   }
 
-  // â”€â”€ links
+  // ── links
   mapLinks.forEach(lk=>{
     const a=mapNodes[lk.a],b=mapNodes[lk.b];if(!a||!b)return;
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
     ctx.strokeStyle=lk.col;ctx.lineWidth=1;ctx.setLineDash([6,10]);ctx.stroke();ctx.setLineDash([]);
   });
 
-  // â”€â”€ packets
+  // ── packets
   mapPackets.forEach(p=>{
     p.t+=p.spd*(p.rev?-1:1);
     if(p.t>1||p.t<0){p.t=p.rev?1:0;spawnPacket();}
@@ -2989,7 +2877,7 @@ function mapLoop(){
     ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
   });
 
-  // â”€â”€ nodes
+  // ── nodes
   mapNodes.forEach(n=>{
     if(n.vel){n.x+=n.vel.x;n.y+=n.vel.y;}
     // glow
@@ -3039,9 +2927,9 @@ function mapThreatToggle(){
 }
 function mapReset(){mapPan={x:0,y:0};mapZoom=1;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    SCREEN 5: CONSOLE + ANALYTICS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 let anCharts={}, anData={};
 
 function caSwitch(tab){
@@ -3054,31 +2942,19 @@ function caSwitch(tab){
 }
 
 function initAnalytics(){
-  if(!AD.th.length){
-    for(let i=0;i<AD.max;i++) adPush();
-  }
+  // seed data
+  for(let i=0;i<AD.max;i++) adPush();
   if(S.caTab==='an') setTimeout(renderAllCharts,50);
   if(S.anRAF){cancelAnimationFrame(S.anRAF);S.anRAF=null;}
   anLoop();
   // seed some log entries
   if(document.getElementById('conlog').children.length===0){
-    const nativeState = window.__NERF_NATIVE_STATE || null;
-    const riskCount = nativeState ? toNum(nativeState.security&&nativeState.security.riskDeviceCount, 0) : 1;
-    const deviceCount = nativeState && Array.isArray(nativeState.devices) ? nativeState.devices.length : DEVS.length;
-    const boot=(nativeState&&nativeState.ready)?[
-      ['JARVIS v4.2 NETWORK INTELLIGENCE SYSTEM','sys'],
-      ['Native bridge connected. Initializing live telemetry...','sys'],
-      [nativeState.router&&nativeState.router.message ? nativeState.router.message : 'Router status synchronized from backend.','suc'],
-      [nativeState.analytics&&nativeState.analytics.message ? nativeState.analytics.message : 'Analytics snapshot loaded.','suc'],
-      [`Device scan cache: ${deviceCount} nodes detected, ${riskCount} flagged`,riskCount>0?'wrn':'suc'],
-      [nativeState.security&&nativeState.security.message ? nativeState.security.message : 'Security summary synchronized.','suc'],
-      ['All systems nominal. Standing by.','suc'],
-    ]:[
+    const boot=[
       ['JARVIS v4.2 NETWORK INTELLIGENCE SYSTEM','sys'],
       ['Initializing subsystems...','sys'],
       ['Firewall: ARMED (4,821 rules active)','suc'],
-      ['IDS/IPS: ACTIVE â€” deep packet inspection enabled','suc'],
-      ['Network adapter: Intel AX210 â€” 802.11ax connected','suc'],
+      ['IDS/IPS: ACTIVE — deep packet inspection enabled','suc'],
+      ['Network adapter: Intel AX210 — 802.11ax connected','suc'],
       [`Device scan: ${DEVS.length} nodes detected, 1 unverified`,'wrn'],
       ['All systems nominal. Standing by.','suc'],
     ];
@@ -3134,7 +3010,7 @@ function renderChart(canvasId, data, lineCol, fillCol, maxY, labelId, fmt){
   if(lv&&data.length>0)lv.textContent=fmt(data[data.length-1]);
 }
 
-/* â”€â”€â”€ CONSOLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── CONSOLE ─────────────────────────────────── */
 let logLines=[];
 function addLog(msg,type='inf'){
   const n=new Date();
@@ -3156,9 +3032,10 @@ function rc(cmd){
     diag:()=>{addLog('Running system diagnostics...','inf');
       setTimeout(()=>{addLog('CPU: nominal | MEM: 42% | NET: stable | FW: armed','suc');},900);},
     export:()=>{addLog('Exporting network data to STARK_ARCHIVE...','wrn');
-      setTimeout(()=>addLog('Export complete. 4.2MB â†’ /archives/net_2025-03-05.json','suc'),1200);},
+      setTimeout(()=>addLog('Export complete. 4.2MB → /archives/net_2025-03-05.json','suc'),1200);},
     speed:()=>{sw('st',1);addLog('Redirecting to SPEEDTEST module...','inf');},
-    flush:()=>{const support=ovRouterSupport('router.flushDns');if(!support.supported){ovWarnUnsupported('Flush DNS', support.reason, support);return;}addLog('Requesting router DNS flush...','inf');req('router.flushDns',{});},
+    flush:()=>{addLog('Flushing DNS cache...','inf');
+      setTimeout(()=>addLog('DNS cache flushed. 847 records cleared.','suc'),600);},
     clear:()=>{const l=document.getElementById('conlog');if(l)l.innerHTML='';logLines=[];},
   };
   if(cmds[cmd])cmds[cmd]();
@@ -3188,9 +3065,9 @@ function sendCmd(){
 
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement===document.getElementById('cin'))sendCmd();});
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    JARVIS ASSISTANT
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 let jOpen=false;
 
 
@@ -3268,7 +3145,7 @@ function jMsgU(txt){
 }
 
 const jReplies = {
-  speedtest:['Running the current speedtest mode now. Switching to speed analysis module.','Initiating bandwidth analysis for the active internet/LAN path...'],
+  speedtest:['Running speedtest now. Switching to speed analysis module.','Initiating bandwidth analysis...'],
   scan:['Scanning all network nodes. This will take approximately 3 seconds.','Network scan initiated. Stand by for results.'],
   alerts:['One alert active: unverified device at 192.168.1.99 has been on the network for 47 minutes. Recommend immediate investigation.','Current threat index is LOW. No critical alerts.'],
   optimize:['Optimizing animation framerate. Reduced particle count by 40%. UI response improved.','Performance optimization applied. All subsystems running at optimal efficiency.'],
@@ -3303,24 +3180,18 @@ function jsend(){
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement===document.getElementById('jpin'))jsend();});
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════
    BOOT SEQUENCE + MAIN LOOP
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════ */
 function boot(){
-  if(window.NERF_NATIVE && window.NERF_NATIVE.request){
-    if(typeof buildOv==='function') buildOv();
-    if(typeof makeOrbDraggable==='function') makeOrbDraggable();
-    if(typeof updateTopBar==='function') updateTopBar();
-    return;
-  }
   setInterval(tickData, 1200);
   setInterval(()=>{
     if(S.screen==='co'&&S.caTab==='co') renderAllCharts();
   },1500);
   // auto-log feed
   const autoMsgs=[
-    ()=>`Network throughput: â†“${S.dl.toFixed(1)} â†‘${S.ul.toFixed(1)} Mbps`,
-    ()=>`Latency check: ${S.lat}ms avg â€” ${S.lat<25?'OPTIMAL':'ELEVATED'}`,
+    ()=>`Network throughput: ↓${S.dl.toFixed(1)} ↑${S.ul.toFixed(1)} Mbps`,
+    ()=>`Latency check: ${S.lat}ms avg — ${S.lat<25?'OPTIMAL':'ELEVATED'}`,
     ()=>`IDS scan complete: no anomalies in last 60s`,
     ()=>`Firewall: blocked 0 connections in last 60s`,
     ()=>`DHCP lease renewed: 192.168.1.${3+Math.floor(Math.random()*8)}`,
@@ -3353,537 +3224,5 @@ window.addEventListener('visibilitychange',()=>{
   }
 });
 </script>
-
-<script>
-(function(){
-  
-  const native = window.__NERF_NATIVE_STATE = {
-    ready:false,
-    tickTimer:null,
-    scan:{},
-    speedtest:{},
-    devices:[],
-    topology:{nodes:[],links:[]},
-    analytics:{},
-    router:{},
-    wifi:{status:'NOT_SUPPORTED',message:'Wi-Fi environment is not supported on this backend.'},
-    security:{status:'NOT_SUPPORTED',message:'Security summary is not supported on this backend.'}
-  };
-  const originalMapReset = window.mapReset;
-  const originalMapRadarToggle = window.mapRadarToggle;
-  const originalMapThreatToggle = window.mapThreatToggle;
-  const originalJToggle = window.jToggle;
-
-  function req(action,payload){
-    try {
-      if (window.NERF_NATIVE && window.NERF_NATIVE.request) {
-        window.NERF_NATIVE.request(action, JSON.stringify(payload || {}));
-      } else {
-        addLog('Native bridge unavailable for '+action,'ale');
-      }
-    } catch (e) {
-      addLog('Native bridge error: '+e.message,'ale');
-    }
-  }
-
-  function toNum(v,d=0){ const n=Number(v); return Number.isFinite(n)?n:d; }
-  function fallbackActionSupport(label, reason, status){
-    const resolvedStatus = String(status || 'NOT_SUPPORTED').toUpperCase();
-    return {
-      supported:false,
-      availableNow:false,
-      availability:resolvedStatus === 'NO_DATA' ? 'unavailable' : 'unsupported',
-      status:resolvedStatus,
-      label:label || 'Action',
-      reason:reason || 'Unsupported on the current backend/router.',
-      detected:false,
-      authenticated:false,
-      readable:false,
-      writable:false,
-      source:null
-    };
-  }
-  function normalizeActionSupportMap(map){
-    const out = {};
-    const src = map && typeof map === 'object' ? map : {};
-    Object.keys(src).forEach(key => {
-      const item = src[key];
-      out[key] = item && typeof item === 'object'
-        ? {
-          supported:item.supported===true,
-          availableNow:item.availableNow===true||item.supported===true,
-          availability:String(item.availability||(((item.status||'').toUpperCase()==='NO_DATA')?'unavailable':(item.supported===true?'available':'unsupported'))),
-          status:String(item.status||(item.supported===true?'OK':'NOT_SUPPORTED')).toUpperCase(),
-          label:item.label||key,
-          reason:item.reason||'Unsupported on the current backend/router.',
-          detected:item.detected===true,
-          authenticated:item.authenticated===true,
-          readable:item.readable===true,
-          writable:item.writable===true,
-          source:item.source||null
-        }
-        : fallbackActionSupport(key,'Unsupported on the current backend/router.');
-    });
-    return out;
-  }
-  function deviceKind(device){
-    const type = String(device&&device.deviceType || '').toLowerCase();
-    if(type.includes('phone') || type.includes('tablet')) return 'phone';
-    if(type.includes('camera')) return 'camera';
-    if(type.includes('tv') || type.includes('display')) return 'display';
-    if(type.includes('server') || type.includes('nas')) return 'server';
-    if(type.includes('router') || device&&device.isGateway) return 'router';
-    return 'router';
-  }
-  function deviceConnType(device){
-    const kind = deviceKind(device);
-    if(kind === 'phone') return 'mobile';
-    if(kind === 'camera' || kind === 'display' || kind === 'router') return 'iot';
-    return 'pc';
-  }
-  function deviceStatus(device){
-    if(!device) return 'offline';
-    if(device.isBlocked || toNum(device.riskScore, 0) >= 60) return 'threat';
-    if(device.online===false && device.reachable===false) return 'offline';
-    return 'online';
-  }
-  function deviceLastSeenLabel(ts){
-    const epoch = Number(ts || 0);
-    if(!epoch) return 'now';
-    const sec = Math.max(0, Math.floor((Date.now()-epoch)/1000));
-    if(sec < 10) return 'now';
-    if(sec < 60) return sec+'s ago';
-    if(sec < 3600) return Math.floor(sec/60)+'m ago';
-    if(sec < 86400) return Math.floor(sec/3600)+'h ago';
-    return Math.floor(sec/86400)+'d ago';
-  }
-  function nativeDeviceByThemeId(id){
-    return Array.isArray(native.devices) ? native.devices.find((_, idx) => idx === id) || null : null;
-  }
-  function nativeOpenDevice(){
-    return window.S?.devOpen >= 0 ? nativeDeviceByThemeId(window.S.devOpen) : null;
-  }
-  function nativeDeviceSupport(device, key, label){
-    const item = device && device.actionSupport && device.actionSupport[key];
-    return item && typeof item === 'object'
-      ? item
-      : fallbackActionSupport(label,`${label} is unsupported on the current backend/router.`);
-  }
-  function applyDrawerActionState(){
-    const button = document.getElementById('dvblkbtn');
-    const note = document.getElementById('dvActionReason');
-    const device = nativeOpenDevice();
-    const support = nativeDeviceSupport(device, 'device.block', 'Block device');
-    if (button) {
-      button.disabled = !device || !support.supported;
-      button.title = device && support.supported ? '' : support.reason;
-      button.textContent = device && support.supported
-        ? (device.isBlocked ? '⊘ UNBLOCK DEVICE' : '⊘ BLOCK DEVICE')
-        : ovDisabledLabel('⊘ BLOCK', support);
-    }
-    if (note) {
-      note.textContent = device && support.supported
-        ? 'Block/unblock is wired to the router for this device. QoS and pause controls remain unavailable here.'
-        : (support.reason || 'Device control actions are unavailable on the current backend/router.');
-    }
-  }
-  function syncConsoleActionState(){
-    const flushButton = document.querySelector(".qc[onclick=\"rc('flush')\"]");
-    const support = ovRouterSupport('router.flushDns');
-    if (!flushButton) return;
-    if (!flushButton.dataset.baseLabel) {
-      flushButton.dataset.baseLabel = flushButton.textContent.replace(/\s+\((UNSUPPORTED|UNAVAILABLE)\)$/i,'');
-    }
-    flushButton.title = support.supported ? 'Flush DNS is available through the router backend.' : (support.reason || 'Flush DNS is unavailable on the current backend/router.');
-    flushButton.textContent = support.supported ? flushButton.dataset.baseLabel : ovDisabledLabel(flushButton.dataset.baseLabel, support).toUpperCase();
-  }
-  function applyDevices(devices){
-    if (!Array.isArray(devices)) return;
-    native.devices = devices;
-    if (Array.isArray(window.DEVS)) {
-      window.DEVS.length = 0;
-      devices.forEach((d,idx)=>window.DEVS.push({
-        id: idx,
-        nativeId: d.id || String(idx),
-        name: d.name || d.hostname || d.ip || 'Unknown Device',
-        kind: deviceKind(d),
-        ip: d.ip || '-',
-        mac: d.mac || '-',
-        vendor: d.vendor || '-',
-        status: deviceStatus(d),
-        last: deviceLastSeenLabel(d.lastSeen),
-        q: toNum(d.quality, 0),
-        lat: d.latencyMs == null ? null : toNum(d.latencyMs, 0),
-        blk: !!d.isBlocked,
-        paused: !!d.isPaused,
-        up: Math.max(0, Math.min(100, toNum(d.quality, 0))),
-        rate: Math.max(0, toNum(d.downMbps, 0) + toNum(d.upMbps, 0)),
-        connType: deviceConnType(d),
-        actionSupport: normalizeActionSupportMap(d.actionSupport)
-      }));
-    }
-    applyDrawerActionState();
-    if (window.S?.devOpen >= 0 && window.DEVS?.[window.S.devOpen] && document.getElementById('dvd')?.classList.contains('open') && typeof dvOpen === 'function') {
-      dvOpen(window.S.devOpen);
-    }
-    if (typeof buildDv === 'function' && window.S?.screen==='dv') buildDv();
-    if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
-    if (typeof initMap === 'function' && window.S?.screen==='mp') initMap();
-  }
-
-  function applySpeedtest(s){
-    native.speedtest = s || {};
-    const downMbps = toNum(s.downMbps ?? s.downloadMbps, 0);
-    const upMbps = toNum(s.upMbps ?? s.uploadMbps, 0);
-    const pingMs = toNum(s.pingMs ?? s.latencyMs, 0);
-    const jitterMs = toNum(s.jitterMs, 0);
-    const lossPct = toNum(s.packetLossPct, 0);
-    const phase = String(s.phase || (s.running ? 'RUNNING' : 'IDLE')).toUpperCase();
-    if (window.S) {
-      S.stRunning = s.running===true || ['RUNNING','STARTED','PING','DOWNLOAD','UPLOAD'].includes(phase);
-      S.stDl = downMbps;
-      S.stUl = upMbps;
-      S.stPing = pingMs;
-      S.stJit = jitterMs;
-      S.stLoss = lossPct;
-      S.stPhase = phase.toLowerCase();
-      S.stTargetMode = String(s.targetMode || 'PUBLIC_INTERNET');
-      S.stTargetLabel = S.stTargetMode === 'PRIVATE_LOCAL' ? 'PRIVATE/LAN' : 'PUBLIC INTERNET';
-      S.dl = S.stDl || S.dl;
-      S.ul = S.stUl || S.ul;
-      S.lat = Math.round(S.stPing || S.lat || 0);
-      S.loss = Number((S.stLoss || 0) / 100);
-    }
-    if (typeof stPhaseLbl === 'function') {
-      const mode = String(s.targetMode || 'PUBLIC_INTERNET') === 'PRIVATE_LOCAL' ? 'PRIVATE/LAN' : 'PUBLIC INTERNET';
-      stPhaseLbl(phase + ' // ' + mode);
-    }
-    if (typeof syncStHud === 'function') syncStHud();
-  }
-
-  function syncOverviewFromNative(){
-    if (!window.S) return;
-    const router = native.router || {};
-    const wifi = native.wifi || {};
-    const security = native.security || {};
-    const analytics = native.analytics || {};
-    const devices = native.devices || [];
-    if (router.guestWifi && typeof router.guestWifi.enabled === 'boolean') S.guestWifi = router.guestWifi.enabled;
-    if (router.dnsShield && typeof router.dnsShield.enabled === 'boolean') S.dnsShield = router.dnsShield.enabled;
-    S.publicIp = router.publicIp || 'UNAVAILABLE';
-    S.scanBusy = String(native.scan.phase || '').toUpperCase() === 'RUNNING';
-    S.scanResultsEmpty = devices.filter(d=>d.online!==false && d.isPaused!==true).length === 0;
-    S.sameChannelNeighbors = Number(wifi.connectedDeviceCount || wifi.weakSignalCount || 0);
-    S.threatsBlockedToday = Number(security.riskDeviceCount || 0);
-    S.knownClients = devices.filter(d=>!(d.riskScore > 0) && d.online !== false && !d.isPaused).length;
-    S.unknownClients = devices.filter(d=>(d.riskScore > 0 || !d.vendor || d.vendor === 'unknown') && d.online !== false && !d.isPaused).length;
-    if (analytics.downMbps != null) S.dl = Number(analytics.downMbps);
-    if (analytics.upMbps != null) S.ul = Number(analytics.upMbps);
-    if (analytics.latencyMs != null) S.lat = Math.round(Number(analytics.latencyMs));
-    if (analytics.packetLossPct != null) S.loss = Number(analytics.packetLossPct) / 100;
-    if (analytics.lastScanEpochMs != null) S.lastScanAt = Number(analytics.lastScanEpochMs);
-    if (!S.lastScanAt && native.scan.completedAt != null) S.lastScanAt = Number(native.scan.completedAt);
-    if (router.accessMode || router.linkSpeedMbps) {
-      const linkLabel = router.linkSpeedMbps ? `${router.linkSpeedMbps} Mbps` : null;
-      S.ispType = [router.accessMode, linkLabel].filter(Boolean).join(' / ') || 'Unavailable';
-    }
-    const threatPressure = (
-      Number(security.riskDeviceCount || 0) * 0.24 +
-      Number(security.unknownDeviceCount || 0) * 0.08 +
-      Number(analytics.packetLossPct || 0) / 100 +
-      Number(analytics.latencyMs || 0) / 400
-    );
-    S.thr = Math.max(0, Math.min(1, threatPressure));
-  }
-
-  window.ensureOverviewTelemetry = function(){
-    syncOverviewFromNative();
-    if(!Array.isArray(S.ovHistDl) || !S.ovHistDl.length){
-      S.ovHistDl=Array.from({length:60},()=>Number(S.dl||0));
-      S.ovHistUl=Array.from({length:60},()=>Number(S.ul||0));
-    }
-    if(typeof S.lastScanAt!=='number') S.lastScanAt=Date.now();
-    if(typeof S.lastScanLabel!=='string') S.lastScanLabel='Waiting';
-    if(typeof S.scanBusy!=='boolean') S.scanBusy=false;
-    if(typeof S.scanResultsEmpty!=='boolean') S.scanResultsEmpty=(native.devices||[]).length===0;
-    if(typeof S.guestWifi!=='boolean') S.guestWifi=false;
-    if(typeof S.dnsShield!=='boolean') S.dnsShield=false;
-    if(typeof S.rebooting!=='boolean') S.rebooting=false;
-    if(typeof S.publicIp!=='string') S.publicIp='UNAVAILABLE';
-    if(typeof S.ispType!=='string') S.ispType='Unavailable';
-    if(typeof S.channel!=='number') S.channel=0;
-    if(typeof S.sameChannelNeighbors!=='number') S.sameChannelNeighbors=0;
-    if(typeof S.threatsBlockedToday!=='number') S.threatsBlockedToday=0;
-    if(typeof S.knownClients!=='number') S.knownClients=0;
-    if(typeof S.unknownClients!=='number') S.unknownClients=0;
-    DEVS.forEach(d=>{
-      if(typeof d.rate!=='number') d.rate = 0;
-      if(typeof d.connType!=='string') d.connType = d.kind==='phone' ? 'mobile' : (['camera','display','router'].includes(d.kind) ? 'iot' : 'pc');
-      d.paused = !!d.paused;
-    });
-  };
-
-  window.ovSimulateDevices = function(){
-    syncOverviewFromNative();
-    const devices = native.devices || [];
-    DEVS.forEach((d,idx)=>{
-      const raw = devices[idx] || {};
-      d.rate = Number(raw.downMbps || raw.upMbps || 0);
-      d.blk = !!raw.isBlocked;
-      d.paused = !!raw.isPaused;
-    });
-    S.knownClients = DEVS.filter(d=>d.kind!=='threat' && d.status!=='offline' && !d.paused).length;
-    S.unknownClients = DEVS.filter(d=>d.kind==='threat' && d.status!=='offline' && !d.paused).length;
-  };
-
-  const origTickData = window.tickData;
-  window.tickData = function(){
-    if (!native.ready && typeof origTickData === 'function') return origTickData();
-    syncOverviewFromNative();
-    if (typeof ovPushHistory === 'function') ovPushHistory();
-    if (typeof adPush === 'function') adPush();
-    if (typeof updateTopBar === 'function') updateTopBar();
-  };
-
-  window.ovScan = function(){ req('scan.start', {}); };
-  window.ovToggleDevice = function(id){
-    const d = window.DEVS?.find(x=>x.id===id);
-    const nativeDevice = nativeDeviceByThemeId(id);
-    const support = nativeDeviceSupport(nativeDevice, 'device.block', 'Block device');
-    if (!d || !nativeDevice) return;
-    if (!support.supported) {
-      ovWarnUnsupported(`Device control for ${d.name}`, support.reason, support);
-      return;
-    }
-    req('device.setBlocked', {deviceId:nativeDevice.id, blocked:!nativeDevice.isBlocked});
-  };
-  window.ovToggleAction = function(key){
-    const support = ovRouterSupport(key === 'guestWifi' ? 'router.guestWifi' : 'router.dnsShield');
-    if (!support.supported) {
-      ovWarnUnsupported(key === 'guestWifi' ? 'Guest Wi-Fi' : 'DNS Shield', support.reason, support);
-      return;
-    }
-    if (key === 'guestWifi') req('router.setGuest', {enabled: !window.S?.guestWifi});
-    if (key === 'dnsShield') req('router.setDnsShield', {enabled: !window.S?.dnsShield});
-  };
-  window.ovShowRebootModal = function(){
-    const support = ovRouterSupport('router.reboot');
-    if (!support.supported) {
-      ovWarnUnsupported('Router reboot', support.reason, support);
-      return;
-    }
-    if (window.ensureOverviewTelemetry) ensureOverviewTelemetry();
-    S.rebooting = true;
-    if (typeof buildOv === 'function') buildOv();
-  };
-  window.ovHideRebootModal = function(){
-    if (window.ensureOverviewTelemetry) ensureOverviewTelemetry();
-    S.rebooting = false;
-    if (typeof buildOv === 'function') buildOv();
-  };
-  window.ovConfirmReboot = function(){
-    const support = ovRouterSupport('router.reboot');
-    if (!support.supported) {
-      ovWarnUnsupported('Router reboot', support.reason, support);
-      if (window.ovHideRebootModal) ovHideRebootModal();
-      return;
-    }
-    req('router.reboot', {});
-    if (window.ovHideRebootModal) ovHideRebootModal();
-  };
-  window.stStart = function(){ req('speedtest.start',{}); };
-  window.stAbort = function(){ req('speedtest.stop',{}); };
-  window.stReset = function(){ req('speedtest.reset',{}); };
-  window.dvScan = function(){ req('scan.start',{}); };
-  window.dvPing = function(){
-    if (window.S?.devOpen >= 0 && window.DEVS?.[S.devOpen]) req('device.ping', {deviceId:window.DEVS[S.devOpen].nativeId});
-  };
-  window.dvBlock = function(){
-    if (window.S?.devOpen < 0 || !window.DEVS?.[S.devOpen]) return;
-    const d = window.DEVS[S.devOpen];
-    const nativeDevice = nativeOpenDevice();
-    const support = nativeDeviceSupport(nativeDevice, 'device.block', 'Block device');
-    if (!nativeDevice || !support.supported) {
-      ovWarnUnsupported(`Device control for ${d.name}`, support.reason, support);
-      applyDrawerActionState();
-      return;
-    }
-    req('device.setBlocked', {deviceId:nativeDevice.id, blocked:!nativeDevice.isBlocked});
-  };
-  window.mapReset = function(){
-    if (typeof originalMapReset === 'function') originalMapReset();
-    addLog('Map camera reset is visual-only in this theme.', 'inf');
-  };
-  window.mapRadarToggle = function(){
-    if (typeof originalMapRadarToggle === 'function') originalMapRadarToggle();
-    addLog('Radar overlay toggled. This affects only the HTML map visualization.', 'inf');
-  };
-  window.mapThreatToggle = function(){
-    if (typeof originalMapThreatToggle === 'function') originalMapThreatToggle();
-    addLog('Threat overlay toggled. This affects only the HTML map visualization.', 'inf');
-  };
-
-  window.jToggle = function(){
-    if (typeof originalJToggle === 'function') originalJToggle();
-    const panel = document.getElementById('jpnl');
-    const chat = document.getElementById('jchat');
-    if (panel && panel.classList.contains('open') && chat && !chat.dataset.nativeSeeded) {
-      chat.innerHTML = '';
-      chat.dataset.nativeSeeded = '1';
-      if (window.jMsgJ) jMsgJ('NERF assistant connected. Ask about network status, diagnostics, speedtest, devices, or router actions. Unsupported actions will be called out explicitly.');
-    }
-  };
-  window.ja = function(action){
-    if (action === 'alerts') {
-      req('assistant.command', {command:'show alerts'});
-    } else if (action === 'optimize') {
-      req('assistant.command', {command:'optimize network'});
-    } else {
-      req('assistant.quickAction', {action});
-    }
-    if (action === 'speedtest' && typeof sw === 'function') sw('st', 1);
-    if (action === 'scan' && typeof sw === 'function') sw('dv', 2);
-  };
-  window.jsend = function(){
-    const inp=document.getElementById('jpin');if(!inp||!inp.value.trim())return;
-    const txt=inp.value.trim();inp.value='';
-    if (window.jMsgU) jMsgU(txt);
-    req('assistant.command', {command:txt});
-  };
-  window.rc = function(cmd){
-    const action = String(cmd || '').toLowerCase();
-    if (action === 'clear') {
-      const log = document.getElementById('conlog');
-      if (log) log.innerHTML = '';
-      logLines = [];
-      return;
-    }
-    if (action === 'help') {
-      addLog('Available: scan | diag | export | speed | flush dns | clear | ping <ip>', 'suc');
-      return;
-    }
-    const mapped = {
-      scan: 'scan',
-      diag: 'diagnostics',
-      export: 'export analytics',
-      speed: 'speedtest',
-      flush: 'flush dns'
-    };
-    const command = mapped[action] || String(cmd || '');
-    if (action === 'flush') {
-      const support = ovRouterSupport('router.flushDns');
-      if (!support.supported) {
-        ovWarnUnsupported('Flush DNS', support.reason, support);
-        return;
-      }
-      addLog('> flush dns', 'wrn');
-      req('router.flushDns', {});
-      return;
-    }
-    if (action === 'speed' && typeof sw === 'function') sw('st', 1);
-    addLog('> ' + command, 'wrn');
-    req('console.execute', {command});
-  };
-  window.sendCmd = function(){
-    const inp=document.getElementById('cin');if(!inp||!inp.value.trim())return;
-    const cmd=inp.value.trim();inp.value='';
-    const lower=cmd.toLowerCase();
-    if (lower === 'clear' || lower === 'help') {
-      window.rc(lower);
-    } else if (lower.includes('flush dns') || lower === 'flush') {
-      const support = ovRouterSupport('router.flushDns');
-      if (!support.supported) {
-        ovWarnUnsupported('Flush DNS', support.reason, support);
-      } else {
-        addLog('> flush dns', 'wrn');
-        req('router.flushDns', {});
-      }
-    } else {
-      addLog('> ' + cmd, 'wrn');
-      req('console.execute', {command:cmd});
-    }
-    inp.focus();
-  };
-
-  window.NERF = window.NERF || {};
-  window.NERF.onEvent = function(name, payload){
-    const p = payload || {};
-    if (name === 'bridge.ready') {
-      native.ready = true;
-      return;
-    }
-    if (name === 'action.result') {
-      if (p.code === 'DEVICES_LIST' && Array.isArray(p.devices)) applyDevices(p.devices);
-      if (p.code === 'SCAN_STATE') native.scan = {...native.scan, ...p};
-      if (p.code === 'SPEEDTEST_STATE') applySpeedtest(p.state || p);
-      if (p.code === 'SPEEDTEST_HISTORY' && Array.isArray(p.history)) native.speedtest.history = p.history;
-      if (p.code === 'ANALYTICS_SNAPSHOT') native.analytics = p;
-      if (p.code === 'ROUTER_STATUS') native.router = p;
-      if (p.code === 'WIFI_ENVIRONMENT') native.wifi = p;
-      if (p.code === 'SECURITY_SUMMARY') native.security = p;
-      if (p.code === 'MAP_STATE') native.topology = p;
-      if (/^ROUTER_/.test(String(p.code || '')) && p.code !== 'ROUTER_STATUS') req('router.status', {});
-      if (/^DEVICE_/.test(String(p.code || '')) && p.code !== 'DEVICE_DETAILS') req('devices.list', {});
-      if (p.code === 'MAP_STATE' && typeof initMap === 'function' && window.S?.screen==='mp') initMap();
-      if ((p.status === 'NOT_SUPPORTED' || p.code === 'NOT_SUPPORTED') && window.addLog) addLog(p.errorReason || p.message || 'Action not supported by backend','wrn');
-      else if (p.message && window.addLog && !['DEVICES_LIST','SPEEDTEST_STATE','SPEEDTEST_HISTORY','ROUTER_STATUS','MAP_STATE'].includes(p.code)) addLog(p.message, p.ok === false ? 'wrn' : 'suc');
-      syncOverviewFromNative();
-      applyDrawerActionState();
-      syncConsoleActionState();
-      return;
-    }
-    if (name === 'scan.state' || name === 'scan.progress' || name === 'scan.results') {
-      native.scan = {...native.scan, ...p};
-      if (String(p.phase || '').toUpperCase() === 'COMPLETE') {
-        S.lastScanAt = Date.now();
-        req('map.state', {});
-      }
-      req('devices.list', {});
-      if (typeof buildOv === 'function' && window.S?.screen==='ov') buildOv();
-      return;
-    }
-    if (name === 'devices.update') { applyDevices(p.devices || []); applyDrawerActionState(); syncConsoleActionState(); return; }
-    if (name === 'speedtest.ui') { applySpeedtest(p); return; }
-    if (name === 'speedtest.result') { applySpeedtest(p); return; }
-    if (name === 'topology.state') { native.topology = p; if (typeof initMap === 'function' && window.S?.screen==='mp') initMap(); }
-    if (name === 'analytics.snapshot') { native.analytics = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
-    if (name === 'router.status') { native.router = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
-    if (name === 'wifi.environment') { native.wifi = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
-    if (name === 'security.summary') { native.security = p; syncOverviewFromNative(); applyDrawerActionState(); syncConsoleActionState(); }
-    if (name === 'assistant.response') {
-      if (window.jMsgJ) jMsgJ(p.message || 'Assistant response received.');
-      if (Array.isArray(p.cards) && window.addLog) {
-        p.cards.forEach(card => addLog((card.title || 'Assistant') + ': ' + ((card.lines || []).join(' | ') || p.message || ''), 'inf'));
-      }
-      if (p.requiresConfirmation && p.confirmationPrompt && window.addLog) addLog(p.confirmationPrompt, 'wrn');
-    }
-  };
-
-  const oldBoot = window.boot;
-  window.boot = function(){
-    native.ready = !!(window.NERF_NATIVE && window.NERF_NATIVE.request);
-    if (typeof oldBoot === 'function') oldBoot();
-    if (native.ready && !native.tickTimer) {
-      native.tickTimer = setInterval(()=>{
-        if (document.visibilityState === 'hidden') return;
-        if (typeof window.tickData === 'function') window.tickData();
-      }, 1200);
-    }
-    if (native.ready && typeof window.tickData === 'function') window.tickData();
-    syncConsoleActionState();
-    if (!native.ready) return;
-    req('devices.list',{});
-    req('scan.state',{});
-    req('speedtest.state',{});
-    req('speedtest.history',{});
-    req('map.state',{});
-    req('analytics.snapshot',{});
-    req('router.status',{});
-    req('wifi.environment',{});
-    req('security.summary',{});
-  };
-})();
-</script>
-
 </body>
 </html>

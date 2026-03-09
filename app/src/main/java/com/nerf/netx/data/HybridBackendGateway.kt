@@ -50,6 +50,8 @@ import com.nerf.netx.domain.SpeedtestTargetMode
 import com.nerf.netx.domain.ThroughputSample
 import com.nerf.netx.domain.SpeedtestUiState
 import com.nerf.netx.domain.deviceHasStableRouterId
+import com.nerf.netx.domain.unavailableResult
+import com.nerf.netx.domain.unsupportedResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -697,7 +700,7 @@ private class HybridSpeedtest(
 
     val workers = (0 until safeThreads).map {
       launch(Dispatchers.IO) {
-        while (isActive && System.currentTimeMillis() < end) {
+        while (kotlin.coroutines.coroutineContext.isActive && System.currentTimeMillis() < end) {
           worker(totalBytes)
         }
       }
@@ -705,7 +708,7 @@ private class HybridSpeedtest(
 
     var lastBytes = 0L
     var lastTick = start
-    while (isActive && System.currentTimeMillis() < end) {
+    while (kotlin.coroutines.coroutineContext.isActive && System.currentTimeMillis() < end) {
       delay(300)
       val now = System.currentTimeMillis()
       val currentBytes = totalBytes.get()
@@ -2717,6 +2720,28 @@ private class HybridAnalytics(
     return (0 until arr.length()).mapNotNull { idx ->
       if (arr.isNull(idx)) null else arr.optInt(idx)
     }
+  }
+}
+
+private fun JSONObject.optDoubleOrNull(name: String): Double? {
+  if (!has(name) || isNull(name)) return null
+  return optDouble(name)
+}
+
+private fun JSONObject.optIntOrNull(name: String): Int? {
+  if (!has(name) || isNull(name)) return null
+  return optInt(name)
+}
+
+private fun JSONObject.optStringList(name: String): List<String> {
+  val arr = optJSONArray(name) ?: return emptyList()
+  return (0 until arr.length()).mapNotNull { idx -> arr.optString(idx).takeIf { it.isNotBlank() } }
+}
+
+private fun JSONObject.optIntList(name: String): List<Int> {
+  val arr = optJSONArray(name) ?: return emptyList()
+  return (0 until arr.length()).mapNotNull { idx ->
+    if (arr.isNull(idx)) null else arr.optInt(idx)
   }
 }
 

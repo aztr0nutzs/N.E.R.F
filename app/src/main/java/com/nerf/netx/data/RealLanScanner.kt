@@ -109,13 +109,14 @@ class RealLanScanner(
             hostnameOutcome.second?.let { unresolved["hostname"] = it }
 
             val latencyOutcome = measureLatencyMedian(host, probe)
+            val latencyReason = latencyOutcome.second
             val isGateway = plan.gatewayIp != null && host == plan.gatewayIp
             val mac = parseArpTable()[host]
             if (mac == null) unresolved["mac"] = "ARP entry not present"
             val vendor = mac?.let { lookupVendor(it) }
             if (mac != null && vendor == null) unresolved["vendor"] = "Unknown OUI"
-            if (latencyOutcome.first == null && latencyOutcome.second != null) {
-              unresolved["latencyMs"] = latencyOutcome.second
+            if (latencyOutcome.first == null && latencyReason != null) {
+              unresolved["latencyMs"] = latencyReason
             }
 
             val finalHostname = hostname

@@ -96,10 +96,10 @@ class NetworkDoctorViewModelTest {
         )
       )
       override val ui: StateFlow<SpeedtestUiState> = uiFlow.asStateFlow()
-      override val servers: StateFlow<List<SpeedtestServer>> = MutableStateFlow(emptyList()).asStateFlow()
+      override val servers: StateFlow<List<SpeedtestServer>> = MutableStateFlow(emptyList<SpeedtestServer>()).asStateFlow()
       override val config: StateFlow<SpeedtestConfig> = MutableStateFlow(SpeedtestConfig()).asStateFlow()
-      override val history: StateFlow<List<SpeedtestHistoryEntry>> = MutableStateFlow(emptyList()).asStateFlow()
-      override val latestResult: StateFlow<SpeedtestResult?> = MutableStateFlow(null).asStateFlow()
+      override val history: StateFlow<List<SpeedtestHistoryEntry>> = MutableStateFlow(emptyList<SpeedtestHistoryEntry>()).asStateFlow()
+      override val latestResult: StateFlow<SpeedtestResult?> = MutableStateFlow<SpeedtestResult?>(null).asStateFlow()
       override suspend fun start() = Unit
       override suspend fun stop() = Unit
       override suspend fun reset() = Unit
@@ -138,20 +138,20 @@ class NetworkDoctorViewModelTest {
     }
 
     override val map: MapService = object : MapService {
-      override val nodes: StateFlow<List<MapNode>> = MutableStateFlow(emptyList()).asStateFlow()
+      override val nodes: StateFlow<List<MapNode>> = MutableStateFlow(emptyList<MapNode>()).asStateFlow()
       override suspend fun refresh() = Unit
     }
 
     override val topology: MapTopologyService = object : MapTopologyService {
       override val layoutMode: StateFlow<MapLayoutMode> = MutableStateFlow(MapLayoutMode.TOPOLOGY).asStateFlow()
-      override val nodes: StateFlow<List<MapNode>> = MutableStateFlow(emptyList()).asStateFlow()
-      override val links: StateFlow<List<MapLink>> = MutableStateFlow(emptyList()).asStateFlow()
+      override val nodes: StateFlow<List<MapNode>> = MutableStateFlow(emptyList<MapNode>()).asStateFlow()
+      override val links: StateFlow<List<MapLink>> = MutableStateFlow(emptyList<MapLink>()).asStateFlow()
       override suspend fun refreshTopology() = Unit
       override suspend fun selectNode(id: String?) = Unit
     }
 
     override val analytics: AnalyticsService = object : AnalyticsService {
-      override val events: StateFlow<List<String>> = MutableStateFlow(emptyList()).asStateFlow()
+      override val events: StateFlow<List<String>> = MutableStateFlow(emptyList<String>()).asStateFlow()
       override val snapshot: StateFlow<AnalyticsSnapshot> = MutableStateFlow(
         AnalyticsSnapshot(
           downMbps = 80.0,

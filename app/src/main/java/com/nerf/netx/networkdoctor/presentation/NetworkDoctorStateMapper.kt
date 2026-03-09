@@ -306,7 +306,7 @@ class NetworkDoctorStateMapper {
             append("Available router actions are limited to ")
             append(writableRouterActions.map { it.label }.distinct().joinToString(", "))
             append(". ")
-            append(unavailableRouterReasons.firstOrNull() ?: context.routerStatus?.message.orEmpty())
+            append(unsupportedRouterReasons.firstOrNull() ?: context.routerStatus?.message.orEmpty())
           }
           unsupportedRouterActions.isNotEmpty() -> buildString {
             append(unsupportedRouterActions.joinToString(", "))

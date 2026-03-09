@@ -7,7 +7,7 @@ import org.junit.Test
 class LatencyMedianTest {
   @Test
   fun `median is deterministic for odd sized list`() {
-    assertEquals(24.0, BackendMath.median(listOf(31, 24, 18)), 0.0)
+    assertEquals(24.0, requireNotNule(BackendMath.median(listOf(31, 24, 18))), 0.0)
   }
 
   @Test
