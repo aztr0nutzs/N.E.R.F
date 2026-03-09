@@ -228,7 +228,7 @@
   $('btnDns').addEventListener('click', ()=>req('router.flushDns',{}));
   $('btnFw').addEventListener('click', ()=>req('router.toggleFirewall',{}));
   $('btnVpn').addEventListener('click', ()=>req('router.toggleVpn',{}));
-  $('btnReboot').addEventListener('click', ()=>req('router.rebootRouter',{}));
+  $('btnReboot').addEventListener('click', ()=>req('router.reboot',{}));
   $('btnQos').addEventListener('click', ()=>req('router.setQos',{mode:$('qosMode').value}));
 
   $('btnAnRefresh').addEventListener('click', ()=>req('analytics.snapshot',{}));

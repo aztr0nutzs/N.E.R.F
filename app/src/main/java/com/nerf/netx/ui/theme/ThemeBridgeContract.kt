@@ -26,7 +26,8 @@ object ThemeBridgeContract {
     const val ROUTER_TOGGLE_GUEST = "router.toggleGuest"
     const val ROUTER_SET_GUEST = "router.setGuest"
     const val ROUTER_SET_DNS_SHIELD = "router.setDnsShield"
-    const val ROUTER_REBOOT = "router.rebootRouter"
+    const val ROUTER_REBOOT = "router.reboot"
+    const val ROUTER_REBOOT_LEGACY = "router.rebootRouter"
     const val ROUTER_TOGGLE_FIREWALL = "router.toggleFirewall"
     const val ROUTER_SET_FIREWALL = "router.setFirewall"
     const val ROUTER_TOGGLE_VPN = "router.toggleVpn"
@@ -38,14 +39,18 @@ object ThemeBridgeContract {
     const val SECURITY_SUMMARY = "security.summary"
     const val ANALYTICS_SNAPSHOT = "analytics.snapshot"
     const val ANALYTICS_EVENTS = "analytics.events"
+    const val ANALYTICS_EXPORT = "analytics.export"
     const val ANALYTICS_EXPORT_JSON = "analytics.exportJson"
-    const val DIAGNOSTICS_RUN_FULL = "diag.runFull"
+    const val DIAGNOSTICS_RUN_FULL = "diagnostics.runFull"
+    const val DIAGNOSTICS_RUN_FULL_LEGACY = "diag.runFull"
+    const val NAVIGATION_OPEN = "navigation.open"
     const val CONSOLE_EXECUTE = "console.execute"
     const val ASSISTANT_QUICK_ACTION = "assistant.quickAction"
     const val ASSISTANT_COMMAND = "assistant.command"
   }
 
   object Events {
+    const val BRIDGE_READY = "bridge.ready"
     const val ACTION_RESULT = "action.result"
     const val SCAN_STATE = "scan.state"
     const val SCAN_PROGRESS = "scan.progress"
@@ -54,8 +59,10 @@ object ThemeBridgeContract {
     const val SCAN_DONE_LEGACY = "scan_done"
     const val SCAN_ERROR_LEGACY = "scan_error"
     const val DEVICES_UPDATE = "devices.update"
+    const val SPEEDTEST_STATE = "speedtest.state"
     const val SPEEDTEST_UI = "speedtest.ui"
     const val SPEEDTEST_RESULT = "speedtest.result"
+    const val MAP_STATE = "map.state"
     const val TOPOLOGY_STATE = "topology.state"
     const val ANALYTICS_SNAPSHOT = "analytics.snapshot"
     const val ANALYTICS_EVENTS = "analytics.events"
@@ -65,7 +72,7 @@ object ThemeBridgeContract {
     const val ASSISTANT_RESPONSE = "assistant.response"
   }
 
-  val supportedActions: Set<String> = setOf(
+  private val canonicalActions: Set<String> = setOf(
     Actions.SCAN_START,
     Actions.SCAN_STOP,
     Actions.SCAN_STATE,
@@ -102,14 +109,25 @@ object ThemeBridgeContract {
     Actions.SECURITY_SUMMARY,
     Actions.ANALYTICS_SNAPSHOT,
     Actions.ANALYTICS_EVENTS,
+    Actions.ANALYTICS_EXPORT,
     Actions.ANALYTICS_EXPORT_JSON,
     Actions.DIAGNOSTICS_RUN_FULL,
+    Actions.NAVIGATION_OPEN,
     Actions.CONSOLE_EXECUTE,
     Actions.ASSISTANT_QUICK_ACTION,
     Actions.ASSISTANT_COMMAND
   )
 
+  val actionAliases: Map<String, String> = linkedMapOf(
+    Actions.ROUTER_REBOOT_LEGACY to Actions.ROUTER_REBOOT,
+    Actions.ANALYTICS_EXPORT_JSON to Actions.ANALYTICS_EXPORT,
+    Actions.DIAGNOSTICS_RUN_FULL_LEGACY to Actions.DIAGNOSTICS_RUN_FULL
+  )
+
+  val supportedActions: Set<String> = canonicalActions + actionAliases.keys
+
   val liveEvents: Set<String> = setOf(
+    Events.BRIDGE_READY,
     Events.ACTION_RESULT,
     Events.SCAN_STATE,
     Events.SCAN_PROGRESS,
@@ -118,8 +136,10 @@ object ThemeBridgeContract {
     Events.SCAN_DONE_LEGACY,
     Events.SCAN_ERROR_LEGACY,
     Events.DEVICES_UPDATE,
+    Events.SPEEDTEST_STATE,
     Events.SPEEDTEST_UI,
     Events.SPEEDTEST_RESULT,
+    Events.MAP_STATE,
     Events.TOPOLOGY_STATE,
     Events.ANALYTICS_SNAPSHOT,
     Events.ANALYTICS_EVENTS,
@@ -130,5 +150,7 @@ object ThemeBridgeContract {
   )
 
   fun supportsAction(action: String): Boolean = supportedActions.contains(action)
+  fun canonicalAction(action: String): String = actionAliases[action] ?: action
+  fun isActionAlias(action: String): Boolean = actionAliases.containsKey(action)
   fun isLiveEvent(name: String): Boolean = liveEvents.contains(name)
 }

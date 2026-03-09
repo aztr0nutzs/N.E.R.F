@@ -3538,7 +3538,7 @@ window.addEventListener('visibilitychange',()=>{
       if (window.ovHideRebootModal) ovHideRebootModal();
       return;
     }
-    req('router.rebootRouter', {});
+    req('router.reboot', {});
     if (window.ovHideRebootModal) ovHideRebootModal();
   };
   window.stStart = function(){ req('speedtest.start',{}); };

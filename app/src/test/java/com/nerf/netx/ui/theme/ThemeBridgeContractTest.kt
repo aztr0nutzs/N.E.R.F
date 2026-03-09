@@ -1,6 +1,7 @@
 package com.nerf.netx.ui.theme
 
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ThemeBridgeContractTest {
@@ -20,7 +21,9 @@ class ThemeBridgeContractTest {
       ThemeBridgeContract.Actions.ROUTER_REBOOT,
       ThemeBridgeContract.Actions.WIFI_ENVIRONMENT,
       ThemeBridgeContract.Actions.SECURITY_SUMMARY,
+      ThemeBridgeContract.Actions.ANALYTICS_EXPORT,
       ThemeBridgeContract.Actions.DIAGNOSTICS_RUN_FULL,
+      ThemeBridgeContract.Actions.NAVIGATION_OPEN,
       ThemeBridgeContract.Actions.CONSOLE_EXECUTE,
       ThemeBridgeContract.Actions.ASSISTANT_COMMAND
     )
@@ -33,13 +36,16 @@ class ThemeBridgeContractTest {
   @Test
   fun `required live events are registered`() {
     val required = setOf(
+      ThemeBridgeContract.Events.BRIDGE_READY,
       ThemeBridgeContract.Events.ACTION_RESULT,
       ThemeBridgeContract.Events.SCAN_STATE,
       ThemeBridgeContract.Events.SCAN_PROGRESS,
       ThemeBridgeContract.Events.SCAN_RESULTS,
       ThemeBridgeContract.Events.DEVICES_UPDATE,
+      ThemeBridgeContract.Events.SPEEDTEST_STATE,
       ThemeBridgeContract.Events.SPEEDTEST_UI,
       ThemeBridgeContract.Events.SPEEDTEST_RESULT,
+      ThemeBridgeContract.Events.MAP_STATE,
       ThemeBridgeContract.Events.TOPOLOGY_STATE,
       ThemeBridgeContract.Events.ANALYTICS_SNAPSHOT,
       ThemeBridgeContract.Events.ROUTER_STATUS,
@@ -51,5 +57,21 @@ class ThemeBridgeContractTest {
     required.forEach { event ->
       assertTrue("Missing live event contract: $event", ThemeBridgeContract.isLiveEvent(event))
     }
+  }
+
+  @Test
+  fun `legacy aliases resolve to canonical actions`() {
+    assertEquals(
+      ThemeBridgeContract.Actions.ROUTER_REBOOT,
+      ThemeBridgeContract.canonicalAction(ThemeBridgeContract.Actions.ROUTER_REBOOT_LEGACY)
+    )
+    assertEquals(
+      ThemeBridgeContract.Actions.ANALYTICS_EXPORT,
+      ThemeBridgeContract.canonicalAction(ThemeBridgeContract.Actions.ANALYTICS_EXPORT_JSON)
+    )
+    assertEquals(
+      ThemeBridgeContract.Actions.DIAGNOSTICS_RUN_FULL,
+      ThemeBridgeContract.canonicalAction(ThemeBridgeContract.Actions.DIAGNOSTICS_RUN_FULL_LEGACY)
+    )
   }
 }

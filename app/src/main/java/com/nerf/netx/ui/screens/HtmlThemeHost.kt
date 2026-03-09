@@ -37,6 +37,7 @@ fun HtmlThemeHost(
           webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, loadedUrl: String?) {
               super.onPageFinished(view, loadedUrl)
+              bridge.onPageFinished()
               onPageFinished?.invoke(loadedUrl)
             }
 

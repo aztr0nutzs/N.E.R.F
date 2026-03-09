@@ -49,12 +49,16 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicLong
 
 class NerfWebBridge(private val services: AppServices) {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var webView: WebView? = null
   private var currentThemeId: ThemeId? = null
   private var started = false
+  private var pageReady = false
+  private var bootstrapInjected = false
+  private val requestIds = AtomicLong(1L)
 
   private val assistantOrchestrator by lazy {
     val prompts = AssistantStarterPromptsProvider()
@@ -81,11 +85,19 @@ class NerfWebBridge(private val services: AppServices) {
   fun attach(wv: WebView, themeId: ThemeId? = null): NerfWebBridge {
     webView = wv
     currentThemeId = themeId
+    pageReady = false
+    bootstrapInjected = false
+    return this
+  }
+
+  fun onPageFinished() {
+    pageReady = true
+    injectBootstrap()
     if (!started) {
       started = true
       startEventStreams()
     }
-    return this
+    scope.launch { emitInitialState() }
   }
 
   private fun startEventStreams() {
@@ -97,8 +109,9 @@ class NerfWebBridge(private val services: AppServices) {
               .put("phase", "RUNNING")
               .put("targetsPlanned", event.targetsPlanned)
               .put("startedAt", event.startedAtEpochMs)
-            emit("scan.state", payload.toString())
-            emit("scan_progress", payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_STATE, payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_PROGRESS, payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_PROGRESS_LEGACY, payload.toString())
           }
           is ScanEvent.ScanProgress -> {
             val payload = JSONObject()
@@ -106,14 +119,14 @@ class NerfWebBridge(private val services: AppServices) {
               .put("targetsPlanned", event.targetsPlanned)
               .put("probesSent", event.probesSent)
               .put("devicesFound", event.devicesFound)
-            emit("scan.progress", payload.toString())
-            emit("scan_progress", payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_PROGRESS, payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_PROGRESS_LEGACY, payload.toString())
           }
           is ScanEvent.ScanDevice -> {
             val payload = JSONObject()
               .put("updated", event.updated)
               .put("device", deviceJson(event.device))
-            emit("scan.results", payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_RESULTS, payload.toString())
           }
           is ScanEvent.ScanDone -> {
             val payload = JSONObject()
@@ -122,64 +135,46 @@ class NerfWebBridge(private val services: AppServices) {
               .put("probesSent", event.probesSent)
               .put("devicesFound", event.devicesFound)
               .put("completedAt", event.completedAtEpochMs)
-            emit("scan.state", payload.toString())
-            emit("scan_done", payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_STATE, payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_DONE_LEGACY, payload.toString())
           }
           is ScanEvent.ScanError -> {
             val payload = JSONObject()
               .put("phase", "ERROR")
               .put("message", event.message)
-            emit("scan.state", payload.toString())
-            emit("scan_error", payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_STATE, payload.toString())
+            emit(ThemeBridgeContract.Events.SCAN_ERROR_LEGACY, payload.toString())
           }
         }
       }
     }
 
     scope.launch {
-      services.scan.scanState.collectLatest { state ->
-        emit(
-          "scan.state",
-          JSONObject()
-            .put("phase", state.phase.name)
-            .put("scannedHosts", state.scannedHosts)
-            .put("discoveredHosts", state.discoveredHosts)
-            .put("message", state.message)
-            .toString()
-        )
-      }
+      services.scan.scanState.collectLatest { emitScanState(it) }
     }
 
     scope.launch {
       services.scan.results.collectLatest { devices ->
-        emit(
-          "scan.results",
-          JSONObject().put("devices", devicesJson(devices)).toString()
-        )
+        emit(ThemeBridgeContract.Events.SCAN_RESULTS, JSONObject().put("devices", devicesJson(devices)).toString())
       }
     }
 
     scope.launch {
       services.devices.devices.collectLatest { devices ->
         runCatching { services.deviceControl.refreshStatus() }
-        emit(
-          "devices.update",
-          JSONObject().put("devices", devicesJson(devices)).toString()
-        )
+        emit(ThemeBridgeContract.Events.DEVICES_UPDATE, JSONObject().put("devices", devicesJson(devices)).toString())
         emitDerivedState()
       }
     }
 
     scope.launch {
-      services.speedtest.ui.collectLatest { ui ->
-        emit("speedtest.ui", speedtestUiJson(ui).toString())
-      }
+      services.speedtest.ui.collectLatest { emitSpeedtestState(it) }
     }
 
     scope.launch {
       services.speedtest.latestResult.collectLatest { result ->
         result ?: return@collectLatest
-        emit("speedtest.result", speedtestResultJson(result).toString())
+        emitSpeedtestResult(result)
       }
     }
 
@@ -195,7 +190,7 @@ class NerfWebBridge(private val services: AppServices) {
 
     scope.launch {
       services.analytics.snapshot.collectLatest { snapshot ->
-        emit("analytics.snapshot", analyticsJson(snapshot, code = "ANALYTICS_SNAPSHOT").toString())
+        emit(ThemeBridgeContract.Events.ANALYTICS_SNAPSHOT, analyticsJson(snapshot, code = "ANALYTICS_SNAPSHOT").toString())
         emitDerivedState()
       }
     }
@@ -203,7 +198,7 @@ class NerfWebBridge(private val services: AppServices) {
     scope.launch {
       services.analytics.events.collectLatest { events ->
         emit(
-          "analytics.events",
+          ThemeBridgeContract.Events.ANALYTICS_EVENTS,
           JSONObject().put("events", JSONArray(events)).toString()
         )
       }
@@ -211,7 +206,7 @@ class NerfWebBridge(private val services: AppServices) {
 
     scope.launch {
       services.routerControl.status.collectLatest { snapshot ->
-        emit("router.status", routerStatusJson(snapshot, "ROUTER_STATUS").toString())
+        emitRouterStatus(snapshot)
         emitDerivedState(snapshot)
       }
     }
@@ -225,15 +220,140 @@ class NerfWebBridge(private val services: AppServices) {
     }
   }
 
-  private suspend fun emitTopologyState() {
+  private fun injectBootstrap() {
+    if (bootstrapInjected) return
+    bootstrapInjected = true
+    val js = """
+      (function() {
+        var bridge = window.__NERF_BRIDGE__ = window.__NERF_BRIDGE__ || {};
+        if (bridge.__nativeBridgeReady) {
+          if (typeof bridge.flush === 'function') bridge.flush();
+          return;
+        }
+        bridge.__nativeBridgeReady = true;
+        bridge.version = '1.0';
+        bridge.queue = Array.isArray(bridge.queue) ? bridge.queue : [];
+        bridge.themeHandler = bridge.themeHandler || null;
+        bridge.dispatch = function(name, payload) {
+          var packet = payload && typeof payload === 'object' ? payload : {};
+          if (!packet.event) packet.event = name;
+          if (!packet.emittedAt) packet.emittedAt = Date.now();
+          if (typeof bridge.themeHandler === 'function') {
+            try {
+              bridge.themeHandler(name, packet);
+              return;
+            } catch (err) {
+              console.error('NERF bridge handler error', err);
+            }
+          }
+          bridge.queue.push({ name: name, payload: packet });
+        };
+        bridge.flush = function() {
+          if (typeof bridge.themeHandler !== 'function') return;
+          while (bridge.queue.length) {
+            var queued = bridge.queue.shift();
+            try {
+              bridge.themeHandler(queued.name, queued.payload);
+            } catch (err) {
+              console.error('NERF bridge flush error', err);
+              break;
+            }
+          }
+        };
+        bridge.request = function(action, payload) {
+          if (!window.NERF_NATIVE || typeof window.NERF_NATIVE.request !== 'function') {
+            return JSON.stringify({
+              accepted: false,
+              error: 'BRIDGE_UNAVAILABLE',
+              message: 'Native bridge is unavailable.'
+            });
+          }
+          try {
+            return window.NERF_NATIVE.request(action, JSON.stringify(payload || {}));
+          } catch (err) {
+            return JSON.stringify({
+              accepted: false,
+              error: 'BRIDGE_ERROR',
+              message: String((err && err.message) || err || 'Unknown bridge error.')
+            });
+          }
+        };
+        var nerf = window.NERF = window.NERF || {};
+        var existingHandler = typeof nerf.onEvent === 'function' ? nerf.onEvent : null;
+        Object.defineProperty(nerf, 'onEvent', {
+          configurable: true,
+          enumerable: true,
+          get: function() { return bridge.themeHandler; },
+          set: function(fn) {
+            bridge.themeHandler = typeof fn === 'function' ? fn : null;
+            bridge.flush();
+          }
+        });
+        nerf.request = bridge.request;
+        bridge.themeHandler = existingHandler;
+        bridge.flush();
+      })();
+    """.trimIndent()
+    webView?.post { webView?.evaluateJavascript(js, null) }
+  }
+
+  private suspend fun emitInitialState() {
+    emitBridgeReady()
+    emitScanState()
+    emit(ThemeBridgeContract.Events.SCAN_RESULTS, JSONObject().put("devices", devicesJson(services.scan.results.value)).toString())
+    emit(ThemeBridgeContract.Events.DEVICES_UPDATE, JSONObject().put("devices", devicesJson(services.devices.devices.value)).toString())
+    emitSpeedtestState(services.speedtest.ui.value)
+    services.speedtest.latestResult.value?.let { emitSpeedtestResult(it) }
+    emitTopologyState()
+    emit(ThemeBridgeContract.Events.ANALYTICS_SNAPSHOT, analyticsJson(services.analytics.snapshot.value, code = "ANALYTICS_SNAPSHOT").toString())
+    emitRouterStatus(services.routerControl.status.value)
+    emitDerivedState(services.routerControl.status.value)
+  }
+
+  private suspend fun emitBridgeReady() {
+    val payload = JSONObject()
+      .put("version", 1)
+      .put("themeId", currentThemeId?.id)
+      .put("supportedActions", JSONArray(ThemeBridgeContract.supportedActions.sorted()))
+      .put("liveEvents", JSONArray(ThemeBridgeContract.liveEvents.sorted()))
+      .put("actionAliases", JSONObject(ThemeBridgeContract.actionAliases))
+    emit(ThemeBridgeContract.Events.BRIDGE_READY, payload.toString())
+  }
+
+  private suspend fun emitScanState(state: com.nerf.netx.domain.ScanState = services.scan.scanState.value) {
     emit(
-      "topology.state",
-      topologyStateJson(
-        services.topology.nodes.value,
-        services.topology.links.value,
-        services.topology.layoutMode.value.name
-      ).toString()
+      ThemeBridgeContract.Events.SCAN_STATE,
+      JSONObject()
+        .put("phase", state.phase.name)
+        .put("scannedHosts", state.scannedHosts)
+        .put("discoveredHosts", state.discoveredHosts)
+        .put("message", state.message)
+        .toString()
     )
+  }
+
+  private suspend fun emitSpeedtestState(ui: SpeedtestUiState) {
+    val payload = speedtestUiJson(ui).toString()
+    emit(ThemeBridgeContract.Events.SPEEDTEST_STATE, payload)
+    emit(ThemeBridgeContract.Events.SPEEDTEST_UI, payload)
+  }
+
+  private suspend fun emitSpeedtestResult(result: SpeedtestResult) {
+    emit(ThemeBridgeContract.Events.SPEEDTEST_RESULT, speedtestResultJson(result).toString())
+  }
+
+  private suspend fun emitRouterStatus(snapshot: RouterStatusSnapshot) {
+    emit(ThemeBridgeContract.Events.ROUTER_STATUS, routerStatusJson(snapshot, "ROUTER_STATUS").toString())
+  }
+
+  private suspend fun emitTopologyState() {
+    val payload = topologyStateJson(
+      services.topology.nodes.value,
+      services.topology.links.value,
+      services.topology.layoutMode.value.name
+    ).toString()
+    emit(ThemeBridgeContract.Events.MAP_STATE, payload)
+    emit(ThemeBridgeContract.Events.TOPOLOGY_STATE, payload)
   }
 
   private suspend fun emitDerivedState(routerStatus: RouterStatusSnapshot = services.routerControl.status.value) {
@@ -253,21 +373,41 @@ class NerfWebBridge(private val services: AppServices) {
 
   @JavascriptInterface
   fun request(action: String, payloadJson: String?): String {
-    if (!ThemeBridgeContract.supportsAction(action)) {
+    val payload = parsePayload(payloadJson)
+    val requestedAction = action.trim()
+    val canonicalAction = ThemeBridgeContract.canonicalAction(requestedAction)
+    val requestId = payload.optString("requestId").ifBlank { nextRequestId() }
+    val requestContext = RequestContext(
+      requestId = requestId,
+      requestedAction = requestedAction,
+      canonicalAction = canonicalAction
+    )
+    if (!ThemeBridgeContract.supportsAction(requestedAction)) {
+      val result = decorateActionResult(
+        error("UNKNOWN_ACTION", "Unknown action: $requestedAction"),
+        requestContext
+      )
       scope.launch {
-        emit(
-          ThemeBridgeContract.Events.ACTION_RESULT,
-          error("UNKNOWN_ACTION", "Unknown action: $action")
-        )
+        emit(ThemeBridgeContract.Events.ACTION_RESULT, result)
       }
-      return """{"accepted":false,"error":"UNKNOWN_ACTION"}"""
+      return JSONObject()
+        .put("accepted", false)
+        .put("requestId", requestId)
+        .put("action", requestedAction)
+        .put("canonicalAction", canonicalAction)
+        .put("error", "UNKNOWN_ACTION")
+        .toString()
     }
     scope.launch {
-      val payload = parsePayload(payloadJson)
-      val result = handleRequest(action, payload)
+      val result = decorateActionResult(handleRequest(canonicalAction, payload), requestContext)
       emit(ThemeBridgeContract.Events.ACTION_RESULT, result)
     }
-    return """{"accepted":true}"""
+    return JSONObject()
+      .put("accepted", true)
+      .put("requestId", requestId)
+      .put("action", requestedAction)
+      .put("canonicalAction", canonicalAction)
+      .toString()
   }
 
   private suspend fun handleRequest(action: String, payload: JSONObject): String {
@@ -447,7 +587,7 @@ class NerfWebBridge(private val services: AppServices) {
           )
         }
       )
-      "router.rebootRouter" -> guardedRouterActionResult(
+      ThemeBridgeContract.Actions.ROUTER_REBOOT -> guardedRouterActionResult(
         actionId = AppActionId.ROUTER_REBOOT,
         routerAction = RouterWriteAction.REBOOT,
         action = { services.routerControl.rebootRouter() }
@@ -521,8 +661,8 @@ class NerfWebBridge(private val services: AppServices) {
           .put("events", JSONArray(services.analytics.events.value))
           .toString()
       }
-      "analytics.exportJson" -> actionResultJson(services.analytics.exportJson())
-      "diag.runFull" -> {
+      ThemeBridgeContract.Actions.ANALYTICS_EXPORT -> actionResultJson(services.analytics.exportJson())
+      ThemeBridgeContract.Actions.DIAGNOSTICS_RUN_FULL -> {
         services.scan.startDeepScan()
         services.analytics.refresh()
         services.routerControl.refreshStatus()
@@ -532,6 +672,14 @@ class NerfWebBridge(private val services: AppServices) {
           .put("code", "DIAG_STARTED")
           .put("message", "Diagnostic run started.")
           .toString()
+      }
+      ThemeBridgeContract.Actions.NAVIGATION_OPEN -> {
+        val destination = payload.optString("destination").ifBlank { payload.optString("route") }
+        if (destination.isBlank()) {
+          error("NAVIGATION_DESTINATION_REQUIRED", "Navigation destination is required.")
+        } else {
+          notSupported("NAVIGATION_UNAVAILABLE", "Native navigation is unavailable for this host.")
+        }
       }
       "console.execute" -> handleConsoleCommand(payload.optString("command", ""))
       "assistant.quickAction" -> {
@@ -611,6 +759,18 @@ class NerfWebBridge(private val services: AppServices) {
     return runCatching {
       if (payloadJson.isNullOrBlank()) JSONObject() else JSONObject(payloadJson)
     }.getOrDefault(JSONObject())
+  }
+
+  private fun nextRequestId(): String = "req-${requestIds.getAndIncrement()}"
+
+  private fun decorateActionResult(resultJson: String, request: RequestContext): String {
+    val payload = parsePayload(resultJson)
+    payload.put("requestId", request.requestId)
+    payload.put("action", request.requestedAction)
+    payload.put("canonicalAction", request.canonicalAction)
+    payload.put("aliasUsed", request.requestedAction != request.canonicalAction)
+    payload.put("emittedAt", System.currentTimeMillis())
+    return payload.toString()
   }
 
   private fun ok(code: String, message: String): String {
@@ -1146,6 +1306,12 @@ class NerfWebBridge(private val services: AppServices) {
     val source: String? = null
   )
 
+  private data class RequestContext(
+    val requestId: String,
+    val requestedAction: String,
+    val canonicalAction: String
+  )
+
   private fun assistantResponseJson(response: AssistantResponse): JSONObject {
     val suggestedActions = JSONArray()
     response.suggestedActions.forEach { action ->
@@ -1189,8 +1355,29 @@ class NerfWebBridge(private val services: AppServices) {
       .put("cards", cards)
   }
 
+  private fun decorateEventPayload(eventName: String, payloadJson: String): String {
+    val payload = parsePayload(payloadJson)
+    payload.put("event", eventName)
+    payload.put("emittedAt", System.currentTimeMillis())
+    currentThemeId?.id?.let { payload.put("themeId", it) }
+    return payload.toString()
+  }
+
   private fun emit(eventName: String, payloadJson: String) {
-    val js = "window.NERF && window.NERF.onEvent && window.NERF.onEvent('${escapeJs(eventName)}', $payloadJson);"
+    if (!pageReady) return
+    val eventPayload = decorateEventPayload(eventName, payloadJson)
+    val js = """
+      (function() {
+        var payload = $eventPayload;
+        if (window.__NERF_BRIDGE__ && typeof window.__NERF_BRIDGE__.dispatch === 'function') {
+          window.__NERF_BRIDGE__.dispatch('${escapeJs(eventName)}', payload);
+          return;
+        }
+        if (window.NERF && typeof window.NERF.onEvent === 'function') {
+          window.NERF.onEvent('${escapeJs(eventName)}', payload);
+        }
+      })();
+    """.trimIndent()
     webView?.post { webView?.evaluateJavascript(js, null) }
   }
 
