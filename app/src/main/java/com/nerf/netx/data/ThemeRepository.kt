@@ -18,6 +18,8 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   private val appContext = context.applicationContext
   private val prefs: SharedPreferences = context.getSharedPreferences("nerf_prefs", Context.MODE_PRIVATE)
   private val key = "theme_id"
+  private val selectionSchemaKey = "theme_selection_schema"
+  private val selectionSchemaVersion = 1
   private val defaultTheme = ThemeId.NERF_DASH_NEW_HTML
   override val availableThemes: List<ThemeId> = ThemeId.entries.filter(::isThemeAvailable)
   private val selectionPolicy = ThemeSelectionPolicy(defaultTheme, availableThemes)
@@ -26,7 +28,10 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
 
   override fun set(themeId: ThemeId) {
     val safeTheme = selectionPolicy.sanitizeSelection(themeId)
-    prefs.edit().putString(key, safeTheme.id).apply()
+    prefs.edit()
+      .putString(key, safeTheme.id)
+      .putInt(selectionSchemaKey, selectionSchemaVersion)
+      .apply()
     _selected.value = safeTheme
   }
 
@@ -37,12 +42,22 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   }
 
   private fun readTheme(): ThemeId {
+    migrateSavedSelectionIfNeeded()
     val saved = prefs.getString(key, null)
     if (saved == "NEON_NERF" || saved == "neon_nerf") {
       prefs.edit().putString(key, defaultTheme.id).apply()
       return defaultTheme
     }
     return selectionPolicy.resolveSavedTheme(saved)
+  }
+
+  private fun migrateSavedSelectionIfNeeded() {
+    val appliedSchema = prefs.getInt(selectionSchemaKey, 0)
+    if (appliedSchema >= selectionSchemaVersion) return
+    prefs.edit()
+      .putString(key, defaultTheme.id)
+      .putInt(selectionSchemaKey, selectionSchemaVersion)
+      .apply()
   }
 
   private fun assetUrl(folder: String): String? {

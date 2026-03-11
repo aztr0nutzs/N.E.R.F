@@ -1,5 +1,6 @@
 package com.nerf.netx.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,11 +22,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,14 +35,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nerf.netx.domain.SpeedtestHistoryEntry
 import com.nerf.netx.domain.SpeedtestPhase
 import com.nerf.netx.domain.SpeedtestServerScope
 import com.nerf.netx.domain.SpeedtestService
 import com.nerf.netx.domain.SpeedtestTargetMode
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.max
@@ -50,12 +53,23 @@ import java.util.Locale
 
 @Composable
 fun SpeedtestScreen(service: SpeedtestService) {
-  val ui by service.ui.collectAsState()
-  val servers by service.servers.collectAsState()
-  val config by service.config.collectAsState()
-  val history by service.history.collectAsState()
-  val latest by service.latestResult.collectAsState()
-  val scope = rememberCoroutineScope()
+  val viewModel: SpeedtestViewModel = viewModel(
+    factory = SpeedtestViewModelFactory(service)
+  )
+
+  val ui by viewModel.uiState.collectAsState()
+  val servers by viewModel.servers.collectAsState()
+  val config by viewModel.config.collectAsState()
+  val history by viewModel.history.collectAsState()
+  val latest by viewModel.latestResult.collectAsState()
+
+  val context = LocalContext.current
+
+  LaunchedEffect(Unit) {
+    viewModel.errorEvents.collectLatest { error ->
+      Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+    }
+  }
 
   var serverMenuExpanded by remember { mutableStateOf(false) }
   var selectedHistoryId by remember { mutableStateOf<String?>(null) }
@@ -137,18 +151,14 @@ fun SpeedtestScreen(service: SpeedtestService) {
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
               onClick = {
-                scope.launch {
-                  service.updateConfig(config.copy(targetMode = SpeedtestTargetMode.PUBLIC_INTERNET))
-                }
+                viewModel.onUpdateConfig(config.copy(targetMode = SpeedtestTargetMode.PUBLIC_INTERNET))
               }
             ) {
               Text(if (config.targetMode == SpeedtestTargetMode.PUBLIC_INTERNET) "PUBLIC INTERNET ON" else "PUBLIC INTERNET")
             }
             OutlinedButton(
               onClick = {
-                scope.launch {
-                  service.updateConfig(config.copy(targetMode = SpeedtestTargetMode.PRIVATE_LOCAL))
-                }
+                viewModel.onUpdateConfig(config.copy(targetMode = SpeedtestTargetMode.PRIVATE_LOCAL))
               }
             ) {
               Text(if (config.targetMode == SpeedtestTargetMode.PRIVATE_LOCAL) "PRIVATE/LAN ON" else "PRIVATE/LAN")
@@ -200,28 +210,24 @@ fun SpeedtestScreen(service: SpeedtestService) {
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
               onClick = {
-                scope.launch {
-                  service.updateConfig(
-                    config.copy(
-                      privateServerName = localServerName.trim().ifBlank { "Private LibreSpeed" },
-                      privateServerBaseUrl = localServerBaseUrl.trim().ifBlank { null }
-                    )
+                viewModel.onUpdateConfig(
+                  config.copy(
+                    privateServerName = localServerName.trim().ifBlank { "Private LibreSpeed" },
+                    privateServerBaseUrl = localServerBaseUrl.trim().ifBlank { null }
                   )
-                }
+                )
               }
             ) { Text("Save Local Server") }
             OutlinedButton(
               onClick = {
                 localServerName = "Private LibreSpeed"
                 localServerBaseUrl = ""
-                scope.launch {
-                  service.updateConfig(
-                    config.copy(
-                      privateServerName = "Private LibreSpeed",
-                      privateServerBaseUrl = null
-                    )
+                viewModel.onUpdateConfig(
+                  config.copy(
+                    privateServerName = "Private LibreSpeed",
+                    privateServerBaseUrl = null
                   )
-                }
+                )
               }
             ) { Text("Clear") }
           }
@@ -241,9 +247,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
               onClick = {
-                scope.launch {
-                  service.updateConfig(config.copy(serverMode = "AUTO", selectedServerId = null))
-                }
+                viewModel.onUpdateConfig(config.copy(serverMode = "AUTO", selectedServerId = null))
               }
             ) {
               Text(if (config.serverMode == "AUTO") "AUTO ON" else "AUTO")
@@ -251,9 +255,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
             OutlinedButton(
               onClick = {
                 val defaultServerId = config.selectedServerId ?: visibleServers(config, servers).firstOrNull()?.id
-                scope.launch {
-                  service.updateConfig(config.copy(serverMode = "MANUAL", selectedServerId = defaultServerId))
-                }
+                viewModel.onUpdateConfig(config.copy(serverMode = "MANUAL", selectedServerId = defaultServerId))
               }
             ) {
               Text(if (config.serverMode == "MANUAL") "MANUAL ON" else "MANUAL")
@@ -275,9 +277,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
                     text = { Text("${server.name} (${serverScopeLabel(server.scope)})") },
                     onClick = {
                       serverMenuExpanded = false
-                      scope.launch {
-                        service.updateConfig(config.copy(serverMode = "MANUAL", selectedServerId = server.id))
-                      }
+                      viewModel.onUpdateConfig(config.copy(serverMode = "MANUAL", selectedServerId = server.id))
                     }
                   )
                 }
@@ -320,9 +320,9 @@ fun SpeedtestScreen(service: SpeedtestService) {
             .padding(14.dp),
           horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          Button(onClick = { scope.launch { service.start() } }, enabled = !ui.running) { Text("START") }
-          OutlinedButton(onClick = { scope.launch { service.stop() } }, enabled = ui.running) { Text("ABORT") }
-          TextButton(onClick = { scope.launch { service.reset() } }) { Text("RESET") }
+          Button(onClick = { viewModel.onStartClicked() }, enabled = !ui.running) { Text("START") }
+          OutlinedButton(onClick = { viewModel.onAbortClicked() }, enabled = ui.running) { Text("ABORT") }
+          TextButton(onClick = { viewModel.onResetClicked() }) { Text("RESET") }
         }
       }
     }
@@ -337,7 +337,7 @@ fun SpeedtestScreen(service: SpeedtestService) {
         ) {
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("History", style = MaterialTheme.typography.titleMedium)
-            TextButton(onClick = { scope.launch { service.clearHistory() } }) { Text("Clear History") }
+            TextButton(onClick = { viewModel.onClearHistoryClicked() }) { Text("Clear History") }
           }
 
           if (history.isEmpty()) {

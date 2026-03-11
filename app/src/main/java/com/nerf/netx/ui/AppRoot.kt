@@ -46,7 +46,7 @@ fun AppRoot(
         }
       }
     ) { padding ->
-      NavHost(navController = nav, startDestination = Routes.SPEED, modifier = Modifier.padding(padding)) {
+      NavHost(navController = nav, startDestination = Routes.HTML_DASHBOARD, modifier = Modifier.padding(padding)) {
         composable(Routes.SPEED) { SpeedtestScreen(services.speedtest) }
         composable(Routes.MAP) { MapScreen(services.topology, services.deviceControl) }
         composable(Routes.DEVICES) { DevicesScreen(services.devices, services.deviceControl) }
