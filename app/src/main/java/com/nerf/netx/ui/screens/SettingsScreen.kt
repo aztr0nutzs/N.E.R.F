@@ -111,6 +111,8 @@ fun SettingsScreen(
     mapOf(
       ThemeId.NERF_MAIN_DASH_HTML to "Main dashboard with live telemetry, assistant actions, and native bridge support.",
       ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard.",
+      ThemeId.NERF_DASH_NEW_HTML to "Legacy dashboard pack kept for runtime compatibility and preview parity.",
+      ThemeId.NERF_MAIN_HUD_HTML to "Legacy main HUD pack kept for runtime compatibility and preview parity.",
       ThemeId.NEON_NERF_NATIVE to "Native Neon NERF styling for Compose surfaces."
     )
   }
@@ -118,6 +120,8 @@ fun SettingsScreen(
     mapOf(
       ThemeId.NERF_MAIN_DASH_HTML to "themes/nerf_main_dash/screenshot.png",
       ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png",
+      ThemeId.NERF_DASH_NEW_HTML to null,
+      ThemeId.NERF_MAIN_HUD_HTML to null,
       ThemeId.NEON_NERF_NATIVE to null
     )
   }

@@ -7,14 +7,14 @@ class ThemeSelectionPolicy(
   private val availableThemes: List<ThemeId>
 ) {
   private val forwardCompatibilityMap: Map<String, ThemeId?> = mapOf(
-    "NERF_DASH_NEW" to ThemeId.NERF_MAIN_DASH_HTML,
-    "nerf_dash_new" to ThemeId.NERF_MAIN_DASH_HTML,
-    "nerf_main_hud" to ThemeId.NERF_MAIN_DASH_HTML,
+    "NERF_DASH_NEW" to ThemeId.NERF_DASH_NEW_HTML,
+    "nerf_dash_new" to ThemeId.NERF_DASH_NEW_HTML,
+    "nerf_main_hud" to ThemeId.NERF_MAIN_HUD_HTML,
     "nerf_main_dash" to ThemeId.NERF_MAIN_DASH_HTML,
     "NEON_NERF" to ThemeId.NEON_NERF_NATIVE,
     "neon_nerf" to ThemeId.NEON_NERF_NATIVE,
-    "speedtest6" to null,
-    "nerf_speed2" to null
+    "speedtest6" to ThemeId.NERF_DASH_NEW_HTML,
+    "nerf_speed2" to ThemeId.NERF_DASH_NEW_HTML
   )
 
   fun resolveSavedTheme(savedId: String?): ThemeId {

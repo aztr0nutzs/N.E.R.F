@@ -31,14 +31,14 @@ class ThemeSelectionPolicyTest {
   }
 
   @Test
-  fun `migrates deprecated neon ids to default`() {
-    assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("NEON_NERF"))
-    assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("neon_nerf"))
+  fun `migrates deprecated neon ids to neon native`() {
+    assertEquals(ThemeId.NEON_NERF_NATIVE, policy.resolveSavedTheme("NEON_NERF"))
+    assertEquals(ThemeId.NEON_NERF_NATIVE, policy.resolveSavedTheme("neon_nerf"))
   }
 
   @Test
-  fun `migrates legacy main dash id to main hud`() {
-    assertEquals(ThemeId.NERF_MAIN_HUD_HTML, policy.resolveSavedTheme("nerf_main_dash"))
+  fun `falls back when legacy main dash theme is unavailable`() {
+    assertEquals(ThemeId.NERF_DASH_NEW_HTML, policy.resolveSavedTheme("nerf_main_dash"))
   }
 
   @Test

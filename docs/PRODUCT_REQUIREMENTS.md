@@ -17,5 +17,6 @@ NERF = Network Explorer & Reporting Framework
 - Multiple themes must be supported.
 - Must include:
   - Native theme: `neon_nerf`
-  - HTML packs: `speedtest6`, `nerf_speed2`
+  - HTML packs: `nerf_main_dash`, `nerf_hud_alt`, `nerf_dash_new`, `nerf_main_hud`
+  - Deprecated compatibility aliases: `speedtest6`, `nerf_speed2` (mapped, not standalone assets)
 - Theme selection must persist across app restarts.

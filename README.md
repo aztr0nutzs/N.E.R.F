@@ -27,8 +27,9 @@ Android-first network control and observability tool, with a WebView-powered web
   - `nerf_main_dash` (html)
   - `nerf_hud_alt` (html)
   - `neon_nerf` (native)
-  - `speedtest6` (html)
-  - `nerf_speed2` (html)
+  - `nerf_dash_new` (html)
+  - `nerf_main_hud` (html)
+  - Deprecated compatibility aliases: `speedtest6`, `nerf_speed2` (mapped to `nerf_dash_new`)
 - Theme selection persistence across app restarts.
 - Runtime theme apply/revert in Settings.
 - In-app HTML preview rendering for selected HTML packs.
@@ -142,8 +143,10 @@ Android-first network control and observability tool, with a WebView-powered web
 4. Use **Speedtest**, **Devices**, **Map**, and **Analytics** tabs for diagnostics and control.
 
 ### Required Theme Packs (Do Not Remove / Rename)
-- `app/src/main/assets/themes/speedtest6/index.html`
-- `app/src/main/assets/themes/nerf_speed2/index.html`
+- `app/src/main/assets/themes/nerf_main_dash/index.html`
+- `app/src/main/assets/themes/nerf_hud_alt/index.html`
+- `app/src/main/assets/themes/nerf_dash_new/index.html`
+- `app/src/main/assets/themes/nerf_main_hud/index.html`
 
 ## Reference Docs
 - `AGENTS.md`
