@@ -1,7 +1,6 @@
 package com.nerf.netx.ui.screens
 
 import android.annotation.SuppressLint
-import android.graphics.BitmapFactory
 import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,6 +37,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.nerf.netx.data.RouterAccessMode
+import com.nerf.netx.data.ThemeVisualAssetRepositoryImpl
 import com.nerf.netx.data.RouterCapability
 import com.nerf.netx.data.RouterCredentials
 import com.nerf.netx.data.RouterProfile
@@ -116,23 +116,12 @@ fun SettingsScreen(
       ThemeId.NEON_NERF_NATIVE to "Native Neon NERF styling for Compose surfaces."
     )
   }
-  val screenshotAssetPath = remember {
-    mapOf(
-      ThemeId.NERF_MAIN_DASH_HTML to "themes/nerf_main_dash/screenshot.png",
-      ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png",
-      ThemeId.NERF_DASH_NEW_HTML to null,
-      ThemeId.NERF_MAIN_HUD_HTML to null,
-      ThemeId.NEON_NERF_NATIVE to null
-    )
+  val themeVisualAssets = remember(context) { ThemeVisualAssetRepositoryImpl(context) }
+  val previewScreenshotPath = remember(previewTheme) {
+    themeVisualAssets.screenshotPath(previewTheme)
   }
-  val previewScreenshotPath = screenshotAssetPath[previewTheme]
-  val previewScreenshotExists = remember(previewTheme) {
-    val path = screenshotAssetPath[previewTheme]
-    if (path == null) {
-      false
-    } else {
-      runCatching { context.assets.open(path).close() }.isSuccess
-    }
+  val previewScreenshotBitmap = remember(previewTheme) {
+    themeVisualAssets.loadScreenshot(previewTheme)
   }
 
   Column(
@@ -214,7 +203,7 @@ fun SettingsScreen(
         Text("Theme Preview", style = MaterialTheme.typography.titleMedium)
         Text(themeDescriptions[previewTheme] ?: "No description.", style = MaterialTheme.typography.bodySmall)
 
-        if (previewScreenshotExists && previewScreenshotPath != null) {
+        if (previewScreenshotBitmap != null) {
           AndroidView(
             modifier = Modifier
               .fillMaxWidth()
@@ -226,12 +215,7 @@ fun SettingsScreen(
               }
             },
             update = { view ->
-              runCatching {
-                context.assets.open(previewScreenshotPath).use { stream ->
-                  val bmp = BitmapFactory.decodeStream(stream)
-                  view.setImageBitmap(bmp)
-                }
-              }
+              view.setImageBitmap(previewScreenshotBitmap)
             }
           )
         } else {
@@ -245,7 +229,7 @@ fun SettingsScreen(
           ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
               Text("No screenshot asset found.", style = MaterialTheme.typography.bodySmall)
-              Text("Missing: ${previewScreenshotPath ?: "themes/<id>/screenshot.png"}", style = MaterialTheme.typography.bodySmall)
+              Text("Missing: ${previewScreenshotPath ?: "themes/<id>/screenshot.png (or unavailable)"}", style = MaterialTheme.typography.bodySmall)
             }
           }
         }
