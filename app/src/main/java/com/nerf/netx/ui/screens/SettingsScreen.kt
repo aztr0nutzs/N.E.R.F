@@ -51,6 +51,7 @@ import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.ui.theme.ThemeId
 import com.nerf.netx.ui.theme.ThemeType
+import com.nerf.netx.ui.theme.nativeThemeTokens
 import kotlinx.coroutines.launch
 
 private data class ThemePalette(
@@ -535,12 +536,15 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
       text = Color(0xFFEAF2F8)
     )
 
-    ThemeId.NEON_NERF_NATIVE -> ThemePalette(
-      primary = Color(0xFFFF6A00),
-      accent = Color(0xFF00C2FF),
-      highlight = Color(0xFFFFD400),
-      panel = Color(0xFF10151A),
-      text = Color(0xFFEAF2F8)
-    )
+    ThemeId.NEON_NERF_NATIVE -> {
+      val nativeTokens = nativeThemeTokens(themeId)
+      ThemePalette(
+        primary = nativeTokens?.primary ?: Color(0xFFFF6A00),
+        accent = nativeTokens?.accent ?: Color(0xFF00C2FF),
+        highlight = nativeTokens?.highlight ?: Color(0xFFFFD400),
+        panel = nativeTokens?.panel ?: Color(0xFF10151A),
+        text = nativeTokens?.text ?: Color(0xFFEAF2F8)
+      )
+    }
   }
 }
