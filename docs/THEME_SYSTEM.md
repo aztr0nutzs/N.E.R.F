@@ -8,8 +8,12 @@ NERF supports:
 - nerf_main_dash (html)
 - nerf_hud_alt (html)
 - neon_nerf (native)
-- speedtest6 (html)
-- nerf_speed2 (html)
+- nerf_dash_new (html)
+- nerf_main_hud (html)
+
+Deprecated IDs retained only as migration aliases (not standalone packs):
+- speedtest6 -> nerf_dash_new
+- nerf_speed2 -> nerf_dash_new
 
 ## Locations
 - Native: `app/src/main/java/com/nerf/netx/ui/theme/*`
