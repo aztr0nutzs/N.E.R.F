@@ -54,6 +54,10 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
 class NerfWebBridge(private val services: AppServices) {
+  private companion object {
+    const val ROUTER_STATUS_POLL_INTERVAL_MS = 30_000L
+  }
+
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var webView: WebView? = null
   private var currentThemeId: ThemeId? = null
@@ -217,8 +221,7 @@ class NerfWebBridge(private val services: AppServices) {
     scope.launch {
       while (isActive) {
         services.routerControl.refreshStatus()
-        emitDerivedState()
-        delay(5_000)
+        delay(ROUTER_STATUS_POLL_INTERVAL_MS)
       }
     }
   }
