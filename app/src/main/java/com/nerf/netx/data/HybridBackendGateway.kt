@@ -1939,9 +1939,14 @@ private class HybridAnalytics(
     }
 
     scope.launch {
-      while (true) {
+      devicesFlow.collect {
         recomputeSnapshot()
-        delay(1000)
+      }
+    }
+
+    scope.launch {
+      speedtestService.ui.collect {
+        recomputeSnapshot()
       }
     }
   }
