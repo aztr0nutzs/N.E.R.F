@@ -68,6 +68,8 @@ fun SettingsScreen(
   themeId: ThemeId,
   availableThemes: List<ThemeId>,
   onThemeSelected: (ThemeId) -> Unit,
+  onRevertTheme: () -> Unit,
+  canRevertTheme: Boolean,
   htmlAssetUrlProvider: (ThemeId) -> String?,
   services: AppServices,
   credentialsStore: RouterCredentialsStore,
@@ -176,14 +178,29 @@ fun SettingsScreen(
           }) {
             Text("Apply Theme")
           }
-          OutlinedButton(onClick = {
-            previewTheme = appliedTheme
-          }) {
+          OutlinedButton(
+            enabled = previewTheme != appliedTheme || canRevertTheme,
+            onClick = {
+              if (previewTheme != appliedTheme) {
+                previewTheme = appliedTheme
+              } else {
+                onRevertTheme()
+              }
+            }
+          ) {
             Text("Cancel / Revert")
           }
         }
 
-        Text("Selection above only previews until Apply Theme is tapped.", style = MaterialTheme.typography.bodySmall)
+        if (previewTheme != appliedTheme) {
+          Text("Selection above only previews until Apply Theme is tapped.", style = MaterialTheme.typography.bodySmall)
+        } else {
+          Text("Revert restores the last committed theme and updates runtime immediately.", style = MaterialTheme.typography.bodySmall)
+        }
+        if (!canRevertTheme && previewTheme == appliedTheme) {
+          Text("No previous committed theme available to revert.", style = MaterialTheme.typography.bodySmall)
+        }
+
         Text("Apply updates runtime theme without app restart.", style = MaterialTheme.typography.bodySmall)
       }
     }

@@ -26,6 +26,7 @@ fun AppRoot(
   credentialsStore: RouterCredentialsStore
 ) {
   val themeId by themeRepository.selected.collectAsState()
+  val lastCommittedBeforeCurrent by themeRepository.lastCommittedBeforeCurrent.collectAsState()
 
   NerfTheme(themeId) {
     val nav = rememberNavController()
@@ -89,6 +90,8 @@ fun AppRoot(
             themeId = themeId,
             availableThemes = themeRepository.availableThemes,
             onThemeSelected = themeRepository::set,
+            onRevertTheme = themeRepository::revertToLastCommitted,
+            canRevertTheme = lastCommittedBeforeCurrent != null,
             htmlAssetUrlProvider = themeRepository::htmlAssetUrl,
             services = services,
             credentialsStore = credentialsStore,
