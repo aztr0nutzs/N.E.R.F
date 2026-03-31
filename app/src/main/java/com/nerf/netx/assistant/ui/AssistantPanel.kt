@@ -31,7 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,6 +57,9 @@ import com.nerf.netx.assistant.tools.RouterTool
 import com.nerf.netx.assistant.tools.ScanTool
 import com.nerf.netx.assistant.tools.SpeedtestTool
 import com.nerf.netx.domain.AppServices
+import com.nerf.netx.ui.theme.messageBubbleColor
+import com.nerf.netx.ui.theme.rememberNerfThemeTokens
+import com.nerf.netx.ui.theme.severityColor
 import kotlinx.coroutines.flow.collect
 
 interface AssistantPanelActions {
@@ -209,7 +211,8 @@ private fun AssistantMessageItem(
   onCancel: () -> Unit
 ) {
   val alignment = if (item.author == AssistantMessageAuthor.USER) Alignment.End else Alignment.Start
-  val bgColor = if (item.author == AssistantMessageAuthor.USER) Color(0xFF1E3A5F) else Color(0xFF2F2F3A)
+  val nerfTokens = rememberNerfThemeTokens()
+  val bgColor = messageBubbleColor(nerfTokens, item.author)
 
   Column(horizontalAlignment = alignment, modifier = Modifier.fillMaxWidth()) {
     Surface(
@@ -300,12 +303,8 @@ private fun AssistantMessageItem(
 
 @Composable
 private fun SeverityPill(severity: AssistantSeverity) {
-  val color = when (severity) {
-    AssistantSeverity.INFO -> Color(0xFF4AA3FF)
-    AssistantSeverity.SUCCESS -> Color(0xFF4DD387)
-    AssistantSeverity.WARNING -> Color(0xFFFFB347)
-    AssistantSeverity.ERROR -> Color(0xFFFF6B6B)
-  }
+  val nerfTokens = rememberNerfThemeTokens()
+  val color = severityColor(nerfTokens, severity)
   Box(
     modifier = Modifier
       .background(color.copy(alpha = 0.22f), RoundedCornerShape(999.dp))
