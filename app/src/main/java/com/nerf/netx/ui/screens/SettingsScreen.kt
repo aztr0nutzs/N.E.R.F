@@ -51,7 +51,7 @@ import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.ui.theme.ThemeId
 import com.nerf.netx.ui.theme.ThemeType
-import com.nerf.netx.ui.theme.nativeThemeTokens
+import com.nerf.netx.ui.theme.themePaletteTokens
 import kotlinx.coroutines.launch
 
 private data class ThemePalette(
@@ -540,32 +540,12 @@ private fun colorSwatch(label: String, color: Color) {
 }
 
 private fun themePalette(themeId: ThemeId): ThemePalette {
-  return when (themeId) {
-    ThemeId.NERF_MAIN_DASH_HTML -> ThemePalette(
-      primary = Color(0xFF02FEFF),
-      accent = Color(0xFF00D4E8),
-      highlight = Color(0xFFF2C14E),
-      panel = Color(0xFF000E16),
-      text = Color(0xFFE9FCFF)
-    )
-
-    ThemeId.NERF_HUD_ALT_HTML -> ThemePalette(
-      primary = Color(0xFFFFE600),
-      accent = Color(0xFF00A3FF),
-      highlight = Color(0xFFFF8F00),
-      panel = Color(0xFF10151A),
-      text = Color(0xFFEAF2F8)
-    )
-
-    ThemeId.NEON_NERF_NATIVE -> {
-      val nativeTokens = nativeThemeTokens(themeId)
-      ThemePalette(
-        primary = nativeTokens?.primary ?: Color(0xFFFF6A00),
-        accent = nativeTokens?.accent ?: Color(0xFF00C2FF),
-        highlight = nativeTokens?.highlight ?: Color(0xFFFFD400),
-        panel = nativeTokens?.panel ?: Color(0xFF10151A),
-        text = nativeTokens?.text ?: Color(0xFFEAF2F8)
-      )
-    }
-  }
+  val paletteTokens = themePaletteTokens(themeId)
+  return ThemePalette(
+    primary = paletteTokens.primary,
+    accent = paletteTokens.accent,
+    highlight = paletteTokens.highlight,
+    panel = paletteTokens.panel,
+    text = paletteTokens.text
+  )
 }

@@ -17,7 +17,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nerf.netx.assistant.model.AssistantSeverity
@@ -28,6 +27,8 @@ import com.nerf.netx.networkdoctor.model.NetworkDoctorFindingUi
 import com.nerf.netx.networkdoctor.model.NetworkDoctorHealthSummary
 import com.nerf.netx.networkdoctor.model.NetworkDoctorRecommendationUi
 import com.nerf.netx.networkdoctor.model.NetworkDoctorUnavailableUi
+import com.nerf.netx.ui.theme.rememberNerfThemeTokens
+import com.nerf.netx.ui.theme.severityColor
 
 @Composable
 fun HealthSummaryCard(
@@ -172,12 +173,8 @@ private fun ActionRow(
 
 @Composable
 private fun SeverityBadge(severity: AssistantSeverity, label: String) {
-  val color = when (severity) {
-    AssistantSeverity.INFO -> Color(0xFF4AA3FF)
-    AssistantSeverity.SUCCESS -> Color(0xFF4DD387)
-    AssistantSeverity.WARNING -> Color(0xFFFFB347)
-    AssistantSeverity.ERROR -> Color(0xFFFF6B6B)
-  }
+  val nerfTokens = rememberNerfThemeTokens()
+  val color = severityColor(nerfTokens, severity)
   Box(
     modifier = Modifier
       .background(color.copy(alpha = 0.18f), RoundedCornerShape(999.dp))
@@ -189,9 +186,10 @@ private fun SeverityBadge(severity: AssistantSeverity, label: String) {
 
 @Composable
 private fun MetricPill(label: String) {
+  val nerfTokens = rememberNerfThemeTokens()
   Box(
     modifier = Modifier
-      .background(Color(0x1F7CA4C9), RoundedCornerShape(999.dp))
+      .background(nerfTokens.ui.metricPillBackground, RoundedCornerShape(999.dp))
       .padding(horizontal = 8.dp, vertical = 4.dp)
   ) {
     Text(label, style = MaterialTheme.typography.labelSmall)
