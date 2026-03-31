@@ -18,10 +18,10 @@ data class ThemeAuditEntry(
 object ThemeOperationalAudit {
   val entries: List<ThemeAuditEntry> = mutableListOf<ThemeAuditEntry>().apply {
     addSharedDashboardAudit(ThemeId.NERF_HUD_ALT_HTML)
-    addSharedDashboardAudit(ThemeId.NERF_MAIN_HUD_HTML)
+    addSharedDashboardAudit(ThemeId.NERF_MAIN_DASH_HTML)
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "overview",
         control = "scan action",
         command = ThemeBridgeContract.Actions.SCAN_START,
@@ -31,7 +31,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "overview",
         control = "device pause/block toggle",
         command = ThemeBridgeContract.Actions.DEVICE_SET_PAUSED,
@@ -41,7 +41,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "overview",
         control = "guest wifi / dns shield",
         command = ThemeBridgeContract.Actions.ROUTER_SET_GUEST,
@@ -51,7 +51,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "overview",
         control = "router reboot",
         command = ThemeBridgeContract.Actions.ROUTER_REBOOT,
@@ -61,7 +61,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "speed",
         control = "start / stop / reset",
         command = ThemeBridgeContract.Actions.SPEEDTEST_START,
@@ -71,7 +71,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "devices",
         control = "scan / ping / block",
         command = ThemeBridgeContract.Actions.DEVICE_PING,
@@ -81,7 +81,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "map",
         control = "radar / threat / reset",
         command = ThemeBridgeContract.Actions.MAP_STATE,
@@ -91,7 +91,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "intel-console",
         control = "quick actions / command execute",
         command = ThemeBridgeContract.Actions.CONSOLE_EXECUTE,
@@ -101,7 +101,7 @@ object ThemeOperationalAudit {
     )
     add(
       ThemeAuditEntry(
-        themeId = ThemeId.NERF_DASH_NEW_HTML,
+        themeId = ThemeId.NERF_MAIN_DASH_HTML,
         screen = "assistant",
         control = "quick actions / send message",
         command = ThemeBridgeContract.Actions.ASSISTANT_COMMAND,

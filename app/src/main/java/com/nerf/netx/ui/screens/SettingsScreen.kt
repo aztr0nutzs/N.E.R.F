@@ -106,16 +106,16 @@ fun SettingsScreen(
   val palette = themePalette(previewTheme)
   val themeDescriptions = remember {
     mapOf(
-      ThemeId.NERF_DASH_NEW_HTML to "Jarvis-styled command dashboard with live telemetry, assistant actions, and native bridge support.",
+      ThemeId.NERF_MAIN_DASH_HTML to "Main dashboard with live telemetry, assistant actions, and native bridge support.",
       ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard.",
-      ThemeId.NERF_MAIN_HUD_HTML to "Restored main HUD with live bridge-backed speedtest, overview, console, map, devices, and analytics shell."
+      ThemeId.NEON_NERF_NATIVE to "Native Neon NERF styling for Compose surfaces."
     )
   }
   val screenshotAssetPath = remember {
     mapOf(
-      ThemeId.NERF_DASH_NEW_HTML to "themes/nerf_dash_new/screenshot.png",
+      ThemeId.NERF_MAIN_DASH_HTML to "themes/nerf_main_dash/screenshot.png",
       ThemeId.NERF_HUD_ALT_HTML to "themes/nerf_hud_alt/screenshot.png",
-      ThemeId.NERF_MAIN_HUD_HTML to "themes/nerf_main_hud/screenshot.png"
+      ThemeId.NEON_NERF_NATIVE to null
     )
   }
   val previewScreenshotPath = screenshotAssetPath[previewTheme]
@@ -519,7 +519,7 @@ private fun colorSwatch(label: String, color: Color) {
 
 private fun themePalette(themeId: ThemeId): ThemePalette {
   return when (themeId) {
-    ThemeId.NERF_DASH_NEW_HTML -> ThemePalette(
+    ThemeId.NERF_MAIN_DASH_HTML -> ThemePalette(
       primary = Color(0xFF02FEFF),
       accent = Color(0xFF00D4E8),
       highlight = Color(0xFFF2C14E),
@@ -535,7 +535,7 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
       text = Color(0xFFEAF2F8)
     )
 
-    ThemeId.NERF_MAIN_HUD_HTML -> ThemePalette(
+    ThemeId.NEON_NERF_NATIVE -> ThemePalette(
       primary = Color(0xFFFF6A00),
       accent = Color(0xFF00C2FF),
       highlight = Color(0xFFFFD400),

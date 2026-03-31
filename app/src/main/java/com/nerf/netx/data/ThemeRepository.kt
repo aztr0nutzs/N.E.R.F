@@ -19,8 +19,8 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   private val prefs: SharedPreferences = context.getSharedPreferences("nerf_prefs", Context.MODE_PRIVATE)
   private val key = "theme_id"
   private val selectionSchemaKey = "theme_selection_schema"
-  private val selectionSchemaVersion = 1
-  private val defaultTheme = ThemeId.NERF_DASH_NEW_HTML
+  private val selectionSchemaVersion = 2
+  private val defaultTheme = ThemeId.NERF_MAIN_DASH_HTML
   override val availableThemes: List<ThemeId> = ThemeId.entries.filter(::isThemeAvailable)
   private val selectionPolicy = ThemeSelectionPolicy(defaultTheme, availableThemes)
   private val _selected = MutableStateFlow(readTheme())
@@ -35,27 +35,24 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
     _selected.value = safeTheme
   }
 
-  override fun htmlAssetUrl(themeId: ThemeId): String? = when (themeId) {
-    ThemeId.NERF_DASH_NEW_HTML -> assetUrl("nerf_dash_new")
-    ThemeId.NERF_HUD_ALT_HTML -> assetUrl("nerf_hud_alt")
-    ThemeId.NERF_MAIN_HUD_HTML -> assetUrl("nerf_main_hud")
-  }
+  override fun htmlAssetUrl(themeId: ThemeId): String? = themeId.assetFolder?.let(::assetUrl)
 
   private fun readTheme(): ThemeId {
     migrateSavedSelectionIfNeeded()
     val saved = prefs.getString(key, null)
-    if (saved == "NEON_NERF" || saved == "neon_nerf") {
-      prefs.edit().putString(key, defaultTheme.id).apply()
-      return defaultTheme
+    val resolved = selectionPolicy.resolveSavedTheme(saved)
+    if (saved != resolved.id) {
+      prefs.edit().putString(key, resolved.id).apply()
     }
-    return selectionPolicy.resolveSavedTheme(saved)
+    return resolved
   }
 
   private fun migrateSavedSelectionIfNeeded() {
     val appliedSchema = prefs.getInt(selectionSchemaKey, 0)
     if (appliedSchema >= selectionSchemaVersion) return
+    val migrated = selectionPolicy.resolveSavedTheme(prefs.getString(key, null))
     prefs.edit()
-      .putString(key, defaultTheme.id)
+      .putString(key, migrated.id)
       .putInt(selectionSchemaKey, selectionSchemaVersion)
       .apply()
   }
@@ -71,7 +68,7 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
   private fun isThemeAvailable(themeId: ThemeId): Boolean {
     return when (themeId.type) {
       ThemeType.NATIVE -> true
-      ThemeType.HTML -> assetExists("themes/${themeId.id}/index.html")
+      ThemeType.HTML -> themeId.assetFolder?.let { assetExists("themes/$it/index.html") } == true
     }
   }
 

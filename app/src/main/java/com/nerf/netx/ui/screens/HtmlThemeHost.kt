@@ -77,7 +77,7 @@ fun HtmlThemeHost(
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-              if (themeId != ThemeId.NERF_DASH_NEW_HTML) return null
+              if (themeId != ThemeId.NERF_MAIN_DASH_HTML) return null
               val requestedUrl = request.url.toString()
               val deferredHeaders = listOf(
                 "nerf_header1.mp4",
