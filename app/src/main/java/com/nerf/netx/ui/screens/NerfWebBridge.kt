@@ -813,25 +813,42 @@ class NerfWebBridge(private val services: AppServices) {
     deviceId: String,
     action: suspend () -> ActionResult
   ): String {
-    val details = services.deviceControl.deviceDetails(deviceId)
-    val support = details?.actionSupport?.get(actionId)
-      ?: details?.support?.let { ActionSupportCatalog.deviceActionState(actionId, it) }
-      ?: ActionSupportCatalog.deviceActionState(actionId)
-    if (support != null && !support.supported) {
+    if (deviceId.isBlank()) {
       return actionResultJson(
         ActionResult(
           ok = false,
-          status = if (details?.backend?.detected == true && details.backend.authenticated.not()) {
+          status = ServiceStatus.ERROR,
+          code = "DEVICE_ID_REQUIRED",
+          message = "Device id is required.",
+          errorReason = "Missing deviceId for $actionId"
+        )
+      )
+    }
+    val details = services.deviceControl.deviceDetails(deviceId)
+    if (details == null) {
+      return actionResultJson(action())
+    }
+    val support = details.actionSupport[actionId]
+      ?: details.support.let { ActionSupportCatalog.deviceActionState(actionId, it) }
+      ?: ActionSupportCatalog.deviceActionState(actionId)
+    if (support != null && !support.supported) {
+      val capabilityStatus = details.deviceCapabilities[deviceCapabilityKey(actionId)]?.status
+      val unavailable = capabilityStatus == ServiceStatus.NO_DATA ||
+        (details.backend.detected && details.backend.authenticated.not())
+      return actionResultJson(
+        ActionResult(
+          ok = false,
+          status = if (unavailable) {
             ServiceStatus.NO_DATA
           } else {
             ServiceStatus.NOT_SUPPORTED
           },
-          code = if (details?.backend?.detected == true && details.backend.authenticated.not()) {
+          code = if (unavailable) {
             "DEVICE_CONTROL_UNAVAILABLE"
           } else {
             "NOT_SUPPORTED"
           },
-          message = if (details?.backend?.detected == true && details.backend.authenticated.not()) {
+          message = if (unavailable) {
             "${support.label ?: "Device action"} is unavailable."
           } else {
             "${support.label ?: "Device action"} is unsupported on the current backend/router."
@@ -851,7 +868,10 @@ class NerfWebBridge(private val services: AppServices) {
     val snapshot = services.routerControl.refreshStatus()
     val support = snapshot.actionSupport[actionId] ?: ActionSupportCatalog.routerActionState(actionId, snapshot)
     if (support != null && !support.supported) {
-      val result = if (snapshot.status == ServiceStatus.OK) {
+      val capabilityStatus = snapshot.routerCapabilities[actionId]?.status
+      val result = if (capabilityStatus == ServiceStatus.NO_DATA || snapshot.status == ServiceStatus.NO_DATA) {
+        routerAction.unavailableResult(support.reason)
+      } else if (snapshot.status == ServiceStatus.OK) {
         routerAction.unsupportedResult(support.reason)
       } else {
         routerAction.unavailableResult(support.reason)
