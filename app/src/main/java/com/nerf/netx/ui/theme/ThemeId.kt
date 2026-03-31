@@ -2,14 +2,27 @@ package com.nerf.netx.ui.theme
 
 enum class ThemeType { NATIVE, HTML }
 
-enum class ThemeId(val id: String, val displayName: String, val type: ThemeType) {
-  NERF_DASH_NEW_HTML("nerf_dash_new", "NERF Dash New (HTML)", ThemeType.HTML),
-  NERF_HUD_ALT_HTML("nerf_hud_alt", "NERF HUD Alt (HTML)", ThemeType.HTML),
-  NERF_MAIN_HUD_HTML("nerf_main_hud", "NERF Main HUD (HTML)", ThemeType.HTML);
+enum class ThemeId(
+  val id: String,
+  val displayName: String,
+  val type: ThemeType,
+  val assetFolder: String? = null
+) {
+  NERF_MAIN_DASH_HTML("nerf_main_dash", "NERF Main Dash (HTML)", ThemeType.HTML, assetFolder = "nerf_main_dash"),
+  NERF_HUD_ALT_HTML("nerf_hud_alt", "NERF HUD Alt (HTML)", ThemeType.HTML, assetFolder = "nerf_hud_alt"),
+  NEON_NERF_NATIVE("neon_nerf", "Neon NERF (Native)", ThemeType.NATIVE);
 
   companion object {
+    private val legacyIdMap: Map<String, ThemeId> = mapOf(
+      "NERF_DASH_NEW" to NERF_MAIN_DASH_HTML,
+      "nerf_dash_new" to NERF_MAIN_DASH_HTML,
+      "nerf_main_hud" to NERF_MAIN_DASH_HTML,
+      "NEON_NERF" to NEON_NERF_NATIVE
+    )
+
     fun fromId(id: String?): ThemeId? {
-      return entries.firstOrNull { it.id == id }
+      if (id == null) return null
+      return entries.firstOrNull { it.id == id } ?: legacyIdMap[id]
     }
   }
 }
