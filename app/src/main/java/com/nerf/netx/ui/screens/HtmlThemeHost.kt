@@ -10,10 +10,14 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.ui.theme.ThemeId
 import java.io.ByteArrayInputStream
@@ -30,6 +34,22 @@ fun HtmlThemeHost(
 ) {
   key(themeId.id, url) {
     val bridge = remember(themeId, services) { NerfWebBridge(services) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, bridge) {
+      val observer = LifecycleEventObserver { _, event ->
+        when (event) {
+          Lifecycle.Event.ON_START -> bridge.setHostVisible(true)
+          Lifecycle.Event.ON_STOP -> bridge.setHostVisible(false)
+          else -> Unit
+        }
+      }
+      lifecycleOwner.lifecycle.addObserver(observer)
+      onDispose {
+        lifecycleOwner.lifecycle.removeObserver(observer)
+        bridge.setHostVisible(false)
+      }
+    }
 
     AndroidView(
       modifier = modifier,
@@ -113,6 +133,8 @@ fun HtmlThemeHost(
         }
       },
       onRelease = { view ->
+        bridge.setHostVisible(false)
+        bridge.dispose()
         view.stopLoading()
         view.removeJavascriptInterface("NERF_NATIVE")
         view.destroy()
