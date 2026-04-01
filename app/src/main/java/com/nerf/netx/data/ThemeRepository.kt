@@ -102,8 +102,8 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
 
   private fun isThemeAvailable(themeId: ThemeId): Boolean {
     return when (themeId.type) {
-      ThemeType.NATIVE -> true
-      ThemeType.HTML -> themeId.assetFolder?.let { assetExists("themes/$it/index.html") } == true
+      ThemeType.NATIVE_ONLY -> true
+      ThemeType.HTML_BACKED -> themeId.assetFolder?.let { assetExists("themes/$it/index.html") } == true
     }
   }
 

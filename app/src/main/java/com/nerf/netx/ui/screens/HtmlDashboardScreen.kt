@@ -8,12 +8,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nerf.netx.data.ThemeRepository
 import com.nerf.netx.domain.AppServices
+import com.nerf.netx.ui.theme.ThemeType
 
 @Composable
 fun HtmlDashboardScreen(themeRepository: ThemeRepository, services: AppServices) {
   val selectedTheme by themeRepository.selected.collectAsState()
   val resolvedTheme = selectedTheme.takeIf { themeRepository.htmlAssetUrl(it) != null }
-    ?: themeRepository.availableThemes.firstOrNull()
+    ?: themeRepository.availableThemes.firstOrNull { it.type == ThemeType.HTML_BACKED }
     ?: return
   val url = themeRepository.htmlAssetUrl(resolvedTheme) ?: return
   val allowedMainUrls = remember(themeRepository.availableThemes) {

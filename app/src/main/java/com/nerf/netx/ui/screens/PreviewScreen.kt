@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.nerf.netx.data.ThemeRepository
 import com.nerf.netx.domain.AppServices
 import com.nerf.netx.ui.theme.ThemeId
+import com.nerf.netx.ui.theme.ThemeType
 
 @Composable
 fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: AppServices) {
@@ -27,8 +28,13 @@ fun PreviewScreen(themeId: ThemeId, themeRepository: ThemeRepository, services: 
     if (url == null) {
       ElevatedCard {
         Column(Modifier.padding(12.dp)) {
-          Text("Native theme selected.")
-          Text("Switch to an HTML dashboard in Settings to preview it here.")
+          val modeText = if (themeId.type == ThemeType.NATIVE_ONLY) {
+            "True native Compose theme selected."
+          } else {
+            "Selected HTML-backed theme has no loadable HTML asset."
+          }
+          Text(modeText)
+          Text("This preview screen renders HTML dashboard packs only.")
         }
       }
     } else {
