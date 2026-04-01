@@ -132,7 +132,9 @@ Android-first network control and observability tool, with a WebView-powered web
 
 ### Install + Run (Android)
 > ⚠️ **Current checkout status (as of April 1, 2026):**
-> `gradle/wrapper/gradle-wrapper.jar` in this tree is a placeholder/corrupt file, so `./gradlew` bootstrap is currently blocked in this snapshot until a real wrapper JAR is restored in a normal development environment.
+> `gradle/wrapper/gradle-wrapper.jar` in this tree is a placeholder/corrupt file. In this snapshot, Gradle wrapper bootstrap is blocked and `./gradlew --version` fails with an invalid/corrupt jarfile error until a real wrapper JAR is restored in a normal development environment.
+>
+> Full compile/sync verification is not possible from this snapshot alone; it requires restoring a real wrapper JAR first, then completing normal Android SDK + JDK setup.
 
 1. Clone this repository.
 2. Open the project folder in Android Studio.
