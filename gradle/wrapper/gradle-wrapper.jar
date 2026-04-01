@@ -1,4 +1,4 @@
-PLACEHOLDER: gradle-wrapper.jar is not committed in this environment.
+PLACEHOLDER: gradle-wrapper.jar is temporarily not committed in this PR flow.
 Generate it with:
   gradle wrapper --gradle-version 8.14.4
-Then commit the real binary jar for production use.
+Then commit the real binary jar before production/bootstrap verification use.

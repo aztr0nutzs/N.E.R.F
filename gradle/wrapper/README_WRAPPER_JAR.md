@@ -1,6 +1,6 @@
 # Wrapper JAR placeholder
 
-This repository snapshot uses a placeholder `gradle-wrapper.jar` file for review-only PR workflows where binary files are disallowed.
+This repository snapshot intentionally uses a temporary placeholder `gradle-wrapper.jar` for PR flow constraints where binary files are being deferred.
 
 To restore normal Gradle wrapper operation in a standard environment:
 
