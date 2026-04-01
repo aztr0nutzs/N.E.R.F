@@ -37,6 +37,8 @@ class ThemeVisualAssetRepositoryImpl(context: Context) : ThemeVisualAssetReposit
     return when (themeId) {
       ThemeId.NERF_MAIN_DASH_HTML -> "themes/nerf_main_dash/screenshot.png"
       ThemeId.NERF_HUD_ALT_HTML -> "themes/nerf_hud_alt/screenshot.png"
+      ThemeId.NERF_DASH_NEW_HTML -> "themes/nerf_dash_new/screenshot.png"
+      ThemeId.NERF_MAIN_HUD_HTML -> "themes/nerf_main_hud/screenshot.png"
       else -> null
     }
   }
