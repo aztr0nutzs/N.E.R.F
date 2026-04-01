@@ -45,8 +45,12 @@ import com.nerf.netx.ui.theme.ThemeId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -65,6 +69,7 @@ class NerfWebBridge(private val services: AppServices) {
   private var pageReady = false
   private var bootstrapInjected = false
   private val requestIds = AtomicLong(1L)
+  private val hostVisible = MutableStateFlow(false)
 
   private val assistantOrchestrator by lazy {
     val prompts = AssistantStarterPromptsProvider()
@@ -105,6 +110,16 @@ class NerfWebBridge(private val services: AppServices) {
       startEventStreams()
     }
     scope.launch { emitInitialState() }
+  }
+
+  fun setHostVisible(visible: Boolean) {
+    hostVisible.value = visible
+  }
+
+  fun dispose() {
+    pageReady = false
+    webView = null
+    scope.cancel()
   }
 
   private fun startEventStreams() {
@@ -219,10 +234,15 @@ class NerfWebBridge(private val services: AppServices) {
     }
 
     scope.launch {
-      while (isActive) {
-        services.routerControl.refreshStatus()
-        delay(ROUTER_STATUS_POLL_INTERVAL_MS)
-      }
+      hostVisible
+        .distinctUntilChanged()
+        .collectLatest { visible ->
+          if (!visible) return@collectLatest
+          while (currentCoroutineContext().isActive) {
+            services.routerControl.refreshStatus()
+            delay(ROUTER_STATUS_POLL_INTERVAL_MS)
+          }
+        }
     }
   }
 
