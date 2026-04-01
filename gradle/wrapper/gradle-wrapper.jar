@@ -1,0 +1,4 @@
+PLACEHOLDER: gradle-wrapper.jar is not committed in this environment.
+Generate it with:
+  gradle wrapper --gradle-version 8.14.4
+Then commit the real binary jar for production use.
