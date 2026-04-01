@@ -50,6 +50,7 @@ import com.nerf.netx.domain.RouterFeatureState
 import com.nerf.netx.domain.RouterStatusSnapshot
 import com.nerf.netx.domain.ServiceStatus
 import com.nerf.netx.ui.theme.ThemeId
+import com.nerf.netx.ui.theme.NativeFallbackPalette
 import com.nerf.netx.ui.theme.ThemeType
 import com.nerf.netx.ui.theme.themePaletteTokens
 import kotlinx.coroutines.launch
@@ -88,7 +89,7 @@ fun SettingsScreen(
 
   val detectedHtmlThemeFolders = remember(availableThemes) {
     availableThemes
-      .filter { it.type == ThemeType.HTML }
+      .filter { it.type == ThemeType.HTML_BACKED }
       .map { it.id }
       .sorted()
   }
@@ -109,11 +110,11 @@ fun SettingsScreen(
   val palette = themePalette(previewTheme)
   val themeDescriptions = remember {
     mapOf(
-      ThemeId.NERF_MAIN_DASH_HTML to "Main dashboard with live telemetry, assistant actions, and native bridge support.",
-      ThemeId.NERF_HUD_ALT_HTML to "Alternative HUD - Brighter accents, identical controls to main dashboard.",
-      ThemeId.NERF_DASH_NEW_HTML to "Legacy dashboard pack kept for runtime compatibility and preview parity.",
-      ThemeId.NERF_MAIN_HUD_HTML to "Legacy main HUD pack kept for runtime compatibility and preview parity.",
-      ThemeId.NEON_NERF_NATIVE to "Native Neon NERF styling for Compose surfaces."
+      ThemeId.NERF_MAIN_DASH_HTML to "HTML dashboard pack. Native screens use the shared DASH fallback shell palette.",
+      ThemeId.NERF_HUD_ALT_HTML to "HTML dashboard pack. Native screens use the shared HUD fallback shell palette.",
+      ThemeId.NERF_DASH_NEW_HTML to "Legacy HTML dashboard pack. Native screens use the shared DASH fallback shell palette.",
+      ThemeId.NERF_MAIN_HUD_HTML to "Legacy HTML dashboard pack. Native screens use the shared HUD fallback shell palette.",
+      ThemeId.NEON_NERF_NATIVE to "Only true native Compose theme branch."
     )
   }
   val themeVisualAssets = remember(context) { ThemeVisualAssetRepositoryImpl(context) }
@@ -158,7 +159,10 @@ fun SettingsScreen(
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f).padding(end = 8.dp)) {
               Text(t.displayName)
-              Text("id=${t.id} | type=${t.type.name}", style = MaterialTheme.typography.bodySmall)
+              Text(
+                "id=${t.id} | ${themeRuntimeBadge(t)}",
+                style = MaterialTheme.typography.bodySmall
+              )
               Text(themeDescriptions[t] ?: "No description.", style = MaterialTheme.typography.bodySmall)
             }
             RadioButton(selected = (previewTheme == t), onClick = { previewTheme = t })
@@ -269,7 +273,7 @@ fun SettingsScreen(
           }
         }
 
-        if (previewTheme.type == ThemeType.HTML) {
+        if (previewTheme.type == ThemeType.HTML_BACKED) {
           Text("HTML Theme Packs in assets/themes/", style = MaterialTheme.typography.bodySmall)
           Text(
             if (detectedHtmlThemeFolders.isEmpty()) "(No folders detected at runtime)"
@@ -291,7 +295,7 @@ fun SettingsScreen(
             Text("Preview unavailable: theme entry HTML not found.", style = MaterialTheme.typography.bodySmall)
           }
         } else {
-          Text("Native-style theme preview shown in mock card.", style = MaterialTheme.typography.bodySmall)
+          Text("True native Compose theme preview shown in mock card.", style = MaterialTheme.typography.bodySmall)
         }
       }
     }
@@ -532,4 +536,18 @@ private fun themePalette(themeId: ThemeId): ThemePalette {
     panel = paletteTokens.panel,
     text = paletteTokens.text
   )
+}
+
+private fun themeRuntimeBadge(themeId: ThemeId): String {
+  return when (themeId.type) {
+    ThemeType.NATIVE_ONLY -> "true_native=compose_only"
+    ThemeType.HTML_BACKED -> {
+      val fallbackLabel = when (themeId.nativeFallbackPalette) {
+        NativeFallbackPalette.SHARED_DASH -> "shared_dash_fallback"
+        NativeFallbackPalette.SHARED_HUD -> "shared_hud_fallback"
+        NativeFallbackPalette.NONE -> "none"
+      }
+      "html_backed|native_shell=$fallbackLabel"
+    }
+  }
 }
