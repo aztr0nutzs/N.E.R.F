@@ -131,10 +131,14 @@ Android-first network control and observability tool, with a WebView-powered web
 - JDK 17+.
 
 ### Install + Run (Android)
+> ⚠️ **Current checkout status (as of April 1, 2026):**
+> `gradle/wrapper/gradle-wrapper.jar` in this tree is a placeholder/corrupt file, so `./gradlew` bootstrap is currently blocked in this snapshot until a real wrapper JAR is restored in a normal development environment.
+
 1. Clone this repository.
 2. Open the project folder in Android Studio.
-3. Let Gradle sync complete.
-4. Run the `app` configuration on an emulator or physical Android device.
+3. Restore a real Gradle wrapper JAR (see `gradle/wrapper/README_WRAPPER_JAR.md`).
+4. Let Gradle sync complete.
+5. Run the `app` configuration on an emulator or physical Android device.
 
 ### Use the App Quickly
 1. Open **Settings**.
