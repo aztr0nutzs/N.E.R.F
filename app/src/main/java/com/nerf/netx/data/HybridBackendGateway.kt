@@ -923,30 +923,6 @@ private class HybridSpeedtest(
     }
   }
 
-  private fun normalizePath(value: String, fallback: String): String {
-    val trimmed = value.trim()
-    if (trimmed.isBlank()) return fallback
-    return if (trimmed.startsWith("/")) trimmed else "/$trimmed"
-  }
-
-  private fun SpeedtestConfig.sanitize(): SpeedtestConfig {
-    return copy(
-      targetMode = targetMode,
-      serverMode = if (serverMode.uppercase(Locale.US) == "MANUAL") "MANUAL" else "AUTO",
-      threads = threads.coerceIn(1, 8),
-      durationMs = durationMs.coerceIn(2_000L, 30_000L),
-      timeoutMs = timeoutMs.coerceIn(1_000L, 20_000L),
-      downloadSizesBytes = downloadSizesBytes.filter { it > 0 }.ifEmpty { listOf(5_000_000, 20_000_000) },
-      uploadSizesBytes = uploadSizesBytes.filter { it > 0 }.ifEmpty { listOf(2_000_000, 10_000_000) },
-      privateServerName = privateServerName.ifBlank { "Private LibreSpeed" },
-      privateServerBaseUrl = privateServerBaseUrl?.trim()?.ifBlank { null },
-      privatePingPath = normalizePath(privatePingPath, "/empty.php"),
-      privateDownloadSmallPath = normalizePath(privateDownloadSmallPath, "/garbage.php?ckSize=5000"),
-      privateDownloadLargePath = normalizePath(privateDownloadLargePath, "/garbage.php?ckSize=20000"),
-      privateUploadPath = normalizePath(privateUploadPath, "/empty.php")
-    )
-  }
-
   private fun List<Double>.median(): Double? {
     if (isEmpty()) return null
     val sorted = sorted()

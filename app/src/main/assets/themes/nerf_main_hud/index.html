@@ -356,7 +356,17 @@ function bindConsoleTabs(){
     .bottom-nav .grid { width: 100%; max-width: 100%; }
     .nav-item { min-width: 0; }
 
-body { background:#000; overflow:hidden; min-height:max(884px,100dvh); }
+body { background:#000; overflow:hidden; min-height:max(884px,100dvh); position:relative; }
+    .shared-bg-fx {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .shared-bg-fx > div {
+      position: absolute;
+      inset: 0;
+    }
     .glow-orange { filter: drop-shadow(0 0 8px var(--c-primary)); }
     .glow-blue { filter: drop-shadow(0 0 8px var(--c-blue)); }
     .nerf-italic { font-style: italic; font-weight: 900; letter-spacing: -0.05em; }
@@ -515,6 +525,7 @@ body { background:#000; overflow:hidden; min-height:max(884px,100dvh); }
       padding-bottom: 110px; /* leave room for bottom nav */
       overflow: hidden;
       display: none;
+      z-index: 1;
     }
     .screen.active { display: block; }
 
@@ -2066,9 +2077,11 @@ body[data-ui="hud"]{
 </head>
 <body class="text-white font-display selection:text-black" style="background: var(--c-bg);">
 <!-- Shared Background FX -->
-<div class="fixed inset-0 bg-carbon opacity-30 pointer-events-none"></div>
-<div class="fixed inset-0 hologram-overlay pointer-events-none"></div>
-<div class="fixed inset-0 scanline-effect pointer-events-none"></div>
+<div class="shared-bg-fx">
+<div class="bg-carbon opacity-30"></div>
+<div class="hologram-overlay"></div>
+<div class="scanline-effect"></div>
+</div>
 <!-- Screen: OVERVIEW / HEALTH (real network health dashboard) -->
 <section class="screen" id="screen-overview">
 <!-- Keep existing global background layers untouched; this is a content-only screen -->
@@ -3471,7 +3484,10 @@ body[data-ui="hud"]{
       if(nerfNativeAvailable()){
         stUpdateMeta();
         stUpdateNumbers();
-        requestAnimationFrame(stTick);
+        return;
+      }
+      if(document.visibilityState !== 'visible' || !screens.speedtest || !screens.speedtest.classList.contains('active')){
+        setTimeout(stTick, 750);
         return;
       }
       // idle drift RSSI
@@ -3526,7 +3542,12 @@ body[data-ui="hud"]{
     });
 
     stScan();
-    requestAnimationFrame(stTick);
+    if(nerfNativeAvailable()){
+      stUpdateMeta();
+      stUpdateNumbers();
+    } else {
+      requestAnimationFrame(stTick);
+    }
 
     // -------------------------
     // CONSOLE LOGIC (namespaced copy of attached panel)
@@ -3716,8 +3737,27 @@ body[data-ui="hud"]{
       cUi.waterfall.appendChild(sliver);
       setTimeout(()=> sliver.remove(), duration*1000);
     }
-    for(let i=0;i<30;i++) setTimeout(cCreateSliver, Math.random()*3000);
-    setInterval(cCreateSliver, 150);
+    let cWaterfallTimer = null;
+    function updateConsoleWaterfall(){
+      const shouldRun = !nerfNativeAvailable() &&
+        document.visibilityState === 'visible' &&
+        screens.console &&
+        screens.console.classList.contains('active');
+      if(shouldRun){
+        if(cWaterfallTimer == null){
+          for(let i=0;i<30;i++) setTimeout(cCreateSliver, Math.random()*3000);
+          cWaterfallTimer = setInterval(cCreateSliver, 150);
+        }
+        return;
+      }
+      if(cWaterfallTimer != null){
+        clearInterval(cWaterfallTimer);
+        cWaterfallTimer = null;
+      }
+    }
+    updateConsoleWaterfall();
+    document.addEventListener('visibilitychange', updateConsoleWaterfall);
+    document.addEventListener('nerf:screen-change', updateConsoleWaterfall);
 
     // scan modal helpers
     function cEscape(str){
@@ -4262,7 +4302,13 @@ body[data-ui="hud"]{
     }
     const originalCAddAlert = cAddAlert;
     // hook: whenever association alert happens, attempt sync
-    window.setInterval(syncFromConsole, 2000);
+    if(!nerfNativeAvailable()){
+      window.setInterval(()=>{
+        if(document.visibilityState !== 'visible') return;
+        if(!screens.speedtest || !screens.speedtest.classList.contains('active')) return;
+        syncFromConsole();
+      }, 2000);
+    }
   </script>
 <script id="nerfNetDevLogic">
 (function(){
@@ -4290,6 +4336,7 @@ body[data-ui="hud"]{
     navButtons.forEach(b=>b.classList.toggle('active', b.dataset.target === key));
 
     try { localStorage.setItem('nerf.activeScreen', key); } catch(e) {}
+    document.dispatchEvent(new CustomEvent('nerf:screen-change', { detail: { screen: key } }));
     // Screen-specific nits
     if(key === 'map') { try { map2RefreshUi(); } catch(e) {} }
   }
@@ -4456,12 +4503,20 @@ body[data-ui="hud"]{
     if(chkAuto){
       const setAuto = ()=>{
         if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
-        if(chkAuto.checked){
+        if(
+          chkAuto.checked &&
+          !nerfNativeAvailable() &&
+          document.visibilityState === 'visible' &&
+          root &&
+          root.classList.contains('active')
+        ){
           autoTimer = setInterval(()=>{ map2RefreshUi(); }, 3000);
         }
         try { localStorage.setItem('nerf.mapAuto', chkAuto.checked ? '1':'0'); } catch(e) {}
       };
       chkAuto.addEventListener('change', setAuto);
+      document.addEventListener('visibilitychange', setAuto);
+      document.addEventListener('nerf:screen-change', setAuto);
       const saved = (()=>{ try { return localStorage.getItem('nerf.mapAuto'); } catch(e){ return null; } })();
       if(saved === '1') chkAuto.checked = true;
       setAuto();
@@ -5691,15 +5746,23 @@ function hookNav(){
             clearInterval(state.mapAutoTimer);
             state.mapAutoTimer = null;
           }
-          if(byId('map2-auto').checked){
+          if(
+            byId('map2-auto').checked &&
+            document.visibilityState === 'visible' &&
+            byId('screen-map') &&
+            byId('screen-map').classList.contains('active')
+          ){
             state.mapAutoTimer = setInterval(()=>{
               if(document.visibilityState !== 'visible') return;
+              if(!byId('screen-map') || !byId('screen-map').classList.contains('active')) return;
               req('devices.list', {});
               req('map.state', {});
             }, 4000);
           }
         };
         byId('map2-auto').addEventListener('change', setAuto);
+        document.addEventListener('visibilitychange', setAuto);
+        document.addEventListener('nerf:screen-change', setAuto);
         setAuto();
       }
       if(byId('c-btnConnectBest')){

@@ -12,7 +12,10 @@ import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -35,12 +38,21 @@ fun HtmlThemeHost(
   key(themeId.id, url) {
     val bridge = remember(themeId, services) { NerfWebBridge(services) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     DisposableEffect(lifecycleOwner, bridge) {
       val observer = LifecycleEventObserver { _, event ->
         when (event) {
-          Lifecycle.Event.ON_START -> bridge.setHostVisible(true)
-          Lifecycle.Event.ON_STOP -> bridge.setHostVisible(false)
+          Lifecycle.Event.ON_START -> {
+            webViewRef?.onResume()
+            webViewRef?.resumeTimers()
+            bridge.setHostVisible(true)
+          }
+          Lifecycle.Event.ON_STOP -> {
+            bridge.setHostVisible(false)
+            webViewRef?.onPause()
+            webViewRef?.pauseTimers()
+          }
           else -> Unit
         }
       }
@@ -55,6 +67,7 @@ fun HtmlThemeHost(
       modifier = modifier,
       factory = { ctx ->
         WebView(ctx).apply {
+          webViewRef = this
           settings.javaScriptEnabled = true
           settings.domStorageEnabled = true
           settings.allowFileAccess = true
@@ -133,7 +146,10 @@ fun HtmlThemeHost(
         }
       },
       onRelease = { view ->
+        webViewRef = null
         bridge.setHostVisible(false)
+        view.onPause()
+        view.pauseTimers()
         bridge.dispose()
         view.stopLoading()
         view.removeJavascriptInterface("NERF_NATIVE")

@@ -1,11 +1,7 @@
 package com.nerf.netx.ui.screens
 
 import android.graphics.Paint
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -124,13 +120,9 @@ fun MapScreen(
 
   val layout = remember(nodes, links) { buildClusteredTopologyLayout(nodes, links) }
   val layoutKey = remember(layout) { layout.positions.keys.joinToString("|") + layout.bounds.toString() }
-  val pulse = rememberInfiniteTransition(label = "ringPulse").animateFloat(
-    initialValue = 0.94f,
-    targetValue = 1.08f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(durationMillis = 2400, easing = LinearEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
+  val pulse by animateFloatAsState(
+    targetValue = if (selectedNodeIds.isEmpty()) 1f else 1.05f,
+    animationSpec = tween(durationMillis = 220),
     label = "ringPulseAnim"
   )
 
@@ -138,7 +130,6 @@ fun MapScreen(
     buildNodeMeta(nodes, query, typeFilter, detailsCache)
   }
   val visibleNodeIds = filteredNodes.filter { it.matchScore > 0 }.map { it.node.id }.toSet()
-  val dimNodeIds = filteredNodes.filter { it.matchScore == 0 }.map { it.node.id }.toSet()
 
   fun fitToView(animate: Boolean) {
     if (canvasSize.width <= 0 || canvasSize.height <= 0) return
@@ -450,14 +441,14 @@ fun MapScreen(
 
             drawCircle(
               color = qualityColor(quality).copy(alpha = (0.22f * alpha)),
-              radius = radius * (1.55f + (pulse.value - 1f) * 0.45f),
+              radius = radius * (1.55f + (pulse - 1f) * 0.45f),
               center = center,
               style = Stroke(width = 1.6f)
             )
             if (quality >= 35) {
               drawCircle(
                 color = qualityColor(quality).copy(alpha = 0.18f * alpha),
-                radius = radius * (1.95f + (pulse.value - 1f) * 0.35f),
+                radius = radius * (1.95f + (pulse - 1f) * 0.35f),
                 center = center,
                 style = Stroke(width = 1.2f)
               )
@@ -465,7 +456,7 @@ fun MapScreen(
             if (quality >= 70) {
               drawCircle(
                 color = qualityColor(quality).copy(alpha = 0.14f * alpha),
-                radius = radius * (2.35f + (pulse.value - 1f) * 0.22f),
+                radius = radius * (2.35f + (pulse - 1f) * 0.22f),
                 center = center,
                 style = Stroke(width = 1f)
               )

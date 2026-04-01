@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import com.nerf.netx.assistant.model.AssistantMessageAuthor
 import com.nerf.netx.assistant.model.AssistantSeverity
 
@@ -36,16 +37,6 @@ data class NativeUiTokens(
 data class NerfThemeTokens(
   val palette: NativeThemeTokens,
   val ui: NativeUiTokens
-)
-
-private val htmlThemeScheme = darkColorScheme(
-  primary = Color(0xFFFF6A00),
-  secondary = Color(0xFF00D5FF),
-  tertiary = Color(0xFFFFD400),
-  background = Color(0xFF000000),
-  surface = Color(0xFF0A0A0A),
-  onBackground = Color(0xFFFFFFFF),
-  onSurface = Color(0xFFFFFFFF)
 )
 
 private val neonNerfNativeTokens = NativeThemeTokens(
@@ -137,10 +128,30 @@ private val LocalNerfThemeTokens = staticCompositionLocalOf { fallbackThemeToken
 @Composable
 fun rememberNerfThemeTokens(): NerfThemeTokens = LocalNerfThemeTokens.current
 
+private fun htmlBackedColorScheme(themeId: ThemeId): ColorScheme {
+  val palette = themePaletteTokens(themeId)
+  val background = lerp(palette.panel, Color.Black, 0.08f)
+  val surface = lerp(palette.panel, Color.White, 0.06f)
+  val surfaceVariant = lerp(palette.panel, palette.accent, 0.14f)
+  return darkColorScheme(
+    primary = palette.primary,
+    secondary = palette.accent,
+    tertiary = palette.highlight,
+    background = background,
+    surface = surface,
+    surfaceVariant = surfaceVariant,
+    onBackground = palette.text,
+    onSurface = palette.text,
+    onSurfaceVariant = palette.text,
+    onPrimary = Color.Black,
+    onSecondary = Color.Black,
+    onTertiary = Color.Black
+  )
+}
+
 private fun resolveColorScheme(themeId: ThemeId): ColorScheme {
   return when (themeId.type) {
-    // HTML-backed themes intentionally share a single Compose fallback shell scheme.
-    ThemeType.HTML_BACKED -> htmlThemeScheme
+    ThemeType.HTML_BACKED -> htmlBackedColorScheme(themeId)
     ThemeType.NATIVE_ONLY -> neonNerfNativeScheme
   }
 }

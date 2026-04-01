@@ -1,9 +1,9 @@
 <component name="libraryTable">
   <library name="Gradle: androidx.compose.animation:animation-android:1.7.0@aar" external-system-id="GRADLE">
     <CLASSES>
-      <root url="file://$USER_HOME$/.gradle/caches/8.14.4/transforms/da0d76d6e911fc0780629b561b814785/transformed/animation-release/res" />
-      <root url="file://$USER_HOME$/.gradle/caches/8.14.4/transforms/da0d76d6e911fc0780629b561b814785/transformed/animation-release/AndroidManifest.xml" />
-      <root url="jar://$USER_HOME$/.gradle/caches/8.14.4/transforms/da0d76d6e911fc0780629b561b814785/transformed/animation-release/jars/classes.jar!/" />
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.4/transforms/a8a99373c0dc8098e085731bf8787b41/transformed/animation-release/AndroidManifest.xml" />
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.4/transforms/a8a99373c0dc8098e085731bf8787b41/transformed/animation-release/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.4/transforms/a8a99373c0dc8098e085731bf8787b41/transformed/animation-release/jars/classes.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES>

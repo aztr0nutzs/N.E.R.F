@@ -50,7 +50,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -183,7 +182,6 @@ class NerfWebBridge(private val services: AppServices) {
 
     scope.launch {
       services.devices.devices.collectLatest { devices ->
-        runCatching { services.deviceControl.refreshStatus() }
         emit(ThemeBridgeContract.Events.DEVICES_UPDATE, JSONObject().put("devices", devicesJson(devices)).toString())
         emitDerivedState()
       }
@@ -235,7 +233,6 @@ class NerfWebBridge(private val services: AppServices) {
 
     scope.launch {
       hostVisible
-        .distinctUntilChanged()
         .collectLatest { visible ->
           if (!visible) return@collectLatest
           while (currentCoroutineContext().isActive) {
@@ -464,7 +461,6 @@ class NerfWebBridge(private val services: AppServices) {
           .toString()
       }
       "devices.list" -> {
-        runCatching { services.deviceControl.refreshStatus() }
         JSONObject()
           .put("ok", true)
           .put("status", ServiceStatus.OK.name)
