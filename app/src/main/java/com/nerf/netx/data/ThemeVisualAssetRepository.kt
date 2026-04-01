@@ -16,13 +16,13 @@ class ThemeVisualAssetRepositoryImpl(context: Context) : ThemeVisualAssetReposit
   private val screenshotCache = LruCache<String, Bitmap>(4)
 
   override fun screenshotPath(themeId: ThemeId): String? {
-    val path = rawScreenshotPath(themeId) ?: return null
-    return path.takeIf(::assetExists)
+    return rawScreenshotPath(themeId)
   }
 
   override fun loadScreenshot(themeId: ThemeId): Bitmap? {
     val path = screenshotPath(themeId) ?: return null
     screenshotCache[path]?.let { return it }
+    if (!assetExists(path)) return null
 
     return runCatching {
       appContext.assets.open(path).use { stream ->
@@ -39,7 +39,7 @@ class ThemeVisualAssetRepositoryImpl(context: Context) : ThemeVisualAssetReposit
       ThemeId.NERF_HUD_ALT_HTML -> "themes/nerf_hud_alt/screenshot.png"
       ThemeId.NERF_DASH_NEW_HTML -> "themes/nerf_dash_new/screenshot.png"
       ThemeId.NERF_MAIN_HUD_HTML -> "themes/nerf_main_hud/screenshot.png"
-      else -> null
+      ThemeId.NEON_NERF_NATIVE -> null
     }
   }
 
