@@ -110,8 +110,14 @@ fun nativeThemeTokens(themeId: ThemeId): NativeThemeTokens? {
 
 fun themePaletteTokens(themeId: ThemeId): NativeThemeTokens {
   return when (themeId) {
-    ThemeId.NERF_MAIN_DASH_HTML -> nerfMainDashHtmlTokens
-    ThemeId.NERF_HUD_ALT_HTML -> nerfHudAltHtmlTokens
+    ThemeId.NERF_MAIN_DASH_HTML,
+    // Legacy dashboard pack intentionally shares the Main Dash native fallback tokens.
+    ThemeId.NERF_DASH_NEW_HTML -> nerfMainDashHtmlTokens
+
+    ThemeId.NERF_HUD_ALT_HTML,
+    // Legacy HUD pack intentionally shares the HUD Alt native fallback tokens.
+    ThemeId.NERF_MAIN_HUD_HTML -> nerfHudAltHtmlTokens
+
     ThemeId.NEON_NERF_NATIVE -> neonNerfNativeTokens
   }
 }
@@ -139,9 +145,13 @@ fun rememberNerfThemeTokens(): NerfThemeTokens = LocalNerfThemeTokens.current
 
 private fun resolveColorScheme(themeId: ThemeId): ColorScheme {
   return when (themeId) {
-    ThemeId.NEON_NERF_NATIVE -> neonNerfNativeScheme
     ThemeId.NERF_MAIN_DASH_HTML,
-    ThemeId.NERF_HUD_ALT_HTML -> htmlThemeScheme
+    ThemeId.NERF_HUD_ALT_HTML,
+    // Legacy HTML packs intentionally share the standard HTML Material fallback scheme.
+    ThemeId.NERF_DASH_NEW_HTML,
+    ThemeId.NERF_MAIN_HUD_HTML -> htmlThemeScheme
+
+    ThemeId.NEON_NERF_NATIVE -> neonNerfNativeScheme
   }
 }
 
