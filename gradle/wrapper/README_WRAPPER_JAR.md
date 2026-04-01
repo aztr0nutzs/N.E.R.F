@@ -1,6 +1,13 @@
-# Wrapper JAR placeholder
+# Wrapper JAR placeholder (bootstrap blocked in this checkout)
 
-This repository snapshot intentionally uses a temporary placeholder `gradle-wrapper.jar` for PR flow constraints where binary files are being deferred.
+In the **current checked-out tree**, `gradle/wrapper/gradle-wrapper.jar` is a temporary placeholder (not a valid wrapper binary), so Gradle wrapper bootstrap is blocked here.
+
+Current observed behavior:
+
+```bash
+./gradlew --version
+# Error: Invalid or corrupt jarfile /.../gradle/wrapper/gradle-wrapper.jar
+```
 
 To restore normal Gradle wrapper operation in a standard environment:
 
